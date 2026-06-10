@@ -232,3 +232,13 @@
 - 文件：tests/test_metrics.py
 - 类型：新建
 - 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10 V1-A TuShare Client
+- 阶段：V1-A TuShare Client
+- 修改文件：
+  - src/data/tushare_client.py
+  - AGENT.md
+- 说明：
+  - 未写入真实 TuShare Token
+  - 未运行真实 TuShare 下载
+  - 未生成虚假投资收益结果
