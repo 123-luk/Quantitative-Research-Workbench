@@ -318,3 +318,23 @@
 - 未调用 TuShare API。
 - 未生成虚假投资收益结果。
 - data/processed/factor_panel_clean.csv 由用户运行脚本后生成，不纳入 Git 跟踪。
+## 2026-06-10 V3-A Factor Effectiveness Test
+
+阶段：V3-A Factor Effectiveness Test
+
+修改文件：
+- src/factors/factor_test.py
+- scripts/run_factor_test.py
+- docs/03_factor_methodology.md
+- AGENT.md
+
+修改内容摘要：
+- 实现 RankIC、IC 汇总、五分组收益和多空收益计算。
+- 新增因子有效性检验命令行脚本。
+- 更新因子方法论文档。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假投资收益结果。
+- reports/tables 下结果由用户运行脚本生成，不纳入 Git 跟踪。
