@@ -1,0 +1,16 @@
+project:
+  name: quant-factor-system
+
+data:
+  start_date: "2015-01-01"
+  end_date: "2026-12-31"
+  universe: all
+  data_source: tushare
+  use_sample_data: true
+
+strategy:
+  rebalance_freq: monthly
+  top_quantile: 0.2
+
+backtest:
+  transaction_cost: 0.001

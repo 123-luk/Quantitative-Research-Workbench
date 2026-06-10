@@ -1,0 +1,234 @@
+# AGENT Log
+
+本文件由 AI/Codex 自动生成，用于记录每次 AI 对项目的修改。  
+
+## 说明
+- 时间戳：修改时间
+- 文件：文件路径
+- 类型：新建 / 修改 / 删除
+- 描述：修改内容简述
+
+## 2026-06-10T10:59:52+08:00
+- 文件：.env.example
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：.gitignore
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：AGENT.md
+- 类型：新建
+- 描述：初始化 AI 修改日志模板
+
+## 2026-06-10T10:59:52+08:00
+- 文件：LICENSE
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：README.md
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：app/services/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：app/services/portfolio_service.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：app/services/stock_analysis_service.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：app/streamlit_app.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：config/config.yaml
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：docs/01_project_design.md
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：docs/02_data_dictionary.md
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：docs/03_factor_methodology.md
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：docs/04_backtest_methodology.md
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：docs/05_user_guide.md
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：main.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：requirements.txt
+- 类型：新建
+- 描述：添加 V0 项目初始化内容
+
+## 2026-06-10T10:59:52+08:00
+- 文件：scripts/fetch_tushare_data.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：scripts/generate_sample_data.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/analysis/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/analysis/stock_analyzer.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/backtest/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/backtest/engine.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/backtest/metrics.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/data/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/data/data_cleaner.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/data/data_loader.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/data/tushare_client.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/factors/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/factors/factor_engine.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/factors/factor_preprocess.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/factors/factor_test.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/strategy/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/strategy/portfolio.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/strategy/scoring.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/utils/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/utils/file_utils.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/utils/logger.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/visualization/__init__.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：src/visualization/plots.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：tests/test_backtest_engine.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：tests/test_data_cleaner.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：tests/test_factor_test.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
+
+## 2026-06-10T10:59:52+08:00
+- 文件：tests/test_metrics.py
+- 类型：新建
+- 描述：添加模块 docstring 与占位函数
