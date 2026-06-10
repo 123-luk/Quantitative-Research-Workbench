@@ -263,3 +263,38 @@
 - 未写入真实 TuShare Token。
 - 未运行大规模 TuShare 下载。
 - 未生成虚假投资收益结果。
+## 2026-06-10 V2-A Factor Panel Builder
+
+阶段：V2-A Factor Panel Builder
+
+修改文件：
+- src/factors/factor_engine.py
+- scripts/build_factor_panel.py
+- docs/02_data_dictionary.md
+- AGENT.md
+
+修改内容摘要：
+- 实现从 TuShare 原始数据构建月频因子面板。
+- 构建估值、规模、换手、成交额、动量、波动率等基础因子。
+- 生成 return_next 标签。
+- 新增命令行脚本 scripts/build_factor_panel.py。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假投资收益结果。
+- data/processed/factor_panel.csv 由用户运行脚本后生成，不纳入 Git 跟踪。
+## 2026-06-10 V2-A Patch Monthly Return Calculation
+
+阶段：V2-A Patch Monthly Return Calculation
+
+修改文件：
+- src/factors/factor_engine.py
+- docs/02_data_dictionary.md
+- AGENT.md
+
+说明：
+- 修复 monthly_return 计算，避免 pct_chg 单位误用。
+- 未调用 TuShare API。
+- 未写入真实 Token。
+- 未生成虚假投资收益结果。

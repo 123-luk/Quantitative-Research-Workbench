@@ -43,3 +43,29 @@
 - `data/raw` 不应提交到 GitHub。
 - `.env` 不应提交到 GitHub。
 - sample 数据后续单独生成，用于开源演示。
+
+## factor_panel.csv
+
+- 来源：`monthly.csv`, `daily_basic.csv`, `stock_basic.csv`, `hs300_components.csv` 加工生成
+- 用途：后续因子检验、打分选股、回测主数据表
+- 字段说明：
+  - `date`：月末日期
+  - `ts_code`：股票代码
+  - `name`：股票名称
+  - `industry`：所属行业
+  - `close`：月收盘价
+  - `monthly_return`：月收益率，`monthly_return = close / pre_close - 1`
+  - `return_next`：下一期月收益标签
+  - `ep`：市盈率倒数，`1 / pe_ttm`
+  - `bp`：市净率倒数，`1 / pb`
+  - `ps_inverse`：市销率倒数，`1 / ps_ttm`
+  - `size_factor`：规模因子，`-log(total_mv)`
+  - `turnover_factor`：换手率因子
+  - `amount_factor`：成交额因子，`log(amount)`
+  - `momentum_1m`：上一月收益率
+  - `momentum_3m`：过去 3 个月滚动累计收益，不包含当前月
+  - `volatility_6m`：过去 6 个月收益率滚动标准差，不包含当前月
+
+- `factor_panel.csv` 属于 `data/processed`，不提交到 GitHub。
+- `return_next` 是下月收益标签，构造时必须避免未来数据泄露。
+- `pct_chg` 保留为 TuShare 原始字段，不作为 `monthly_return` 的计算来源。
