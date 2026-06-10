@@ -2,15 +2,14 @@ project:
   name: quant-factor-system
 
 data:
-  start_date: "2015-01-01"
-  end_date: "2026-12-31"
-  universe: all
-  data_source: tushare
+  source: tushare
+  start_date: "20150101"
+  end_date: "20251231"
+  universe: hs300
+  index_code: "000300.SH"
   use_sample_data: true
 
 strategy:
   rebalance_freq: monthly
   top_quantile: 0.2
-
-backtest:
   transaction_cost: 0.001

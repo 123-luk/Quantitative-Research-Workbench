@@ -242,3 +242,24 @@
   - 未写入真实 TuShare Token
   - 未运行真实 TuShare 下载
   - 未生成虚假投资收益结果
+## 2026-06-10 V1-B TuShare Fetch Script and Data Dictionary
+
+阶段：V1-B TuShare Fetch Script and Data Dictionary
+
+修改文件：
+- scripts/fetch_tushare_data.py
+- docs/02_data_dictionary.md
+- config/config.yaml
+- AGENT.md
+
+修改内容摘要：
+- 实现命令行 TuShare 数据拉取脚本。
+- 支持 hs300 和 all 两种股票池。
+- 支持 max-stocks 调试限制。
+- 支持跳过 monthly 或 daily_basic。
+- 更新数据字典与默认配置。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未运行大规模 TuShare 下载。
+- 未生成虚假投资收益结果。
