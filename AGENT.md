@@ -298,3 +298,23 @@
 - 未调用 TuShare API。
 - 未写入真实 Token。
 - 未生成虚假投资收益结果。
+## 2026-06-10 V2-B Factor Preprocessing
+
+阶段：V2-B Factor Preprocessing
+
+修改文件：
+- src/factors/factor_preprocess.py
+- scripts/preprocess_factor_panel.py
+- docs/03_factor_methodology.md
+- AGENT.md
+
+修改内容摘要：
+- 实现因子缺失值填补、缩尾和横截面标准化。
+- 新增因子面板预处理命令行脚本。
+- 更新因子方法论文档。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假投资收益结果。
+- data/processed/factor_panel_clean.csv 由用户运行脚本后生成，不纳入 Git 跟踪。
