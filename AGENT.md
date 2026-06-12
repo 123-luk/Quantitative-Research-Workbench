@@ -395,3 +395,24 @@
 - 未生成虚假未来收益承诺。
 - 回测结果仅为历史样本测算。
 - reports/tables 下结果由用户运行脚本生成，不纳入 Git 跟踪。
+## 2026-06-12 V4-C Backtest Visualization
+
+阶段：V4-C Backtest Visualization
+
+修改文件：
+- src/backtest/backtest_plot.py
+- scripts/plot_backtest.py
+- docs/04_backtest_design.md
+- AGENT.md
+
+修改内容摘要：
+- 新增历史回测净值曲线、月度收益柱状图和回撤曲线绘图函数。
+- 新增回测可视化命令行脚本。
+- 更新回测设计文档。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假未来收益承诺。
+- 图表仅展示历史样本回测结果。
+- reports/figures 下图片由用户运行脚本生成，不纳入 Git 跟踪。
