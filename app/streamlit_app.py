@@ -22,6 +22,7 @@ from app.services.dashboard_service import (  # noqa: E402
     get_project_root,
     load_dashboard_data,
 )
+from app.services.portfolio_report_service import prepare_portfolio_report_data  # noqa: E402
 from app.services.stock_chart_service import prepare_single_stock_chart_data  # noqa: E402
 from app.services.pipeline_runner_service import (  # noqa: E402
     build_pipeline_command,
@@ -211,6 +212,78 @@ def render_pipeline_page(project_root: Path) -> None:
 
 def render_portfolio_page(data: dict[str, pd.DataFrame]) -> None:
     """Render the model-selected portfolio page."""
+    st.title("推荐投资组合 / Model Portfolio")
+    st.info("本页面展示的是历史样本中的模型选股结果和量化研究参考，不代表未来表现，不构成投资建议。")
+
+    selected_portfolio = data["selected_portfolio"]
+    portfolio_report = prepare_portfolio_report_data(selected_portfolio)
+    latest_portfolio = portfolio_report["latest_portfolio"]
+    industry_distribution = portfolio_report["industry_distribution"]
+    weight_distribution = portfolio_report["weight_distribution"]
+    summary = portfolio_report["summary"]
+    research_comment = portfolio_report["research_comment"]
+
+    st.subheader("组合概览 / Portfolio Overview")
+    summary_cols = st.columns(4)
+    summary_cols[0].metric("最新日期", sanitize_research_text(summary.get("latest_date") or "N/A"))
+    summary_cols[1].metric("持仓数量", sanitize_research_text(summary.get("holding_count") or "N/A"))
+    summary_cols[2].metric("覆盖行业数", sanitize_research_text(summary.get("industry_count") or "N/A"))
+    summary_cols[3].metric("权重最高股票", sanitize_research_text(summary.get("top_weight_stock") or "N/A"))
+
+    summary_cols = st.columns(3)
+    summary_cols[0].metric("模型评分最高股票", sanitize_research_text(summary.get("top_score_stock") or "N/A"))
+    summary_cols[1].metric("平均模型评分", format_metric_value(summary.get("average_score"), decimals=4))
+    summary_cols[2].metric(
+        "平均评分百分位",
+        format_metric_value(summary.get("average_score_pct_rank"), percent=True),
+    )
+
+    st.subheader("组合研究说明 / Portfolio Research Comment")
+    st.info(sanitize_research_text(research_comment))
+
+    st.subheader("行业分布 / Industry Distribution")
+    if industry_distribution.empty:
+        st.info("暂无行业分布数据。")
+    else:
+        st.dataframe(industry_distribution, use_container_width=True)
+        if {"industry", "weight"}.issubset(industry_distribution.columns):
+            chart_df = industry_distribution.copy()
+            chart_df["weight"] = pd.to_numeric(chart_df["weight"], errors="coerce")
+            chart_df = chart_df.dropna(subset=["weight"])
+            if not chart_df.empty:
+                st.bar_chart(chart_df.set_index("industry")[["weight"]])
+        st.caption("weight 为组合行业权重或等权估算权重。")
+
+    st.subheader("个股权重分布 / Stock Weight Distribution")
+    if weight_distribution.empty:
+        st.info("暂无个股权重数据。")
+    else:
+        st.dataframe(weight_distribution, use_container_width=True)
+        if "weight" in weight_distribution.columns:
+            chart_df = weight_distribution.copy()
+            chart_df["weight"] = pd.to_numeric(chart_df["weight"], errors="coerce")
+            chart_df = chart_df.dropna(subset=["weight"])
+            label_col = "name" if "name" in chart_df.columns else "ts_code"
+            if label_col in chart_df.columns and not chart_df.empty:
+                st.bar_chart(chart_df.set_index(label_col)[["weight"]])
+
+    st.subheader("最新组合明细 / Latest Portfolio Holdings")
+    if latest_portfolio.empty:
+        st.info("暂无最新组合明细。")
+    else:
+        st.dataframe(latest_portfolio, use_container_width=True)
+        st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不作为前瞻性收益判断。")
+        st.download_button(
+            label="下载当前组合 CSV",
+            data=latest_portfolio.to_csv(index=False).encode("utf-8-sig"),
+            file_name="latest_model_portfolio.csv",
+            mime="text/csv",
+        )
+
+    with st.expander("查看全部历史模型选股结果"):
+        show_table_or_hint(selected_portfolio, "No historical model-selected portfolio data found.")
+    return
+
     st.title("模型选股结果 / Model-selected Portfolio")
     st.info("当前页面展示最新一期模型选出的 Top N 股票，仅作为量化研究信号，不构成投资建议。")
 

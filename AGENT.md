@@ -749,3 +749,62 @@
 - 未生成虚假未来收益承诺。
 - 页面展示仅为历史样本和量化研究参考，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V8-A-1 Portfolio Report Service
+
+阶段：V8-A-1 Portfolio Report Service
+
+修改文件：
+- app/services/portfolio_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增推荐投资组合报告服务。
+- 支持生成最新组合、行业分布、个股权重分布、组合概览和中文组合研究说明。
+- 为后续 Streamlit 推荐投资组合页面增强做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 组合结果仅为历史样本中的模型筛选结果和量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V8-A-1 Patch Portfolio Report Display
+
+阶段：V8-A-1 Patch Portfolio Report Display
+
+修改文件：
+- app/services/portfolio_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 修复推荐组合行业分布中 industry 空值显示为 NaN 的问题。
+- 将缺失行业统一展示为“未知行业”。
+- 修复组合研究说明中的风险声明文字错误。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 组合结果仅为历史样本中的模型筛选结果和量化研究参考，不构成投资建议。
+## 2026-06-12 V8-A-2 Portfolio Report App Integration
+
+阶段：V8-A-2 Portfolio Report App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将推荐投资组合报告服务接入 Streamlit 推荐投资组合页面。
+- 新增组合概览、组合研究说明、行业分布、个股权重分布、最新组合明细和 CSV 下载按钮。
+- 增强模型组合页面的产品化展示能力。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 页面展示仅为历史样本中的模型选股结果和量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
