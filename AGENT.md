@@ -359,3 +359,39 @@
 - 未生成虚假投资收益结果。
 - 输出结果仅作为量化研究信号，不构成投资建议。
 - reports/tables 下结果由用户运行脚本生成，不纳入 Git 跟踪。
+## 2026-06-12 V4-B-1 Portfolio Backtest Core
+
+阶段：V4-B-1 Portfolio Backtest Core
+
+修改文件：
+- src/backtest/portfolio_backtest.py
+- AGENT.md
+
+修改内容摘要：
+- 实现等权组合持仓、换手率、交易成本、净值曲线和绩效指标计算核心函数。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假未来收益承诺。
+- 回测结果仅用于历史样本测算。
+## 2026-06-12 V4-B-2 Portfolio Backtest CLI and Docs
+
+阶段：V4-B-2 Portfolio Backtest CLI and Docs
+
+修改文件：
+- scripts/run_backtest.py
+- docs/04_backtest_design.md
+- AGENT.md
+
+修改内容摘要：
+- 新增组合回测命令行脚本。
+- 输出持仓、换手率、净值曲线和绩效指标表。
+- 更新回测设计文档。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假未来收益承诺。
+- 回测结果仅为历史样本测算。
+- reports/tables 下结果由用户运行脚本生成，不纳入 Git 跟踪。
