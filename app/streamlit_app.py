@@ -37,6 +37,10 @@ from app.services.stock_query_service import (  # noqa: E402
     search_stock,
 )
 from app.services.stock_rating_service import build_stock_rating_report  # noqa: E402
+from app.services.stock_report_service import (  # noqa: E402
+    build_factor_exposure_comment,
+    build_stock_research_summary,
+)
 
 
 RISK_NOTICE = "本应用展示的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。"
@@ -311,6 +315,25 @@ def render_rating_report(rating_report: dict[str, object]) -> None:
     st.warning(sanitize_research_text(rating_report.get("disclaimer", RISK_NOTICE)))
 
 
+def render_stock_research_summary(
+    snapshot: dict[str, object],
+    rating_report: dict[str, object],
+    frequency: dict[str, object],
+) -> None:
+    """Render a natural-language single-stock research summary and factor comments."""
+    st.subheader("单股研究摘要 / Stock Research Summary")
+    research_summary = build_stock_research_summary(snapshot, rating_report, frequency)
+    st.info(sanitize_research_text(research_summary))
+
+    st.subheader("因子暴露解释")
+    factor_comments = build_factor_exposure_comment(snapshot)
+    if factor_comments:
+        for comment in factor_comments:
+            st.markdown(f"- {sanitize_research_text(comment)}")
+    else:
+        st.info("暂无可用因子暴露解释。")
+
+
 def render_stock_history_charts(history: pd.DataFrame) -> None:
     """Render simple score and rank history charts for one stock."""
     if history.empty or "date" not in history.columns:
@@ -361,6 +384,7 @@ def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
     if snapshot:
         rating_report = build_stock_rating_report(snapshot, frequency)
         render_rating_report(rating_report)
+        render_stock_research_summary(snapshot, rating_report, frequency)
     else:
         st.info("暂无可生成趋势参考与模型评级的历史样本记录。")
 

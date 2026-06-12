@@ -594,3 +594,43 @@
 - 未绕过现有 Token 读取逻辑。
 - 未生成虚假未来收益承诺。
 - 页面明确说明流水线输出仅为历史样本回测和量化研究结果，不构成投资建议。
+## 2026-06-12 V7-A-1 Stock Research Summary Service
+
+阶段：V7-A-1 Stock Research Summary Service
+
+修改文件：
+- app/services/stock_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增单只股票自然语言研究摘要服务。
+- 支持根据模型快照、趋势评级和入选频率生成中文研究摘要。
+- 新增因子暴露解释文本生成函数。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 摘要结果仅为历史样本和量化模型研究输出，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V7-A-2 Stock Research Summary App Integration
+
+阶段：V7-A-2 Stock Research Summary App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将单只股票自然语言研究摘要接入 Streamlit 单股分析页面。
+- 展示结构化中文研究摘要和因子暴露解释。
+- 增强单股分析页面的可读性和研究报告感。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 研究摘要仅为历史样本和量化模型研究输出，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
