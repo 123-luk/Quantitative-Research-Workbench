@@ -436,3 +436,42 @@
 - 未生成虚假未来收益承诺。
 - 输出结果仅为历史样本回测和量化研究结果。
 - data 与 reports 下结果由用户运行脚本生成，不纳入 Git 跟踪。
+## 2026-06-12 V6-A-1 Dashboard Data Service
+
+阶段：V6-A-1 Dashboard Data Service
+
+修改文件：
+- app/services/dashboard_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增 Streamlit Dashboard 数据读取服务。
+- 支持安全读取本地 CSV、获取图表路径、提取最新一期模型选股结果和格式化指标。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未修改 data 或 reports 下任何生成文件。
+- 未生成虚假未来收益承诺。
+## 2026-06-12 V6-A-2 Streamlit App Pages
+
+阶段：V6-A-2 Streamlit App Pages
+
+修改文件：
+- app/streamlit_app.py
+- requirements.txt
+- AGENT.md
+
+修改内容摘要：
+- 新增 Streamlit App 页面主体。
+- 实现首页 Dashboard、推荐投资组合、回测结果和因子研究页面。
+- App 读取本地 pipeline 输出结果，展示历史回测指标、图表、IC Summary 和最新一期模型选股结果。
+- 补充 Streamlit 依赖。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- App 明确说明结果仅为历史样本回测和量化研究输出，不构成投资建议。
