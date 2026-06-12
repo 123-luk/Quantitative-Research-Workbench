@@ -516,3 +516,42 @@
 - 未生成虚假未来收益承诺。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
 - 页面明确说明结果仅为量化研究参考，不构成投资建议。
+## 2026-06-12 V6-C-1 Stock Rating Service
+
+阶段：V6-C-1 Stock Rating Service
+
+修改文件：
+- app/services/stock_rating_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增单只股票趋势参考与投资吸引力评级服务。
+- 基于综合评分、动量、波动率和估值因子构建 research_score。
+- 输出模型评级、趋势参考、解释文本和风险声明。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 评级结果仅为量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V6-C-2 Stock Rating App Integration
+
+阶段：V6-C-2 Stock Rating App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将单只股票趋势参考与投资吸引力评级接入 Streamlit 单股分析页面。
+- 展示 research_score、模型评级、未来半年趋势参考、综合评分位置、动量标签、波动率标签、解释文本和风险声明。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 页面明确说明评级仅为量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。

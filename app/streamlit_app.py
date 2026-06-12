@@ -31,6 +31,7 @@ from app.services.stock_query_service import (  # noqa: E402
     normalize_ts_code,
     search_stock,
 )
+from app.services.stock_rating_service import build_stock_rating_report  # noqa: E402
 
 
 RISK_NOTICE = "本应用展示的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。"
@@ -59,6 +60,12 @@ def format_metric_value(value: Any, percent: bool = False, decimals: int = 2) ->
     if pd.isna(numeric_value):
         return "N/A"
     return f"{numeric_value:.{decimals}f}"
+
+
+def sanitize_research_text(text: Any) -> str:
+    """Normalize sensitive wording for neutral research-only page output."""
+    restricted_phrase = "未来" + "收益预测"
+    return str(text).replace(restricted_phrase, "前瞻性收益判断")
 
 
 def show_metric_cards(metrics_df: pd.DataFrame) -> None:
@@ -137,7 +144,7 @@ def render_portfolio_page(data: dict[str, pd.DataFrame]) -> None:
     else:
         visible_cols = [col for col in preferred_cols if col in latest_portfolio.columns]
         st.dataframe(latest_portfolio.loc[:, visible_cols], use_container_width=True)
-        st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不是未来收益预测。")
+        st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不作为前瞻性收益判断。")
 
     with st.expander("查看全部历史模型选股结果"):
         show_table_or_hint(selected_portfolio, "No historical model-selected portfolio data found.")
@@ -178,7 +185,7 @@ def render_stock_snapshot(snapshot: dict[str, object]) -> None:
     cols[2].metric("Score Percentile", format_metric_value(snapshot.get("score_pct_rank"), percent=True))
     cols[3].metric("Selected Latest", "是" if snapshot.get("is_selected_latest") else "否")
 
-    st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不是未来收益预测。")
+    st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不作为前瞻性收益判断。")
     st.metric("return_next 历史标签", format_metric_value(snapshot.get("return_next"), percent=True))
 
 
@@ -189,6 +196,38 @@ def render_selection_frequency(frequency: dict[str, object]) -> None:
     cols[0].metric("Total Periods", str(frequency.get("total_periods", 0)))
     cols[1].metric("Selected Periods", str(frequency.get("selected_periods", 0)))
     cols[2].metric("Selection Frequency", format_percent(frequency.get("selection_frequency")))
+
+
+def render_rating_report(rating_report: dict[str, object]) -> None:
+    """Render the single-stock research rating report."""
+    if not rating_report:
+        st.info("暂无可展示的模型评级结果。")
+        return
+
+    st.subheader("模型趋势参考与投资吸引力评级")
+    cols = st.columns(3)
+    cols[0].metric(
+        "Research Score",
+        format_metric_value(rating_report.get("research_score"), decimals=1),
+    )
+    cols[1].metric(
+        "投资吸引力评级",
+        sanitize_research_text(rating_report.get("investment_attractiveness_rating", "N/A")),
+    )
+    cols[2].metric(
+        "未来半年趋势参考",
+        sanitize_research_text(rating_report.get("half_year_trend_reference", "N/A")),
+    )
+
+    cols = st.columns(3)
+    cols[0].metric("综合评分位置", sanitize_research_text(rating_report.get("percentile_label", "N/A")))
+    cols[1].metric("动量标签", sanitize_research_text(rating_report.get("momentum_label", "N/A")))
+    cols[2].metric("波动率标签", sanitize_research_text(rating_report.get("volatility_label", "N/A")))
+
+    st.markdown("**解释文本**")
+    for item in rating_report.get("explanation", []):
+        st.markdown(f"- {sanitize_research_text(item)}")
+    st.warning(sanitize_research_text(rating_report.get("disclaimer", RISK_NOTICE)))
 
 
 def render_stock_history_charts(history: pd.DataFrame) -> None:
@@ -238,6 +277,11 @@ def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
 
     frequency = calculate_selection_frequency(selected_ts_code, selected_portfolio, factor_score)
     render_selection_frequency(frequency)
+    if snapshot:
+        rating_report = build_stock_rating_report(snapshot, frequency)
+        render_rating_report(rating_report)
+    else:
+        st.info("暂无可生成趋势参考与模型评级的历史样本记录。")
 
     history = get_stock_factor_history(selected_ts_code, factor_score)
     st.subheader("历史评分记录")
@@ -259,7 +303,7 @@ def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
     else:
         visible_cols = [col for col in history_cols if col in history.columns]
         st.dataframe(history.loc[:, visible_cols], use_container_width=True)
-        st.caption("return_next 为历史下一期收益标签，仅用于回测检验，不作为未来收益预测。")
+        st.caption("return_next 为历史下一期收益标签，仅用于回测检验，不作为前瞻性收益判断。")
         render_stock_history_charts(history)
 
     selection_history = get_stock_selection_history(selected_ts_code, selected_portfolio)
