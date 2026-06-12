@@ -475,3 +475,44 @@
 - 未运行研究流水线。
 - 未生成虚假未来收益承诺。
 - App 明确说明结果仅为历史样本回测和量化研究输出，不构成投资建议。
+## 2026-06-12 V6-B-1 Stock Query Service
+
+阶段：V6-B-1 Stock Query Service
+
+修改文件：
+- app/services/stock_query_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增股票名称/代码查询服务。
+- 支持股票代码规范化、名称模糊搜索、股票历史评分提取、历史入选记录提取和最新一期快照生成。
+- 为后续单只股票分析页面做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未修改 data 或 reports 下任何生成文件。
+- 未生成虚假未来收益承诺。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V6-B-2 Single Stock Analysis Page
+
+阶段：V6-B-2 Single Stock Analysis Page
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 在 Streamlit App 中新增单只股票分析页面。
+- 支持按股票名称或代码查询。
+- 展示股票最新模型评分、排名、历史评分走势、历史入选记录和入选频率。
+- 将单股分析功能接入本地 factor_score 与 selected_portfolio 结果文件。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+- 页面明确说明结果仅为量化研究参考，不构成投资建议。

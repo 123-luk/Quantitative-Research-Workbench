@@ -22,9 +22,22 @@ from app.services.dashboard_service import (  # noqa: E402
     get_project_root,
     load_dashboard_data,
 )
+from app.services.stock_query_service import (  # noqa: E402
+    build_stock_lookup,
+    calculate_selection_frequency,
+    get_latest_stock_snapshot,
+    get_stock_factor_history,
+    get_stock_selection_history,
+    normalize_ts_code,
+    search_stock,
+)
 
 
 RISK_NOTICE = "本应用展示的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。"
+SINGLE_STOCK_NOTICE = (
+    "本页面展示的是历史样本中的模型评分、排名和入选情况，仅作为量化研究参考，"
+    "不代表未来表现，不构成投资建议。"
+)
 MISSING_FIGURE_HINT = "Please run scripts/plot_backtest.py or scripts/run_research_pipeline.py first."
 
 
@@ -66,10 +79,7 @@ def show_metric_cards(metrics_df: pd.DataFrame) -> None:
     columns = st.columns(4)
     for index, (label, column, is_percent) in enumerate(metric_specs):
         value = get_metric_value(metrics_df, column)
-        columns[index % len(columns)].metric(
-            label,
-            format_metric_value(value, percent=is_percent),
-        )
+        columns[index % len(columns)].metric(label, format_metric_value(value, percent=is_percent))
 
 
 def show_figure(path: Path, caption: str) -> None:
@@ -127,9 +137,137 @@ def render_portfolio_page(data: dict[str, pd.DataFrame]) -> None:
     else:
         visible_cols = [col for col in preferred_cols if col in latest_portfolio.columns]
         st.dataframe(latest_portfolio.loc[:, visible_cols], use_container_width=True)
+        st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不是未来收益预测。")
 
     with st.expander("查看全部历史模型选股结果"):
         show_table_or_hint(selected_portfolio, "No historical model-selected portfolio data found.")
+
+
+def choose_stock_from_matches(matches: pd.DataFrame) -> str | None:
+    """Return the selected ts_code from one or more search matches."""
+    if matches.empty:
+        return None
+    if len(matches) == 1:
+        return str(matches.iloc[0]["ts_code"])
+
+    options = []
+    for _, row in matches.iterrows():
+        name = row.get("name", "")
+        industry = row.get("industry", "")
+        options.append(f"{row['ts_code']} | {name} | {industry}")
+    selected_label = st.selectbox("请选择一个匹配股票", options)
+    return selected_label.split("|", 1)[0].strip()
+
+
+def render_stock_snapshot(snapshot: dict[str, object]) -> None:
+    """Render the latest single-stock research snapshot."""
+    if not snapshot:
+        st.info("No factor score history found for this stock.")
+        return
+
+    st.subheader("最新一期模型评分快照")
+    cols = st.columns(4)
+    cols[0].metric("ts_code", str(snapshot.get("ts_code", "N/A")))
+    cols[1].metric("name", str(snapshot.get("name", "N/A")))
+    cols[2].metric("industry", str(snapshot.get("industry", "N/A")))
+    cols[3].metric("latest_date", str(snapshot.get("latest_date", "N/A")))
+
+    cols = st.columns(4)
+    cols[0].metric("Composite Score", format_metric_value(snapshot.get("composite_score")))
+    cols[1].metric("Score Rank", format_metric_value(snapshot.get("score_rank"), decimals=0))
+    cols[2].metric("Score Percentile", format_metric_value(snapshot.get("score_pct_rank"), percent=True))
+    cols[3].metric("Selected Latest", "是" if snapshot.get("is_selected_latest") else "否")
+
+    st.caption("return_next 是历史下一期收益标签，仅用于回测检验，不是未来收益预测。")
+    st.metric("return_next 历史标签", format_metric_value(snapshot.get("return_next"), percent=True))
+
+
+def render_selection_frequency(frequency: dict[str, object]) -> None:
+    """Render selection frequency metrics for one stock."""
+    st.subheader("历史入选频率")
+    cols = st.columns(3)
+    cols[0].metric("Total Periods", str(frequency.get("total_periods", 0)))
+    cols[1].metric("Selected Periods", str(frequency.get("selected_periods", 0)))
+    cols[2].metric("Selection Frequency", format_percent(frequency.get("selection_frequency")))
+
+
+def render_stock_history_charts(history: pd.DataFrame) -> None:
+    """Render simple score and rank history charts for one stock."""
+    if history.empty or "date" not in history.columns:
+        return
+
+    chart_data = history.copy()
+    chart_data["date"] = pd.to_datetime(chart_data["date"], errors="coerce")
+    chart_data = chart_data.dropna(subset=["date"]).set_index("date")
+    if "composite_score" in chart_data.columns:
+        st.subheader("模型评分走势")
+        st.line_chart(chart_data[["composite_score"]])
+    if "score_rank" in chart_data.columns:
+        st.subheader("模型排名走势")
+        st.caption("score_rank 越低表示该期模型排名越靠前。")
+        st.line_chart(chart_data[["score_rank"]])
+
+
+def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
+    """Render the single-stock analysis page."""
+    st.title("单只股票分析 / Single Stock Analysis")
+    st.warning(SINGLE_STOCK_NOTICE)
+
+    factor_score = data["factor_score"]
+    selected_portfolio = data["selected_portfolio"]
+    lookup = build_stock_lookup(factor_score, selected_portfolio)
+
+    query = st.text_input("股票名称或代码，例如：贵州茅台、600519、600519.SH")
+    if not query:
+        st.info("请输入股票名称或代码进行查询。")
+        return
+
+    matches = search_stock(query, lookup)
+    if matches.empty:
+        normalized_code = normalize_ts_code(query)
+        st.info(f"未找到匹配股票，请检查股票名称或代码。规范化代码：{normalized_code}")
+        return
+
+    selected_ts_code = choose_stock_from_matches(matches)
+    if not selected_ts_code:
+        st.info("请选择一个股票查看单股分析。")
+        return
+
+    snapshot = get_latest_stock_snapshot(selected_ts_code, factor_score, selected_portfolio)
+    render_stock_snapshot(snapshot)
+
+    frequency = calculate_selection_frequency(selected_ts_code, selected_portfolio, factor_score)
+    render_selection_frequency(frequency)
+
+    history = get_stock_factor_history(selected_ts_code, factor_score)
+    st.subheader("历史评分记录")
+    history_cols = [
+        "date",
+        "composite_score",
+        "score_rank",
+        "score_pct_rank",
+        "return_next",
+        "momentum_1m",
+        "momentum_3m",
+        "volatility_6m",
+        "ep",
+        "bp",
+        "ps_inverse",
+    ]
+    if history.empty:
+        st.info("该股票暂无历史评分记录。")
+    else:
+        visible_cols = [col for col in history_cols if col in history.columns]
+        st.dataframe(history.loc[:, visible_cols], use_container_width=True)
+        st.caption("return_next 为历史下一期收益标签，仅用于回测检验，不作为未来收益预测。")
+        render_stock_history_charts(history)
+
+    selection_history = get_stock_selection_history(selected_ts_code, selected_portfolio)
+    with st.expander("查看历史入选模型组合记录"):
+        if selection_history.empty:
+            st.info("该股票在当前样本期没有进入模型选股组合。")
+        else:
+            st.dataframe(selection_history, use_container_width=True)
 
 
 def render_backtest_page(data: dict[str, pd.DataFrame], figure_paths: dict[str, Path]) -> None:
@@ -180,7 +318,7 @@ def main() -> None:
     st.sidebar.title("Quant Factor System")
     page = st.sidebar.radio(
         "Navigation",
-        ["首页 Dashboard", "推荐投资组合", "回测结果", "因子研究"],
+        ["首页 Dashboard", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
     )
     st.sidebar.markdown("当前版本：V6-A Portfolio Dashboard")
     st.sidebar.markdown("数据来源：TuShare + local CSV")
@@ -190,6 +328,8 @@ def main() -> None:
         render_dashboard_page(data, figure_paths)
     elif page == "推荐投资组合":
         render_portfolio_page(data)
+    elif page == "单只股票分析":
+        render_single_stock_page(data)
     elif page == "回测结果":
         render_backtest_page(data, figure_paths)
     elif page == "因子研究":
