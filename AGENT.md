@@ -808,3 +808,60 @@
 - 未生成虚假未来收益承诺。
 - 页面展示仅为历史样本中的模型选股结果和量化研究参考，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V8-B-1a Backtest Summary Service
+
+阶段：V8-B-1a Backtest Summary Service
+
+修改文件：
+- app/services/backtest_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增回测指标摘要服务。
+- 支持读取回测核心指标、生成表现标签和中文回测研究摘要。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 回测结果仅为历史样本回测和量化研究参考，不构成投资建议。
+## 2026-06-12 V8-B-1b Backtest Time Series Service
+
+阶段：V8-B-1b Backtest Time Series Service
+
+修改文件：
+- app/services/backtest_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 在回测报告服务中新增净值曲线、月度收益、回撤序列和换手率序列整理函数。
+- 新增 prepare_backtest_report_data 聚合函数，为 Streamlit 回测页面增强做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 回测时间序列仅为历史样本回测展示，不代表未来表现，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V8-B-2 Backtest Report App Integration
+
+阶段：V8-B-2 Backtest Report App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将回测报告服务接入 Streamlit 回测结果页面。
+- 新增回测核心指标、回测研究摘要、表现标签、净值曲线、月度收益、回撤曲线、换手率和 CSV 下载按钮。
+- 增强回测结果页面的策略评估展示能力。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 页面展示仅为历史样本回测和量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。

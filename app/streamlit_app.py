@@ -22,6 +22,7 @@ from app.services.dashboard_service import (  # noqa: E402
     get_project_root,
     load_dashboard_data,
 )
+from app.services.backtest_report_service import prepare_backtest_report_data  # noqa: E402
 from app.services.portfolio_report_service import prepare_portfolio_report_data  # noqa: E402
 from app.services.stock_chart_service import prepare_single_stock_chart_data  # noqa: E402
 from app.services.pipeline_runner_service import (  # noqa: E402
@@ -600,20 +601,100 @@ def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
 
 def render_backtest_page(data: dict[str, pd.DataFrame], figure_paths: dict[str, Path]) -> None:
     """Render the historical backtest page."""
-    st.title("历史回测结果 / Historical Backtest")
-    st.info("以下内容为 historical backtest 历史样本测算，不代表未来收益。")
+    st.title("回测结果 / Backtest Results")
+    st.info("本页面展示的是历史样本回测结果和量化研究参考，不代表未来表现，不构成投资建议。")
 
-    st.subheader("Backtest Metrics")
-    show_table_or_hint(data["backtest_metrics"], "No backtest metrics found.")
+    backtest_metrics = data["backtest_metrics"]
+    backtest_nav = data["backtest_nav"]
+    backtest_turnover = data["backtest_turnover"]
+    backtest_report = prepare_backtest_report_data(
+        metrics_df=backtest_metrics,
+        nav_df=backtest_nav,
+        turnover_df=backtest_turnover,
+    )
+    metrics = backtest_report["metrics"]
+    labels = backtest_report["labels"]
+    research_comment = backtest_report["research_comment"]
+    nav_curve = backtest_report["nav_curve"]
+    monthly_return = backtest_report["monthly_return"]
+    drawdown = backtest_report["drawdown"]
+    turnover = backtest_report["turnover"]
 
-    st.subheader("Backtest NAV")
-    show_table_or_hint(data["backtest_nav"], "No backtest NAV data found.")
+    st.subheader("回测核心指标 / Key Backtest Metrics")
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("累计收益", format_metric_value(metrics.get("cumulative_return"), percent=True))
+    metric_cols[1].metric("年化收益", format_metric_value(metrics.get("annual_return"), percent=True))
+    metric_cols[2].metric("年化波动", format_metric_value(metrics.get("annual_volatility"), percent=True))
+    metric_cols[3].metric("夏普比率", format_metric_value(metrics.get("sharpe_ratio"), decimals=2))
 
-    st.subheader("Backtest Turnover")
-    show_table_or_hint(data["backtest_turnover"], "No backtest turnover data found.")
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("最大回撤", format_metric_value(metrics.get("max_drawdown"), percent=True))
+    metric_cols[1].metric("胜率", format_metric_value(metrics.get("win_rate"), percent=True))
+    metric_cols[2].metric("平均换手率", format_metric_value(metrics.get("average_turnover"), percent=True))
+    metric_cols[3].metric("调仓周期数", format_metric_value(metrics.get("n_periods"), decimals=0))
 
-    st.subheader("Historical Backtest Figures")
-    show_figures(figure_paths)
+    st.subheader("回测研究摘要 / Backtest Research Comment")
+    st.info(sanitize_research_text(research_comment))
+
+    st.subheader("表现标签 / Performance Labels")
+    if labels:
+        st.markdown(f"- cumulative_return_label：{sanitize_research_text(labels.get('cumulative_return_label', 'N/A'))}")
+        st.markdown(f"- max_drawdown_label：{sanitize_research_text(labels.get('max_drawdown_label', 'N/A'))}")
+        st.markdown(f"- sharpe_label：{sanitize_research_text(labels.get('sharpe_label', 'N/A'))}")
+        st.markdown(f"- win_rate_label：{sanitize_research_text(labels.get('win_rate_label', 'N/A'))}")
+    else:
+        st.info("暂无表现标签。")
+
+    st.subheader("净值曲线 / NAV Curve")
+    if nav_curve.empty or "nav" not in nav_curve.columns:
+        st.info("暂无净值曲线数据。")
+    else:
+        st.line_chart(nav_curve.set_index("date")[["nav"]])
+
+    st.subheader("月度收益 / Monthly Return")
+    if monthly_return.empty or "net_return" not in monthly_return.columns:
+        st.info("暂无月度收益数据。")
+    else:
+        st.bar_chart(monthly_return.set_index("date")[["net_return"]])
+        st.caption("net_return 为历史回测月度净收益，不代表未来收益。")
+
+    st.subheader("回撤曲线 / Drawdown")
+    if drawdown.empty or "drawdown" not in drawdown.columns:
+        st.info("暂无回撤数据。")
+    else:
+        st.line_chart(drawdown.set_index("date")[["drawdown"]])
+
+    st.subheader("换手率 / Turnover")
+    if turnover.empty or "turnover" not in turnover.columns:
+        st.info("暂无换手率数据。")
+    else:
+        st.line_chart(turnover.set_index("date")[["turnover"]])
+
+    st.subheader("回测数据表 / Backtest Data Tables")
+    st.markdown("**backtest_metrics**")
+    show_table_or_hint(backtest_metrics, "No backtest metrics found.")
+    st.markdown("**nav_curve**")
+    show_table_or_hint(nav_curve, "No backtest NAV curve data found.")
+    st.markdown("**turnover**")
+    show_table_or_hint(turnover, "No backtest turnover data found.")
+
+    if not nav_curve.empty:
+        st.download_button(
+            label="下载回测净值数据 CSV",
+            data=nav_curve.to_csv(index=False).encode("utf-8-sig"),
+            file_name="backtest_nav_curve.csv",
+            mime="text/csv",
+        )
+    if not monthly_return.empty:
+        st.download_button(
+            label="下载月度收益数据 CSV",
+            data=monthly_return.to_csv(index=False).encode("utf-8-sig"),
+            file_name="backtest_monthly_return.csv",
+            mime="text/csv",
+        )
+
+    with st.expander("Historical Backtest Figures"):
+        show_figures(figure_paths)
 
 
 def render_factor_research_page(data: dict[str, pd.DataFrame]) -> None:
