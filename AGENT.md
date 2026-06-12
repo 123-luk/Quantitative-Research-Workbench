@@ -416,3 +416,23 @@
 - 未生成虚假未来收益承诺。
 - 图表仅展示历史样本回测结果。
 - reports/figures 下图片由用户运行脚本生成，不纳入 Git 跟踪。
+## 2026-06-12 V5-A Research Pipeline CLI
+
+阶段：V5-A Research Pipeline CLI
+
+修改文件：
+- scripts/run_research_pipeline.py
+- docs/01_project_design.md
+- AGENT.md
+
+修改内容摘要：
+- 新增一键运行完整研究流水线脚本。
+- 串联数据拉取、因子构建、预处理、因子检验、打分、回测和可视化。
+- 更新项目设计文档。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未绕过现有 Token 读取逻辑。
+- 未生成虚假未来收益承诺。
+- 输出结果仅为历史样本回测和量化研究结果。
+- data 与 reports 下结果由用户运行脚本生成，不纳入 Git 跟踪。
