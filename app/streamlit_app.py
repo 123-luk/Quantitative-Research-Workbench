@@ -28,6 +28,7 @@ from app.services.pipeline_runner_service import (  # noqa: E402
     command_to_display,
     run_research_pipeline_from_app,
 )
+from app.services.stock_price_service import prepare_single_stock_price_data  # noqa: E402
 from app.services.stock_query_service import (  # noqa: E402
     build_stock_lookup,
     calculate_selection_frequency,
@@ -409,6 +410,51 @@ def render_single_stock_charts(
         st.dataframe(factor_exposure, use_container_width=True)
 
 
+def render_single_stock_price_section(history: pd.DataFrame) -> None:
+    """Render historical price, return, and volatility information for one stock."""
+    price_data = prepare_single_stock_price_data(history)
+    summary = price_data["price_summary"]
+
+    st.subheader("价格与历史收益表现 / Price and Historical Return")
+    cols = st.columns(5)
+    cols[0].metric("最新收盘价", format_metric_value(summary.get("latest_close")))
+    cols[1].metric(
+        "最新月度收益",
+        format_metric_value(summary.get("latest_monthly_return"), percent=True),
+    )
+    cols[2].metric(
+        "近 3 个月历史收益",
+        format_metric_value(summary.get("recent_3m_return"), percent=True),
+    )
+    cols[3].metric(
+        "近 6 个月历史收益",
+        format_metric_value(summary.get("recent_6m_return"), percent=True),
+    )
+    cols[4].metric(
+        "近 6 个月历史波动率",
+        format_metric_value(summary.get("recent_6m_volatility"), percent=True),
+    )
+
+    st.write(f"最近 3 个月历史表现：{sanitize_research_text(summary.get('recent_3m_return_label', 'N/A'))}")
+    st.write(f"最近 6 个月历史表现：{sanitize_research_text(summary.get('recent_6m_return_label', 'N/A'))}")
+    st.write(f"最近 6 个月波动水平：{sanitize_research_text(summary.get('recent_6m_volatility_label', 'N/A'))}")
+    st.write(f"可用历史月份：{summary.get('available_months', 0)}")
+
+    close_trend = price_data["close_trend"]
+    if close_trend.empty:
+        st.info("暂无历史收盘价走势数据。")
+    else:
+        st.caption("历史收盘价走势仅用于历史样本展示和量化研究参考。")
+        st.line_chart(render_chart_frame(close_trend, ["close"]))
+
+    monthly_return_trend = price_data["monthly_return_trend"]
+    if monthly_return_trend.empty:
+        st.info("暂无月度收益走势数据。")
+    else:
+        st.caption("monthly_return 为历史月度收益，不代表未来收益。")
+        st.bar_chart(render_chart_frame(monthly_return_trend, ["monthly_return"]))
+
+
 def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
     """Render the single-stock analysis page."""
     st.title("单只股票分析 / Single Stock Analysis")
@@ -447,6 +493,8 @@ def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
         st.info("暂无可生成趋势参考与模型评级的历史样本记录。")
 
     history = get_stock_factor_history(selected_ts_code, factor_score)
+    render_single_stock_price_section(history)
+
     st.subheader("历史评分记录")
     history_cols = [
         "date",

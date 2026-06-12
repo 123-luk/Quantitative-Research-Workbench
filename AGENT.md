@@ -691,3 +691,61 @@
 - 未生成虚假未来收益承诺。
 - 图表仅为历史样本中的量化研究展示，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V7-C-1 Single Stock Price Data Service
+
+阶段：V7-C-1 Single Stock Price Data Service
+
+修改文件：
+- app/services/stock_price_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增单只股票价格与收益走势数据服务。
+- 支持生成历史收盘价走势、月度收益走势、近 1/3/6 个月历史收益和近 6 个月波动统计。
+- 为后续 Streamlit 单股分析页面展示价格走势和历史收益表现做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+- 输出仅为历史样本展示和量化研究参考，不构成投资建议。
+## 2026-06-12 V7-C-1 Patch Stock History Price Columns
+
+阶段：V7-C-1 Patch Stock History Price Columns
+
+修改文件：
+- app/services/stock_query_service.py
+- AGENT.md
+
+修改内容摘要：
+- 修复 get_stock_factor_history 未返回 close、monthly_return 等价格收益字段的问题。
+- 支持单股价格走势和月度收益走势服务读取历史价格数据。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V7-C-2 Single Stock Price App Integration
+
+阶段：V7-C-2 Single Stock Price App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将单只股票历史收盘价走势、月度收益走势和收益统计接入 Streamlit 单股分析页面。
+- 展示最新收盘价、最新月度收益、近 3 个月历史收益、近 6 个月历史收益和近 6 个月历史波动率。
+- 增强单股分析页面对历史价格表现的解释能力。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 页面展示仅为历史样本和量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
