@@ -166,7 +166,7 @@ def get_latest_stock_snapshot(
         )
         is_selected_latest = bool(selected_mask.any())
 
-    return {
+    snapshot = {
         "ts_code": latest.get("ts_code"),
         "name": latest.get("name"),
         "industry": latest.get("industry"),
@@ -177,6 +177,21 @@ def get_latest_stock_snapshot(
         "return_next": latest.get("return_next"),
         "is_selected_latest": is_selected_latest,
     }
+    factor_cols = [
+        "ep",
+        "bp",
+        "ps_inverse",
+        "size_factor",
+        "turnover_factor",
+        "amount_factor",
+        "momentum_1m",
+        "momentum_3m",
+        "volatility_6m",
+    ]
+    for col in factor_cols:
+        if col in latest.index:
+            snapshot[col] = latest.get(col)
+    return snapshot
 
 
 def calculate_selection_frequency(

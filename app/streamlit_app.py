@@ -22,6 +22,7 @@ from app.services.dashboard_service import (  # noqa: E402
     get_project_root,
     load_dashboard_data,
 )
+from app.services.stock_chart_service import prepare_single_stock_chart_data  # noqa: E402
 from app.services.pipeline_runner_service import (  # noqa: E402
     build_pipeline_command,
     command_to_display,
@@ -351,6 +352,63 @@ def render_stock_history_charts(history: pd.DataFrame) -> None:
         st.line_chart(chart_data[["score_rank"]])
 
 
+def render_chart_frame(df: pd.DataFrame, value_cols: list[str]) -> pd.DataFrame:
+    """Return chart-ready data indexed by date for Streamlit line charts."""
+    chart_df = df.copy()
+    chart_df["date"] = pd.to_datetime(chart_df["date"], errors="coerce")
+    chart_df = chart_df.dropna(subset=["date"]).set_index("date")
+    return chart_df.loc[:, [col for col in value_cols if col in chart_df.columns]]
+
+
+def render_single_stock_charts(
+    history: pd.DataFrame,
+    snapshot: dict[str, object],
+) -> None:
+    """Render enhanced single-stock trend charts and latest factor exposure."""
+    chart_data = prepare_single_stock_chart_data(history, snapshot)
+
+    st.subheader("单股历史趋势图 / Single Stock Trend Charts")
+    score_trend = chart_data["score_trend"]
+    if score_trend.empty:
+        st.info("暂无综合评分趋势数据。")
+    else:
+        st.caption("综合评分越高，表示模型相对评分越高。")
+        st.line_chart(render_chart_frame(score_trend, ["composite_score"]))
+
+    rank_trend = chart_data["rank_trend"]
+    if rank_trend.empty:
+        st.info("暂无排名趋势数据。")
+    else:
+        st.caption("score_rank 越低表示模型排名越靠前。")
+        st.line_chart(render_chart_frame(rank_trend, ["score_rank"]))
+
+    percentile_trend = chart_data["percentile_trend"]
+    if percentile_trend.empty:
+        st.info("暂无评分百分位趋势数据。")
+    else:
+        st.caption("score_pct_rank 越高表示相对排名越靠前。")
+        st.line_chart(render_chart_frame(percentile_trend, ["score_pct_rank"]))
+
+    momentum_risk_trend = chart_data["momentum_risk_trend"]
+    if momentum_risk_trend.empty:
+        st.info("暂无动量/波动率趋势数据。")
+    else:
+        st.caption("这些字段为横截面标准化后的历史因子值。")
+        st.line_chart(
+            render_chart_frame(
+                momentum_risk_trend,
+                ["momentum_1m", "momentum_3m", "volatility_6m"],
+            )
+        )
+
+    st.subheader("最新一期因子暴露 / Latest Factor Exposure")
+    factor_exposure = chart_data["factor_exposure"]
+    if factor_exposure.empty:
+        st.info("暂无可用因子暴露数据。")
+    else:
+        st.dataframe(factor_exposure, use_container_width=True)
+
+
 def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
     """Render the single-stock analysis page."""
     st.title("单只股票分析 / Single Stock Analysis")
@@ -409,7 +467,7 @@ def render_single_stock_page(data: dict[str, pd.DataFrame]) -> None:
         visible_cols = [col for col in history_cols if col in history.columns]
         st.dataframe(history.loc[:, visible_cols], use_container_width=True)
         st.caption("return_next 为历史下一期收益标签，仅用于回测检验，不作为前瞻性收益判断。")
-        render_stock_history_charts(history)
+    render_single_stock_charts(history, snapshot)
 
     selection_history = get_stock_selection_history(selected_ts_code, selected_portfolio)
     with st.expander("查看历史入选模型组合记录"):

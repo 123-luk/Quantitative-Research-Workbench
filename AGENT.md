@@ -634,3 +634,60 @@
 - 未生成虚假未来收益承诺。
 - 研究摘要仅为历史样本和量化模型研究输出，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V7-B-1 Single Stock Chart Data Service
+
+阶段：V7-B-1 Single Stock Chart Data Service
+
+修改文件：
+- app/services/stock_chart_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增单只股票图表数据整理服务。
+- 支持生成评分走势、排名走势、百分位走势、动量/波动率走势和因子暴露表。
+- 为后续 Streamlit 单股分析页面可视化增强做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 图表数据仅作为量化研究展示，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V7-B-1 Patch Stock Snapshot Factor Exposure
+
+阶段：V7-B-1 Patch Stock Snapshot Factor Exposure
+
+修改文件：
+- app/services/stock_query_service.py
+- AGENT.md
+
+修改内容摘要：
+- 修复 get_latest_stock_snapshot 未返回最新一期因子字段的问题。
+- 使单股因子暴露表可以读取 ep、bp、momentum、volatility 等标准化因子值。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V7-B-2 Single Stock Chart App Integration
+
+阶段：V7-B-2 Single Stock Chart App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将单只股票评分走势、排名走势、百分位走势、动量/波动率走势和因子暴露表接入 Streamlit 单股分析页面。
+- 增强单股分析页面的可视化展示能力。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 图表仅为历史样本中的量化研究展示，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
