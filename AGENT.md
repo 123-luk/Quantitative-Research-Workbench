@@ -338,3 +338,24 @@
 - 未调用 TuShare API。
 - 未生成虚假投资收益结果。
 - reports/tables 下结果由用户运行脚本生成，不纳入 Git 跟踪。
+## 2026-06-12 V4-A Multi-Factor Scoring Model
+
+阶段：V4-A Multi-Factor Scoring Model
+
+修改文件：
+- src/models/scoring_model.py
+- scripts/run_scoring_model.py
+- docs/03_factor_methodology.md
+- AGENT.md
+
+修改内容摘要：
+- 实现多因子方向调整、等权综合评分和 Top N 选股。
+- 新增多因子打分命令行脚本。
+- 更新因子方法论文档。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未生成虚假投资收益结果。
+- 输出结果仅作为量化研究信号，不构成投资建议。
+- reports/tables 下结果由用户运行脚本生成，不纳入 Git 跟踪。
