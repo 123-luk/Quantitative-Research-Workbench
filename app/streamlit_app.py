@@ -22,6 +22,11 @@ from app.services.dashboard_service import (  # noqa: E402
     get_project_root,
     load_dashboard_data,
 )
+from app.services.pipeline_runner_service import (  # noqa: E402
+    build_pipeline_command,
+    command_to_display,
+    run_research_pipeline_from_app,
+)
 from app.services.stock_query_service import (  # noqa: E402
     build_stock_lookup,
     calculate_selection_frequency,
@@ -120,6 +125,82 @@ def render_dashboard_page(data: dict[str, pd.DataFrame], figure_paths: dict[str,
     show_metric_cards(data["backtest_metrics"])
     st.divider()
     show_figures(figure_paths)
+
+
+def render_pipeline_page(project_root: Path) -> None:
+    """Render controls for running the historical research pipeline."""
+    st.title("运行研究流水线 / Run Research Pipeline")
+    st.warning("流水线生成的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。")
+    st.info(
+        "如果 skip_fetch=False，会调用 TuShare 拉取数据，需要本地 .env 中配置 TUSHARE_TOKEN。"
+        "App 不会展示 Token。Pipeline 可能需要较长时间，建议先用 skip_fetch=True 测试。"
+    )
+
+    st.subheader("参数设置")
+    col_left, col_right = st.columns(2)
+    with col_left:
+        start = st.text_input("start", value="20240101")
+        universe = st.selectbox("universe", ["hs300", "all"], index=0)
+        max_stocks = int(st.number_input("max_stocks", min_value=1, max_value=500, value=50, step=1))
+        n_groups = int(st.number_input("n_groups", min_value=2, max_value=10, value=5, step=1))
+        sleep = float(st.number_input("sleep", min_value=0.0, max_value=5.0, value=0.5, step=0.1))
+    with col_right:
+        end = st.text_input("end", value="20241231")
+        top_n = int(st.number_input("top_n", min_value=1, max_value=100, value=10, step=1))
+        transaction_cost = float(
+            st.number_input(
+                "transaction_cost",
+                min_value=0.0,
+                value=0.0005,
+                step=0.0001,
+                format="%.6f",
+            )
+        )
+        skip_fetch = st.checkbox("skip_fetch", value=True)
+        skip_plot = st.checkbox("skip_plot", value=False)
+
+    command = build_pipeline_command(
+        project_root=project_root,
+        start=start,
+        end=end,
+        universe=universe,
+        max_stocks=max_stocks,
+        top_n=top_n,
+        n_groups=n_groups,
+        transaction_cost=transaction_cost,
+        sleep=sleep,
+        skip_fetch=skip_fetch,
+        skip_plot=skip_plot,
+    )
+    st.subheader("命令预览")
+    st.code(command_to_display(command), language="powershell")
+    if skip_fetch:
+        st.caption("skip_fetch=True：将使用已有 data/raw 数据，不重新调用 TuShare。")
+
+    if st.button("Run pipeline"):
+        with st.spinner("Running historical research pipeline..."):
+            result = run_research_pipeline_from_app(
+                project_root=project_root,
+                start=start,
+                end=end,
+                universe=universe,
+                max_stocks=max_stocks,
+                top_n=top_n,
+                n_groups=n_groups,
+                transaction_cost=transaction_cost,
+                sleep=sleep,
+                skip_fetch=skip_fetch,
+                skip_plot=skip_plot,
+            )
+        if result.get("success"):
+            st.success("Pipeline completed. You can switch to Dashboard, Model-selected Portfolio, or Historical Backtest pages to inspect results.")
+        else:
+            st.error(f"Pipeline failed with return code {result.get('returncode')}.")
+
+        with st.expander("Pipeline stdout"):
+            st.code(str(result.get("stdout", "")))
+        with st.expander("Pipeline stderr"):
+            st.code(str(result.get("stderr", "")))
 
 
 def render_portfolio_page(data: dict[str, pd.DataFrame]) -> None:
@@ -362,7 +443,7 @@ def main() -> None:
     st.sidebar.title("Quant Factor System")
     page = st.sidebar.radio(
         "Navigation",
-        ["首页 Dashboard", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
+        ["首页 Dashboard", "运行研究流水线", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
     )
     st.sidebar.markdown("当前版本：V6-A Portfolio Dashboard")
     st.sidebar.markdown("数据来源：TuShare + local CSV")
@@ -370,6 +451,8 @@ def main() -> None:
 
     if page == "首页 Dashboard":
         render_dashboard_page(data, figure_paths)
+    elif page == "运行研究流水线":
+        render_pipeline_page(project_root)
     elif page == "推荐投资组合":
         render_portfolio_page(data)
     elif page == "单只股票分析":

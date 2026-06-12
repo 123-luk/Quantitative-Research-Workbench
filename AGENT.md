@@ -555,3 +555,42 @@
 - 未生成虚假未来收益承诺。
 - 页面明确说明评级仅为量化研究参考，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-12 V6-D-1 App Pipeline Runner Service
+
+阶段：V6-D-1 App Pipeline Runner Service
+
+修改文件：
+- app/services/pipeline_runner_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增 Streamlit App 调用研究流水线的服务函数。
+- 支持构建 run_research_pipeline.py 命令并通过 subprocess 执行。
+- 为后续 App 内一键运行 Pipeline 按钮做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未读取或打印真实 TuShare Token。
+- 未绕过现有 Token 读取逻辑。
+- 未生成虚假未来收益承诺。
+- Pipeline 输出仍为历史样本回测和量化研究结果。
+## 2026-06-12 V6-D-2 App Pipeline Runner Page
+
+阶段：V6-D-2 App Pipeline Runner Page
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 在 Streamlit App 中新增运行研究流水线页面。
+- 支持用户设置 start、end、universe、max_stocks、top_n、n_groups、transaction_cost、sleep、skip_fetch 和 skip_plot。
+- 支持在 App 中预览并运行 scripts/run_research_pipeline.py。
+- 展示 pipeline stdout 和 stderr，方便用户排错。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未直接读取或打印真实 TuShare Token。
+- 未绕过现有 Token 读取逻辑。
+- 未生成虚假未来收益承诺。
+- 页面明确说明流水线输出仅为历史样本回测和量化研究结果，不构成投资建议。
