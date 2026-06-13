@@ -984,3 +984,22 @@
 - README 明确说明项目仅用于量化研究、学习和展示。
 - 模型评分、趋势参考、组合结果和回测结果不代表未来表现，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-13 V9-C Project Health Check Script
+
+阶段：V9-C Project Health Check Script
+
+修改文件：
+- scripts/check_project_health.py
+- AGENT.md
+
+修改内容摘要：
+- 新增项目健康检查脚本。
+- 支持检查关键文件、核心模块导入和本地输出文件状态。
+- 可选数据和报告文件不存在时仅提示 WARN，不阻止项目基础检查通过。
+
+安全说明：
+- 未读取、输出或写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未修改任何数据文件或报告文件。
+- 未生成任何投资建议或收益承诺措辞。
