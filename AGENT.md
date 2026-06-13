@@ -944,3 +944,43 @@
 - 页面展示仅为历史样本因子研究和量化研究参考，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
 - group_return 和 long_short_return 仅作为历史分组收益和历史多空收益，不代表未来收益。
+## 2026-06-13 V8-D App Launch Scripts
+
+阶段：V8-D App Launch Scripts
+
+修改文件：
+- run_app.bat
+- run_app.ps1
+- AGENT.md
+
+修改内容摘要：
+- 新增 Windows 批处理启动脚本 run_app.bat。
+- 新增 PowerShell 启动脚本 run_app.ps1。
+- 支持自动检测并激活项目根目录下的 .venv。
+- 支持一键启动 Streamlit App，减少手动输入命令的步骤。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未修改核心业务代码。
+- 未生成任何投资建议或收益承诺措辞。
+## 2026-06-13 V9-A README Productization
+
+阶段：V9-A README Productization
+
+修改文件：
+- README.md
+- AGENT.md
+
+修改内容摘要：
+- 重写 README.md，使项目更适合 GitHub 开源展示、简历项目展示和本地使用说明。
+- 系统说明项目功能、App 页面、启动方式、研究流水线、输出文件、方法逻辑和风险声明。
+- README 中新增 run_app.bat 和 run_app.ps1 一键启动说明。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未生成虚假未来收益承诺。
+- README 明确说明项目仅用于量化研究、学习和展示。
+- 模型评分、趋势参考、组合结果和回测结果不代表未来表现，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
