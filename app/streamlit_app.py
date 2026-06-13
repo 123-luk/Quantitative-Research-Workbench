@@ -23,6 +23,7 @@ from app.services.dashboard_service import (  # noqa: E402
     load_dashboard_data,
 )
 from app.services.backtest_report_service import prepare_backtest_report_data  # noqa: E402
+from app.services.factor_report_service import prepare_factor_report_data  # noqa: E402
 from app.services.portfolio_report_service import prepare_portfolio_report_data  # noqa: E402
 from app.services.stock_chart_service import prepare_single_stock_chart_data  # noqa: E402
 from app.services.pipeline_runner_service import (  # noqa: E402
@@ -700,21 +701,100 @@ def render_backtest_page(data: dict[str, pd.DataFrame], figure_paths: dict[str, 
 def render_factor_research_page(data: dict[str, pd.DataFrame]) -> None:
     """Render the factor research page."""
     st.title("因子研究 / Factor Research")
-    st.info("Factor research outputs are historical research statistics and do not represent future performance.")
-
     ic_summary = data["ic_summary"]
-    if ic_summary.empty:
-        st.info("No IC summary found. Please run scripts/run_factor_test.py or scripts/run_research_pipeline.py first.")
+    group_return = data["group_return"]
+    long_short_return = data["long_short_return"]
+    factor_report = prepare_factor_report_data(
+        ic_summary=ic_summary,
+        group_return=group_return,
+        long_short_return=long_short_return,
+    )
+    ic_table = factor_report["ic_table"]
+    factor_rank_table = factor_report["factor_rank_table"]
+    top_factors = factor_report["top_factors"]
+    ic_research_comment = factor_report["ic_research_comment"]
+    group_return_summary = factor_report["group_return_summary"]
+    long_short_summary = factor_report["long_short_summary"]
+    return_research_comment = factor_report["return_research_comment"]
+
+    st.info("本页面展示的是历史样本因子研究结果和量化研究参考，不代表未来表现，不构成投资建议。")
+
+    st.subheader("因子 IC 研究摘要 / Factor IC Research Comment")
+    st.info(sanitize_research_text(ic_research_comment))
+
+    st.subheader("Top 因子 / Top Factors")
+    if top_factors.empty:
+        st.info("暂无 Top 因子数据。")
     else:
-        if "mean_ic" in ic_summary.columns:
-            ic_summary = ic_summary.sort_values("mean_ic", ascending=False)
-        st.dataframe(ic_summary, use_container_width=True)
+        st.dataframe(top_factors, use_container_width=True)
+        if {"factor", "abs_mean_ic"}.issubset(top_factors.columns):
+            chart_df = top_factors.copy()
+            chart_df["abs_mean_ic"] = pd.to_numeric(chart_df["abs_mean_ic"], errors="coerce")
+            chart_df = chart_df.dropna(subset=["abs_mean_ic"])
+            if not chart_df.empty:
+                st.bar_chart(chart_df.set_index("factor")[["abs_mean_ic"]])
 
-    with st.expander("Group Return"):
-        show_table_or_hint(data["group_return"], "No group return data found.")
+    st.subheader("因子 IC 排名 / Factor IC Ranking")
+    if factor_rank_table.empty:
+        st.info("暂无因子 IC 排名数据。")
+    else:
+        st.dataframe(factor_rank_table, use_container_width=True)
 
-    with st.expander("Long-short Return"):
-        show_table_or_hint(data["long_short_return"], "No long-short return data found.")
+    st.subheader("因子收益研究摘要 / Factor Return Research Comment")
+    st.info(sanitize_research_text(return_research_comment))
+
+    st.subheader("历史多空收益摘要 / Long-Short Return Summary")
+    if long_short_summary.empty:
+        st.info("暂无多空收益摘要数据。")
+    else:
+        st.dataframe(long_short_summary, use_container_width=True)
+        if {"factor", "mean_long_short_return"}.issubset(long_short_summary.columns):
+            chart_df = long_short_summary.copy()
+            chart_df["mean_long_short_return"] = pd.to_numeric(
+                chart_df["mean_long_short_return"],
+                errors="coerce",
+            )
+            chart_df = chart_df.dropna(subset=["mean_long_short_return"])
+            if not chart_df.empty:
+                st.bar_chart(chart_df.set_index("factor")[["mean_long_short_return"]])
+        st.caption("mean_long_short_return 为历史样本中的平均多空收益，不代表未来收益。")
+
+    st.subheader("历史分组收益摘要 / Group Return Summary")
+    if group_return_summary.empty:
+        st.info("暂无分组收益摘要数据。")
+    else:
+        st.dataframe(group_return_summary, use_container_width=True)
+        st.caption("mean_group_return 为历史样本中的平均分组收益，不代表未来收益。")
+
+    st.subheader("原始因子研究数据 / Raw Factor Research Tables")
+    with st.expander("IC Summary 原表"):
+        show_table_or_hint(ic_summary, "No IC summary found.")
+    with st.expander("Group Return 原表"):
+        show_table_or_hint(group_return, "No group return data found.")
+    with st.expander("Long-Short Return 原表"):
+        show_table_or_hint(long_short_return, "No long-short return data found.")
+
+    if not factor_rank_table.empty:
+        st.download_button(
+            label="下载因子 IC 排名 CSV",
+            data=factor_rank_table.to_csv(index=False).encode("utf-8-sig"),
+            file_name="factor_rank_table.csv",
+            mime="text/csv",
+        )
+    if not long_short_summary.empty:
+        st.download_button(
+            label="下载多空收益摘要 CSV",
+            data=long_short_summary.to_csv(index=False).encode("utf-8-sig"),
+            file_name="factor_long_short_summary.csv",
+            mime="text/csv",
+        )
+    if not group_return_summary.empty:
+        st.download_button(
+            label="下载分组收益摘要 CSV",
+            data=group_return_summary.to_csv(index=False).encode("utf-8-sig"),
+            file_name="factor_group_return_summary.csv",
+            mime="text/csv",
+        )
 
 
 def main() -> None:

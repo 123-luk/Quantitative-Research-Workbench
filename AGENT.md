@@ -865,3 +865,82 @@
 - 未生成虚假未来收益承诺。
 - 页面展示仅为历史样本回测和量化研究参考，不构成投资建议。
 - return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-13 V8-C-1a Factor IC Report Service
+
+阶段：V8-C-1a Factor IC Report Service
+
+修改文件：
+- app/services/factor_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 新增因子 IC 研究报告服务。
+- 支持整理 IC 摘要、因子 IC 排名、Top 因子和中文 IC 研究摘要。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 因子研究结果仅为历史样本因子有效性研究和量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-13 V8-C-1b Factor Return Report Service
+
+阶段：V8-C-1b Factor Return Report Service
+
+修改文件：
+- app/services/factor_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 在因子研究报告服务中新增分组收益摘要和多空收益摘要函数。
+- 新增因子收益研究中文说明。
+- 新增 prepare_factor_report_data 聚合函数，为 Streamlit 因子研究页面增强做准备。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 因子分组收益和多空收益仅为历史样本研究结果，不代表未来表现，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-13 V8-C-1b Patch Group Return Summary
+
+阶段：V8-C-1b Patch Group Return Summary
+
+修改文件：
+- app/services/factor_report_service.py
+- AGENT.md
+
+修改内容摘要：
+- 修复 prepare_group_return_summary 对 group_return.csv 中 mean_return 列名不兼容的问题。
+- 支持将分组收益明细正确聚合为 factor、group、mean_group_return。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 因子分组收益仅为历史样本研究结果，不代表未来表现，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+## 2026-06-13 V8-C-2 Factor Report App Integration
+
+阶段：V8-C-2 Factor Report App Integration
+
+修改文件：
+- app/streamlit_app.py
+- AGENT.md
+
+修改内容摘要：
+- 将因子研究报告服务接入 Streamlit 因子研究页面。
+- 新增因子 IC 研究摘要、Top 因子、因子 IC 排名、因子收益研究摘要、多空收益摘要、分组收益摘要和 CSV 下载按钮。
+- 增强因子研究页面的可读性和产品化展示能力。
+
+安全说明：
+- 未写入真实 TuShare Token。
+- 未调用 TuShare API。
+- 未运行研究流水线。
+- 未生成虚假未来收益承诺。
+- 页面展示仅为历史样本因子研究和量化研究参考，不构成投资建议。
+- return_next 仅作为历史回测标签，不作为未来收益预测。
+- group_return 和 long_short_return 仅作为历史分组收益和历史多空收益，不代表未来收益。
