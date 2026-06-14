@@ -1025,3 +1025,15 @@ python scripts/run_pipeline.py --backtest-start 2024-01-01 --backtest-end 2025-0
 
 Compatibility note:
 - Avoid unnecessary runtime type annotation forms that may fail in some Python environments, such as `tuple[str, str]`. For broader compatibility, use `typing.Tuple` or ensure the interpreter version is consistent.
+
+V1-D additions:
+- Added `tests/test_pipeline_config.py`.
+- Added `tests/test_data_cache.py`.
+- Added `tests/test_experiment.py`.
+- Added `docs/04_pipeline_design.md`.
+
+V1-D test command:
+
+```bash
+"E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" -m pytest tests/test_pipeline_config.py tests/test_data_cache.py tests/test_experiment.py
+```
