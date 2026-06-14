@@ -23,3 +23,23 @@ strategy:
   rebalance_freq: monthly
   top_quantile: 0.2
   transaction_cost: 0.001
+
+pipeline:
+  backtest_start: "2024-01-01"
+  backtest_end: "2025-03-31"
+  train_years: 10
+  max_lookback_months: 12
+  stock_pool: "hs300"
+  benchmark: "000300.SH"
+  strategy_name: "score"
+  rebalance_frequency: "M"
+  top_n: 20
+  transaction_cost: 0.001
+
+factors:
+  selected:
+    - pe
+    - pb
+    - roe
+    - momentum_20d
+    - volatility_20d
