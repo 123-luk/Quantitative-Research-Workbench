@@ -2,11 +2,21 @@ project:
   name: quant-factor-system
 
 data:
+  root: "data"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  cache_dir: "data/cache"
+  output_dir: "data/output"
   source: tushare
   start_date: "20150101"
   end_date: "20251231"
   universe: hs300
   index_code: "000300.SH"
+  parquet_engine: "auto"
+  required_datasets:
+    - daily
+    - daily_basic
+    - adj_factor
   use_sample_data: true
 
 strategy:
