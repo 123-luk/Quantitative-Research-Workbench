@@ -1003,3 +1003,25 @@
 - 未运行研究流水线。
 - 未修改任何数据文件或报告文件。
 - 未生成任何投资建议或收益承诺措辞。
+## V1 Data Layer and Pipeline Notes
+
+Completed so far:
+- V1-A data cache layer skeleton.
+- V1-B PipelineConfig and ExperimentManager.
+- V1-C runner and command line entry.
+
+Current constraints:
+- Do not write real TuShare Token values.
+- Do not modify `.env`, `.env.example`, or `.gitignore`.
+- Do not automatically run `git commit`.
+- Large changes should be made on a feature branch.
+- The current stage does not implement machine learning and does not refactor UI.
+
+Pipeline skeleton command:
+
+```bash
+python scripts/run_pipeline.py --backtest-start 2024-01-01 --backtest-end 2025-03-31 --strategy-name score --stock-pool hs300
+```
+
+Compatibility note:
+- Avoid unnecessary runtime type annotation forms that may fail in some Python environments, such as `tuple[str, str]`. For broader compatibility, use `typing.Tuple` or ensure the interpreter version is consistent.

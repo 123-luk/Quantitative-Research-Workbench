@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Tuple
 
 
-DateRange = tuple[str, str]
+DateRange = Tuple[str, str]
 
 
 class DataCache:
