@@ -1169,3 +1169,27 @@ V2-C2C constraints:
 - Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-D1 completed scope:
+- Established configurable cross-sectional factor preprocessing with
+  `PreprocessingConfig` and `FactorPreprocessor`.
+- The fixed processing order is numeric conversion and infinity handling,
+  same-date missing-value handling, same-date winsorization, metadata direction
+  adjustment, and same-date standardization.
+- Every operation is isolated by `trade_date`; whole-history statistics,
+  forward fill, backward fill, and cross-date filling are prohibited.
+- Missing-value methods are `none` and `median`. Winsorization methods are
+  `none`, `quantile`, and `mad`. Standardization methods are `none`, `zscore`,
+  and `rank`.
+- Factors with `direction=-1` are multiplied by `-1` before standardization so
+  larger processed values consistently indicate the preferred direction.
+- Rank standardization is centered on zero with an approximate range of
+  `[-1, 1]`, using average ranks for ties.
+- Industry and market-cap neutralization are not implemented in V2-D1. The next
+  stage is V2-D2 industry and market-cap neutralization.
+
+V2-D1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-D1.

@@ -130,3 +130,12 @@ __all__.extend(
         "register_financial_factors",
     ]
 )
+
+from src.factors.preprocessing import FactorPreprocessor, PreprocessingConfig
+
+__all__.extend(
+    [
+        "FactorPreprocessor",
+        "PreprocessingConfig",
+    ]
+)
