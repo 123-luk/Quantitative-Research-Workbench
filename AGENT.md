@@ -1193,3 +1193,29 @@ V2-D1 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
   modules during V2-D1.
+
+V2-D2 completed scope:
+- Established same-date industry and size neutralization with
+  `NeutralizationConfig` and `FactorNeutralizer`.
+- V2-D2 consumes factor values already processed by V2-D1 and an exposure panel
+  keyed by `trade_date` and `ts_code`; default exposures are `industry` and
+  `log_total_mv`.
+- Neutralized values are OLS residuals from a same-date design matrix containing
+  an intercept, stable drop-first industry dummies, and standardized size
+  exposure as configured. Small industries below `min_industry_size` are
+  excluded.
+- Every regression, industry structure, size statistic, and optional residual
+  z-score is isolated by `trade_date`. Exposure forward fill, backward fill,
+  and cross-date filling are prohibited.
+- `log_total_mv` and `log_circ_mv` are exempt from size neutralization by default
+  but can still be industry-neutralized. Same-date stocks influence their shared
+  cross-sectional regression by design; future dates cannot affect past dates.
+- The research order is raw factor calculation, V2-D1 preprocessing, V2-D2
+  neutralization, optional residual z-scoring, then factor evaluation.
+- The next stage is factor IC, RankIC, and quantile-return evaluation.
+
+V2-D2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-D2.

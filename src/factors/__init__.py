@@ -139,3 +139,12 @@ __all__.extend(
         "PreprocessingConfig",
     ]
 )
+
+from src.factors.neutralization import FactorNeutralizer, NeutralizationConfig
+
+__all__.extend(
+    [
+        "FactorNeutralizer",
+        "NeutralizationConfig",
+    ]
+)
