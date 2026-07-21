@@ -1037,3 +1037,34 @@ V1-D test command:
 ```bash
 "E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" -m pytest tests/test_pipeline_config.py tests/test_data_cache.py tests/test_experiment.py
 ```
+
+## V2 Factor Library and Analysis
+
+Current branch:
+- `feature/factor-library`
+
+V2-A completed scope:
+- Established `FactorMetadata`, `FactorRegistry`, and the minimal factor calculation interface.
+- Added only `momentum_20d` and `volatility_20d` as example factors.
+- V2 does not implement a paper factor package or `thesis_top20`.
+
+Factor metadata requirements:
+- Every factor declares `name`, `category`, `direction`, `required_datasets`,
+  `source_fields`, `lookback_days`, and `availability_lag_days`.
+- Factor calculations must use only data available at the calculation time and
+  must not use future data.
+
+Planned development order:
+1. Basic price and volume factors.
+2. Basic valuation and financial factors.
+3. Factor preprocessing and neutralization.
+4. IC, RankIC, and quantile return evaluation.
+5. Equal-weight, fixed-weight, and rolling IC-weighted strategies.
+6. Integration with the existing pipeline.
+
+Development constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`
+  for Python commands.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, the Streamlit UI, backtest modules, or machine
+  learning modules during V2-A.
