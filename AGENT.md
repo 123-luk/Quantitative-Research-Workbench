@@ -1219,3 +1219,31 @@ V2-D2 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
   modules during V2-D2.
+
+V2-E1 completed scope:
+- Established same-date Pearson IC and Spearman RankIC evaluation with
+  `FactorEvaluationConfig` and `FactorEvaluator`.
+- The evaluator consumes a processed factor panel and a caller-prepared forward
+  return panel aligned by `trade_date` and `ts_code`; it never constructs future
+  returns or infers a holding period.
+- `universe_count` is the factor-panel stock count for a date, `n_obs` is the
+  finite factor-return pair count, and `coverage = n_obs / universe_count`.
+- IC is same-date Pearson correlation. RankIC is same-date Spearman correlation
+  implemented with average ranks followed by Pearson correlation.
+- Every correlation, rank, and sample count is isolated by `trade_date`; pooled
+  historical correlations and cross-date ranking are prohibited.
+- ICIR is mean IC divided by sample standard deviation (`ddof=1`) and is not
+  annualized. Positive ratios use only finite metric periods.
+- Direction is not adjusted in evaluation. Inputs normally complete V2-D1
+  direction unification and may optionally complete V2-D2 neutralization first;
+  positive IC means higher factor values align with higher future returns.
+- Automatic `shift(-n)` labels, missing-value filling, winsorization, and
+  standardization are outside the evaluation module.
+- The next stage is V2-E2 quantile returns, long-short returns, and monotonicity
+  evaluation.
+
+V2-E1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-E1.

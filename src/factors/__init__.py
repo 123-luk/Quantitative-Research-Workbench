@@ -148,3 +148,12 @@ __all__.extend(
         "NeutralizationConfig",
     ]
 )
+
+from src.factors.evaluation import FactorEvaluationConfig, FactorEvaluator
+
+__all__.extend(
+    [
+        "FactorEvaluationConfig",
+        "FactorEvaluator",
+    ]
+)
