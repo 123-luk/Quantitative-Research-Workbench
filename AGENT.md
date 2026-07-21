@@ -1147,3 +1147,25 @@ V2-C2B constraints:
 - Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-C2C completed scope:
+- Added financial factors `roe_ttm`, `roa_ttm`, `gross_margin_ttm`,
+  `net_margin_ttm`, `revenue_yoy`, `net_profit_yoy`, `debt_to_assets`, and
+  `operating_cf_to_assets`.
+- Financial factors consume standardized `fin_*` fields rather than vendor
+  fields. Upstream adapters own vendor-to-standard field mapping.
+- Every financial-factor input must first complete announcement-date
+  point-in-time alignment. `source_ann_date` and `source_end_date` remain audit
+  fields, and `end_date` never makes unannounced data available early.
+- `availability_lag_days=0` means PIT delay was handled upstream; it never
+  permits future announcements. Financial factors do not fill or search data.
+- Financial ratios and growth rates retain their original units. Finite negative
+  profitability, margin, growth, and operating-cash-flow values are preserved;
+  positive and negative infinity become missing.
+- The next stage is factor preprocessing and neutralization, followed later by
+  IC, RankIC, quantile-return evaluation, and multi-factor combination.
+
+V2-C2C constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
