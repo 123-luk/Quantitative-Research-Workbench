@@ -1068,3 +1068,26 @@ Development constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, the Streamlit UI, backtest modules, or machine
   learning modules during V2-A.
+
+V2-B completed scope:
+- Established the factor input data contract and multi-stock factor panel engine.
+- Standard factor input keys are `trade_date` and `ts_code`.
+- Factors are computed independently by `ts_code`, with each stock ordered by
+  ascending `trade_date`.
+- Cross-stock rolling, `pct_change`, and historical-window contamination are prohibited.
+- `describe_requirements` summarizes datasets, source fields, categories,
+  maximum lookback days, and maximum availability lag.
+- Cleaning, neutralization, IC evaluation, and multi-factor weighting remain
+  outside the current scope.
+
+V2 development order remains:
+1. Basic price and volume factors.
+2. Basic valuation and financial factors.
+3. Factor preprocessing and neutralization.
+4. Factor evaluation.
+5. Multi-factor strategies.
+6. Pipeline integration.
+
+V2-B command constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.

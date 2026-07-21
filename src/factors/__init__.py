@@ -18,3 +18,19 @@ __all__ = [
     "create_default_registry",
     "register_example_factors",
 ]
+
+from src.factors.contracts import (
+    normalize_factor_input,
+    validate_factor_input,
+    validate_required_fields,
+)
+from src.factors.factor_engine import FactorEngine
+
+__all__.extend(
+    [
+        "FactorEngine",
+        "normalize_factor_input",
+        "validate_factor_input",
+        "validate_required_fields",
+    ]
+)
