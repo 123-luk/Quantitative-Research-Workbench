@@ -157,3 +157,15 @@ __all__.extend(
         "FactorEvaluator",
     ]
 )
+
+from src.factors.quantile_evaluation import (
+    FactorQuantileEvaluator,
+    QuantileEvaluationConfig,
+)
+
+__all__.extend(
+    [
+        "FactorQuantileEvaluator",
+        "QuantileEvaluationConfig",
+    ]
+)

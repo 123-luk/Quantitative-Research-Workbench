@@ -1247,3 +1247,29 @@ V2-E1 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
   modules during V2-E1.
+
+V2-E2 completed scope:
+- Established same-date rank-based quantile, long-short, and group-return
+  monotonicity evaluation with `QuantileEvaluationConfig` and
+  `FactorQuantileEvaluator`.
+- Factors and caller-prepared forward returns align by `trade_date` and
+  `ts_code`. Quantile assignment uses same-date average factor ranks; tied
+  factor values remain together even when that leaves quantiles empty.
+- Quantile 1 is the lowest-factor group and Quantile N is the highest-factor
+  group. Group returns are equal-weight means of prepared forward returns, and
+  long-short return is the high-group return minus the low-group return.
+- Monotonicity is the same-date Spearman correlation between quantile number and
+  finite group return. Every rank, group, and statistic is isolated by date.
+- E2 never repeats direction adjustment or constructs forward returns. Inputs
+  normally complete V2-D1 direction unification and may complete V2-D2 first.
+- These outputs are factor evaluation, not a realizable backtest: no actual
+  rebalancing, compounding, costs, slippage, suspensions, or price-limit handling
+  is modeled. Long-short IR is not annualized.
+- The next stage is equal-weight, fixed-weight, and rolling IC-weighted
+  multi-factor combination.
+
+V2-E2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-E2.
