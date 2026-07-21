@@ -1046,7 +1046,6 @@ Current branch:
 V2-A completed scope:
 - Established `FactorMetadata`, `FactorRegistry`, and the minimal factor calculation interface.
 - Added only `momentum_20d` and `volatility_20d` as example factors.
-- V2 does not implement a paper factor package or `thesis_top20`.
 
 Factor metadata requirements:
 - Every factor declares `name`, `category`, `direction`, `required_datasets`,
@@ -1084,10 +1083,27 @@ V2 development order remains:
 1. Basic price and volume factors.
 2. Basic valuation and financial factors.
 3. Factor preprocessing and neutralization.
-4. Factor evaluation.
-5. Multi-factor strategies.
+4. IC, RankIC, and quantile return evaluation.
+5. Equal-weight, fixed-weight, and rolling IC-weighted strategies.
 6. Pipeline integration.
 
 V2-B command constraints:
 - Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Do not automatically run `git commit` or `git push`.
+
+V2-C1 completed scope:
+- Added the core price-volume factor pack. The current price-volume library has
+  10 factors: `momentum_20d`, `volatility_20d`, `momentum_60d`,
+  `momentum_120d`, `momentum_252_20d`, `short_term_reversal_5d`,
+  `price_52w_high`, `volatility_60d`, `turnover_mean_20d`, and `amihud_20d`.
+- Every factor declares direction, required datasets, source fields, and lookback days.
+- `amihud_20d` treats zero amount as missing, rejects negative amount, and
+  retains a scale determined by the input amount unit.
+- All time-series factors must be calculated independently by stock; future
+  data and cross-stock rolling, shifts, or return contamination are prohibited.
+- The next stage is basic valuation and financial factors.
+
+V2-C1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
