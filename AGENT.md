@@ -1127,3 +1127,23 @@ V2-C2A constraints:
 - Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-C2B completed scope:
+- Established financial announcement-date point-in-time alignment.
+- Financial record keys are `ts_code`, `ann_date`, and `end_date`; trading-panel
+  keys are `trade_date` and `ts_code`.
+- Financial data cannot be made available from `end_date`; actual availability
+  is determined by `ann_date` and the stock's real trading-date sequence.
+- The default `availability_lag_trading_days=1` makes an announcement effective
+  one trading row after the first trading date on or after its announcement.
+  Trading-day lag never uses simple calendar-day addition.
+- Revisions replace older records only from the revision's effective trading
+  date onward. Future announcements cannot overwrite historical dates, and
+  financial records never match across stocks.
+- Outputs retain `source_ann_date` and `source_end_date` for point-in-time audit.
+- Profitability, growth, and quality factors remain a later stage.
+
+V2-C2B constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.

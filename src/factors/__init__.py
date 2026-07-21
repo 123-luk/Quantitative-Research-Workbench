@@ -86,3 +86,19 @@ __all__.extend(
         "register_valuation_factors",
     ]
 )
+
+from src.factors.financial_alignment import (
+    FinancialPointInTimeAligner,
+    normalize_financial_data,
+    normalize_trading_panel,
+    normalize_value_columns,
+)
+
+__all__.extend(
+    [
+        "FinancialPointInTimeAligner",
+        "normalize_financial_data",
+        "normalize_trading_panel",
+        "normalize_value_columns",
+    ]
+)
