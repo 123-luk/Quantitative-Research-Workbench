@@ -1107,3 +1107,23 @@ V2-C1 constraints:
 - Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-C2A completed scope:
+- Added valuation factors `ep_ttm`, `bp`, `sp_ttm`, and `dividend_yield_ttm`.
+- Added size factors `log_total_mv` and `log_circ_mv`.
+- Non-positive PE, PB, and PS values are converted to missing values. Non-positive
+  market-value fields are also converted to missing values before logarithms.
+- Daily-basic source units are retained without conversion. A zero dividend
+  yield remains zero, while a negative dividend yield becomes missing.
+- `availability_lag_days=0` means factor metadata adds no extra calendar-day
+  delay; it does not permit trading at a closing price with data obtained only
+  after that close. Factor calculation and trade execution timing remain separate.
+- The next stage is point-in-time alignment by financial announcement date,
+  followed later by profitability, growth, and quality factors.
+- Preprocessing, IC evaluation, and multi-factor weighting remain outside the
+  current stage.
+
+V2-C2A constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.

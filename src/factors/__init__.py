@@ -62,3 +62,27 @@ __all__.extend(
         "register_price_volume_factors",
     ]
 )
+
+from src.factors.valuation import (
+    BP,
+    DIVIDEND_YIELD_TTM,
+    EP_TTM,
+    LOG_CIRC_MV,
+    LOG_TOTAL_MV,
+    SP_TTM,
+    VALUATION_FACTORS,
+    register_valuation_factors,
+)
+
+__all__.extend(
+    [
+        "BP",
+        "DIVIDEND_YIELD_TTM",
+        "EP_TTM",
+        "LOG_CIRC_MV",
+        "LOG_TOTAL_MV",
+        "SP_TTM",
+        "VALUATION_FACTORS",
+        "register_valuation_factors",
+    ]
+)
