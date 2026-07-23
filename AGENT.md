@@ -1360,3 +1360,30 @@ V2-G1 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
   modules during V2-G1.
+
+V2-G2 completed scope:
+- Established a pure in-memory factor-research orchestrator with
+  `FactorResearchConfig`, `FactorResearchResult`, and `FactorResearchRunner`.
+- The fixed order is full-history `FactorEngine` calculation, exact
+  `score_panel` key selection, D1 preprocessing, optional D2 neutralization,
+  G1 forward-return construction, E1 IC/RankIC, E2 quantile and long-short
+  evaluation, F1/F2 composition, and composite-score evaluation.
+- Time-series factors must be calculated from the complete input history before
+  score dates are selected. `score_panel` defines final research keys and must
+  never truncate the factor lookback history in advance.
+- Financial inputs must already be point-in-time aligned and mapped to
+  standardized `fin_*` fields. G2 does not perform vendor-field adaptation.
+- Forward returns are evaluation labels only and never enter preprocessing,
+  neutralization, or composition. Rolling weights retain the F2 rule that only
+  IC or RankIC observations strictly earlier than a score date are eligible.
+- G2 downloads no data and writes no files. It does not construct real
+  historical universe membership, select Top N stocks, manage holdings,
+  rebalance, model costs or execution constraints, or run a backtest.
+- V2-G3 owns experiment-result persistence. V2-G4 owns integration with the V1
+  pipeline configuration and CLI.
+
+V2-G2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G2.

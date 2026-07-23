@@ -199,3 +199,17 @@ __all__.extend(
         "ForwardReturnConfig",
     ]
 )
+
+from src.factors.research_pipeline import (
+    FactorResearchConfig,
+    FactorResearchResult,
+    FactorResearchRunner,
+)
+
+__all__.extend(
+    [
+        "FactorResearchConfig",
+        "FactorResearchResult",
+        "FactorResearchRunner",
+    ]
+)
