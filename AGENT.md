@@ -1469,3 +1469,36 @@ V2-G4B constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, UI, strategy, backtest, or machine learning modules
   during V2-G4B.
+
+V2-G4C completed scope:
+- Completed the factor-research CLI integration and end-to-end command
+  acceptance while retaining `scripts/run_pipeline.py` as the unified entry
+  point.
+- Whether factor research executes is controlled exclusively by the
+  `factor_research` YAML section parsed by `PipelineConfig.from_yaml()`.
+- The CLI continues to delegate execution to `run_pipeline()` and therefore to
+  `FactorResearchPipelineExecutor`; it does not copy G2, G3, or G4B logic.
+- Human-readable success output includes the run directory and a compact
+  research summary. Enabled runs include the artifact directory, factor names,
+  composition method, input and major table shapes, and manifest verification
+  status.
+- CLI output never includes complete DataFrames or the complete manifest. The
+  optional `--json` output follows the same compact boundary.
+- The complete example is `config/factor_research.example.yaml`. Research is
+  disabled by default and the required input Parquet panels must be prepared
+  before enabling it.
+- Workflow and input-schema documentation is in
+  `docs/05_factor_research_workflow.md`.
+- CLI end-to-end tests create temporary Parquet inputs and output directories
+  under `tmp_path`, invoke the real script through `sys.executable`, and verify
+  the published G3 artifact.
+- V2 still does not implement Top N selection, holdings, rebalancing, or a real
+  portfolio backtest.
+- After G4C, the next stage is V2 release acceptance, merge, and the v0.3.0
+  tag.
+
+V2-G4C constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G4C.

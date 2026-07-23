@@ -1,0 +1,120 @@
+project:
+  name: quant-factor-system
+
+data:
+  root: data
+  raw_dir: data/raw
+  processed_dir: data/processed
+  cache_dir: data/cache
+  output_dir: data/output
+  source: tushare
+  start_date: "20150101"
+  end_date: "20251231"
+  universe: hs300
+  index_code: 000300.SH
+  parquet_engine: auto
+  required_datasets:
+    - daily
+    - daily_basic
+    - adj_factor
+  use_sample_data: true
+
+strategy:
+  rebalance_freq: monthly
+  top_quantile: 0.2
+  transaction_cost: 0.001
+
+pipeline:
+  backtest_start: "2024-01-01"
+  backtest_end: "2025-03-31"
+  train_years: 10
+  max_lookback_months: 12
+  stock_pool: hs300
+  benchmark: 000300.SH
+  strategy_name: score
+  rebalance_frequency: M
+  top_n: 20
+  transaction_cost: 0.001
+
+factors:
+  selected:
+    - momentum_20d
+    - volatility_20d
+
+# Keep this disabled until the three required Parquet panels below exist.
+# exposure_panel is optional while research.use_neutralization is false.
+factor_research:
+  enabled: false
+  factor_input_path: data/processed/factor_input.parquet
+  score_panel_path: data/processed/score_panel.parquet
+  price_panel_path: data/processed/price_panel.parquet
+  exposure_panel_path: data/processed/exposure_panel.parquet
+  artifact_subdir: factor_research
+  research:
+    factor_names:
+      - momentum_20d
+      - volatility_20d
+    use_neutralization: false
+    composition_method: equal
+    evaluate_components: true
+    evaluate_composite: true
+  preprocessing:
+    missing_method: median
+    winsor_method: mad
+    lower_quantile: 0.01
+    upper_quantile: 0.99
+    mad_limit: 3.0
+    standardize_method: zscore
+    min_cross_section_size: 3
+  neutralization:
+    neutralize_industry: true
+    neutralize_size: true
+    industry_col: industry
+    size_col: log_total_mv
+    min_cross_section_size: 10
+    min_industry_size: 2
+    standardize_residuals: true
+    size_exempt_factors:
+      - log_total_mv
+      - log_circ_mv
+  evaluation:
+    return_col: forward_return
+    min_cross_section_size: 20
+    compute_ic: true
+    compute_rank_ic: true
+  quantile:
+    return_col: forward_return
+    quantiles: 5
+    min_cross_section_size: 20
+    min_group_size: 1
+    compute_monotonicity: true
+  composition:
+    method: equal
+    fixed_weights: []
+    normalize_weights: true
+    missing_policy: renormalize
+    min_valid_factors: 1
+    score_col: composite_score
+  rolling:
+    metric: rank_ic
+    lookback_periods: 12
+    min_periods: 6
+    negative_policy: zero
+    fallback_method: equal
+    missing_policy: renormalize
+    min_valid_factors: 1
+    score_col: composite_score
+  forward_returns:
+    price_col: close
+    return_col: forward_return
+    entry_lag_periods: 1
+    holding_periods: 20
+    require_positive_prices: true
+  artifacts:
+    tables_dirname: tables
+    manifest_filename: manifest.json
+    compression: snappy
+    include_empty_tables: true
+    overwrite: false
+    schema_version: "1"
+    verify_after_write: true
