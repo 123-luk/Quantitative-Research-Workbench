@@ -169,3 +169,12 @@ __all__.extend(
         "QuantileEvaluationConfig",
     ]
 )
+
+from src.factors.composition import FactorComposer, FactorCompositionConfig
+
+__all__.extend(
+    [
+        "FactorComposer",
+        "FactorCompositionConfig",
+    ]
+)

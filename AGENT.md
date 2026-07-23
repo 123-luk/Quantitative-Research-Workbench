@@ -1273,3 +1273,32 @@ V2-E2 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
   modules during V2-E2.
+
+V2-F1 completed scope:
+- Established auditable equal-weight and fixed-weight multi-factor composition
+  with `FactorCompositionConfig` and `FactorComposer`.
+- Composition inputs must already have completed V2-D1 direction unification
+  and cross-sectional standardization. Optional V2-D2 neutralization must also
+  occur before composition.
+- F1 does not repeat direction adjustment, missing-value filling, winsorization,
+  standardization, or industry and size neutralization. Higher composite scores
+  indicate a more preferred combined factor direction, not a return forecast.
+- Equal composition assigns the same base weight to every selected factor.
+  Fixed composition matches non-negative weights by factor name; normalized and
+  raw fixed weights are both supported.
+- `require_all` scores only rows where every selected factor is finite.
+  `renormalize` rescales the valid factors' weights independently for each row,
+  subject to `min_valid_factors`.
+- `valid_factor_count` records the number of finite factor inputs and
+  `weight_coverage` records the observed share of configured base weight before
+  any row-level renormalization.
+- Every score is isolated by `trade_date` and `ts_code`; F1 does not construct
+  forward returns, select stocks, form holdings, rebalance, or run a backtest.
+- The next stage is V2-F2 rolling IC and RankIC dynamic weighting using only
+  information available strictly before each scoring date.
+
+V2-F1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-F1.
