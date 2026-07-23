@@ -1334,3 +1334,29 @@ V2-F2 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, UI, strategy, backtest, or machine learning modules
   during V2-F2.
+
+V2-G1 completed scope:
+- Established auditable future-return label construction with
+  `ForwardReturnConfig` and `ForwardReturnBuilder`.
+- `score_panel` and `price_panel` both use `trade_date` plus `ts_code` as unique
+  keys. The market trading calendar is the sorted set of every unique
+  `trade_date` in the complete price panel.
+- Entry and exit advance by market-calendar positions, never by one stock's
+  non-missing price rows. Defaults are `entry_lag_periods=1` and
+  `holding_periods=20`.
+- A valid label is `forward_return = exit_price / entry_price - 1`. Exact entry
+  and exit dates and prices remain in the output for audit.
+- Missing or invalid entry and exit prices keep the label missing. Dates are
+  never delayed for a suspension or missing quote, and no forward fill or
+  backward fill is performed.
+- Forward returns are evaluation labels, not factor features. Labels must not
+  enter factor calculation, preprocessing, neutralization, or composition.
+- `ForwardReturnBuilder` does not model costs, slippage, suspension execution,
+  price limits, Top N selection, portfolio mechanics, or an actual backtest.
+- The next stage is V2-G2 factor-research workflow orchestration.
+
+V2-G1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-G1.

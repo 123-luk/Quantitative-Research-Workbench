@@ -190,3 +190,12 @@ __all__.extend(
         "RollingICWeightConfig",
     ]
 )
+
+from src.factors.forward_returns import ForwardReturnBuilder, ForwardReturnConfig
+
+__all__.extend(
+    [
+        "ForwardReturnBuilder",
+        "ForwardReturnConfig",
+    ]
+)
