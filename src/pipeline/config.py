@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import calendar
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from src.pipeline.research_config import FactorResearchPipelineConfig
 
 
 @dataclass
@@ -34,10 +37,21 @@ class PipelineConfig:
     parquet_engine: str
     required_datasets: list[str]
 
+    factor_research: FactorResearchPipelineConfig = field(
+        default_factory=FactorResearchPipelineConfig
+    )
     def __post_init__(self) -> None:
         """Normalize dates and validate the backtest range."""
         self.backtest_start = normalize_date(self.backtest_start)
         self.backtest_end = normalize_date(self.backtest_end)
+        if isinstance(self.factor_research, Mapping):
+            self.factor_research = FactorResearchPipelineConfig.from_dict(
+                self.factor_research
+            )
+        elif not isinstance(self.factor_research, FactorResearchPipelineConfig):
+            raise TypeError(
+                "factor_research must be a FactorResearchPipelineConfig or Mapping."
+            )
         if parse_date(self.backtest_start) > parse_date(self.backtest_end):
             raise ValueError("backtest_start must be earlier than or equal to backtest_end.")
 
@@ -60,7 +74,7 @@ class PipelineConfig:
         strategy = merged.get("strategy", {}) or {}
         factors = merged.get("factors", {}) or {}
 
-        values = {
+        values: dict[str, Any] = {
             "backtest_start": pipeline.get("backtest_start", data.get("start_date")),
             "backtest_end": pipeline.get("backtest_end", data.get("end_date")),
             "train_years": pipeline.get("train_years", 10),
@@ -88,11 +102,28 @@ class PipelineConfig:
                 "required_datasets",
                 ["daily", "daily_basic", "adj_factor"],
             ),
+            "factor_research": merged.get("factor_research", {}),
         }
         direct_overrides = {
             key: value for key, value in (overrides or {}).items() if key in values
         }
         values.update(direct_overrides)
+        return cls(**values)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "PipelineConfig":
+        """Build from direct dataclass fields, including factor_research."""
+        if not isinstance(data, Mapping):
+            raise TypeError("PipelineConfig data must be a Mapping.")
+        values = dict(data)
+        values.pop("required_start_date", None)
+        values.pop("required_end_date", None)
+        unknown = sorted(set(values) - set(cls.__dataclass_fields__))
+        if unknown:
+            raise ValueError("Unknown PipelineConfig keys: " + ", ".join(unknown) + ".")
+        raw_research = values.get("factor_research")
+        if isinstance(raw_research, Mapping):
+            values["factor_research"] = FactorResearchPipelineConfig.from_dict(raw_research)
         return cls(**values)
 
     @property
@@ -111,6 +142,7 @@ class PipelineConfig:
     def to_dict(self) -> dict[str, Any]:
         """Return a serializable dictionary representation."""
         result = asdict(self)
+        result["factor_research"] = self.factor_research.to_dict()
         result["required_start_date"] = self.required_start_date
         result["required_end_date"] = self.required_end_date
         return result

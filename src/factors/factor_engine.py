@@ -165,3 +165,98 @@ def build_factor_panel(raw_dir: Path, output_path: Path) -> pd.DataFrame:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     panel.to_csv(output_path, index=False, encoding="utf-8-sig")
     return panel
+
+
+class FactorEngine:
+    """Compute registered factors independently for each stock time series.
+
+    Output rows are sorted stably by ``trade_date`` and then ``ts_code``.
+    Factor columns follow the order requested in ``factor_names``.
+    """
+
+    def __init__(self, registry: "FactorRegistry") -> None:
+        from src.factors.registry import FactorRegistry
+
+        if not isinstance(registry, FactorRegistry):
+            raise TypeError("FactorEngine registry must be a FactorRegistry.")
+        self.registry = registry
+
+    def _resolve_factors(self, factor_names: list[str]) -> list[object]:
+        """Validate requested names and return their registered factors."""
+        if not factor_names:
+            raise ValueError("factor_names must contain at least one factor name.")
+        if any(not isinstance(name, str) or not name.strip() for name in factor_names):
+            raise ValueError("factor_names cannot contain empty values.")
+        if len(set(factor_names)) != len(factor_names):
+            raise ValueError("factor_names cannot contain duplicate names.")
+
+        factors = []
+        for name in factor_names:
+            try:
+                factors.append(self.registry.get(name))
+            except KeyError as exc:
+                raise KeyError(f"Requested factor '{name}' is not registered.") from exc
+        return factors
+
+    def describe_requirements(self, factor_names: list[str]) -> dict[str, object]:
+        """Summarize data dependencies and timing requirements for factors."""
+        factors = self._resolve_factors(factor_names)
+        metadata = [factor.metadata for factor in factors]
+        return {
+            "factor_names": sorted(factor_names),
+            "required_datasets": sorted(
+                {item for meta in metadata for item in meta.required_datasets}
+            ),
+            "source_fields": sorted(
+                {item for meta in metadata for item in meta.source_fields}
+            ),
+            "max_lookback_days": max(meta.lookback_days for meta in metadata),
+            "max_availability_lag_days": max(
+                meta.availability_lag_days for meta in metadata
+            ),
+            "categories": sorted({meta.category for meta in metadata}),
+        }
+
+    def compute_factor_panel(
+        self,
+        data: pd.DataFrame,
+        factor_names: list[str],
+    ) -> pd.DataFrame:
+        """Return a wide factor panel computed per stock in ascending date order."""
+        from src.factors.contracts import normalize_factor_input
+
+        factors = self._resolve_factors(factor_names)
+        source_fields = sorted(
+            {
+                field_name
+                for factor in factors
+                for field_name in factor.metadata.source_fields
+            }
+        )
+        normalized = normalize_factor_input(data, required_fields=source_fields)
+        normalized = normalized.sort_values(
+            ["ts_code", "trade_date"], kind="mergesort"
+        )
+        output_columns = ["trade_date", "ts_code"] + list(factor_names)
+        if normalized.empty:
+            return pd.DataFrame(columns=output_columns)
+
+        frames = []
+        for ts_code, stock_data in normalized.groupby("ts_code", sort=True):
+            stock_data = stock_data.sort_values("trade_date", kind="mergesort").copy()
+            stock_output = stock_data.loc[:, ["trade_date", "ts_code"]].copy()
+            for name, factor in zip(factor_names, factors):
+                try:
+                    values = factor.compute(stock_data)
+                except Exception as exc:
+                    raise ValueError(
+                        f"Failed to compute factor '{name}' for ts_code "
+                        f"'{ts_code}': {exc}"
+                    ) from exc
+                stock_output[name] = values.to_numpy()
+            frames.append(stock_output)
+
+        panel = pd.concat(frames, ignore_index=True)
+        return panel.loc[:, output_columns].sort_values(
+            ["trade_date", "ts_code"], kind="mergesort", ignore_index=True
+        )

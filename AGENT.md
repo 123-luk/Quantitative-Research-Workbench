@@ -1037,3 +1037,468 @@ V1-D test command:
 ```bash
 "E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" -m pytest tests/test_pipeline_config.py tests/test_data_cache.py tests/test_experiment.py
 ```
+
+## V2 Factor Library and Analysis
+
+Current branch:
+- `feature/factor-library`
+
+V2-A completed scope:
+- Established `FactorMetadata`, `FactorRegistry`, and the minimal factor calculation interface.
+- Added only `momentum_20d` and `volatility_20d` as example factors.
+
+Factor metadata requirements:
+- Every factor declares `name`, `category`, `direction`, `required_datasets`,
+  `source_fields`, `lookback_days`, and `availability_lag_days`.
+- Factor calculations must use only data available at the calculation time and
+  must not use future data.
+
+Planned development order:
+1. Basic price and volume factors.
+2. Basic valuation and financial factors.
+3. Factor preprocessing and neutralization.
+4. IC, RankIC, and quantile return evaluation.
+5. Equal-weight, fixed-weight, and rolling IC-weighted strategies.
+6. Integration with the existing pipeline.
+
+Development constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`
+  for Python commands.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, the Streamlit UI, backtest modules, or machine
+  learning modules during V2-A.
+
+V2-B completed scope:
+- Established the factor input data contract and multi-stock factor panel engine.
+- Standard factor input keys are `trade_date` and `ts_code`.
+- Factors are computed independently by `ts_code`, with each stock ordered by
+  ascending `trade_date`.
+- Cross-stock rolling, `pct_change`, and historical-window contamination are prohibited.
+- `describe_requirements` summarizes datasets, source fields, categories,
+  maximum lookback days, and maximum availability lag.
+- Cleaning, neutralization, IC evaluation, and multi-factor weighting remain
+  outside the current scope.
+
+V2 development order remains:
+1. Basic price and volume factors.
+2. Basic valuation and financial factors.
+3. Factor preprocessing and neutralization.
+4. IC, RankIC, and quantile return evaluation.
+5. Equal-weight, fixed-weight, and rolling IC-weighted strategies.
+6. Pipeline integration.
+
+V2-B command constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+
+V2-C1 completed scope:
+- Added the core price-volume factor pack. The current price-volume library has
+  10 factors: `momentum_20d`, `volatility_20d`, `momentum_60d`,
+  `momentum_120d`, `momentum_252_20d`, `short_term_reversal_5d`,
+  `price_52w_high`, `volatility_60d`, `turnover_mean_20d`, and `amihud_20d`.
+- Every factor declares direction, required datasets, source fields, and lookback days.
+- `amihud_20d` treats zero amount as missing, rejects negative amount, and
+  retains a scale determined by the input amount unit.
+- All time-series factors must be calculated independently by stock; future
+  data and cross-stock rolling, shifts, or return contamination are prohibited.
+- The next stage is basic valuation and financial factors.
+
+V2-C1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-C2A completed scope:
+- Added valuation factors `ep_ttm`, `bp`, `sp_ttm`, and `dividend_yield_ttm`.
+- Added size factors `log_total_mv` and `log_circ_mv`.
+- Non-positive PE, PB, and PS values are converted to missing values. Non-positive
+  market-value fields are also converted to missing values before logarithms.
+- Daily-basic source units are retained without conversion. A zero dividend
+  yield remains zero, while a negative dividend yield becomes missing.
+- `availability_lag_days=0` means factor metadata adds no extra calendar-day
+  delay; it does not permit trading at a closing price with data obtained only
+  after that close. Factor calculation and trade execution timing remain separate.
+- The next stage is point-in-time alignment by financial announcement date,
+  followed later by profitability, growth, and quality factors.
+- Preprocessing, IC evaluation, and multi-factor weighting remain outside the
+  current stage.
+
+V2-C2A constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-C2B completed scope:
+- Established financial announcement-date point-in-time alignment.
+- Financial record keys are `ts_code`, `ann_date`, and `end_date`; trading-panel
+  keys are `trade_date` and `ts_code`.
+- Financial data cannot be made available from `end_date`; actual availability
+  is determined by `ann_date` and the stock's real trading-date sequence.
+- The default `availability_lag_trading_days=1` makes an announcement effective
+  one trading row after the first trading date on or after its announcement.
+  Trading-day lag never uses simple calendar-day addition.
+- Revisions replace older records only from the revision's effective trading
+  date onward. Future announcements cannot overwrite historical dates, and
+  financial records never match across stocks.
+- Outputs retain `source_ann_date` and `source_end_date` for point-in-time audit.
+- Profitability, growth, and quality factors remain a later stage.
+
+V2-C2B constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-C2C completed scope:
+- Added financial factors `roe_ttm`, `roa_ttm`, `gross_margin_ttm`,
+  `net_margin_ttm`, `revenue_yoy`, `net_profit_yoy`, `debt_to_assets`, and
+  `operating_cf_to_assets`.
+- Financial factors consume standardized `fin_*` fields rather than vendor
+  fields. Upstream adapters own vendor-to-standard field mapping.
+- Every financial-factor input must first complete announcement-date
+  point-in-time alignment. `source_ann_date` and `source_end_date` remain audit
+  fields, and `end_date` never makes unannounced data available early.
+- `availability_lag_days=0` means PIT delay was handled upstream; it never
+  permits future announcements. Financial factors do not fill or search data.
+- Financial ratios and growth rates retain their original units. Finite negative
+  profitability, margin, growth, and operating-cash-flow values are preserved;
+  positive and negative infinity become missing.
+- The next stage is factor preprocessing and neutralization, followed later by
+  IC, RankIC, quantile-return evaluation, and multi-factor combination.
+
+V2-C2C constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning modules.
+
+V2-D1 completed scope:
+- Established configurable cross-sectional factor preprocessing with
+  `PreprocessingConfig` and `FactorPreprocessor`.
+- The fixed processing order is numeric conversion and infinity handling,
+  same-date missing-value handling, same-date winsorization, metadata direction
+  adjustment, and same-date standardization.
+- Every operation is isolated by `trade_date`; whole-history statistics,
+  forward fill, backward fill, and cross-date filling are prohibited.
+- Missing-value methods are `none` and `median`. Winsorization methods are
+  `none`, `quantile`, and `mad`. Standardization methods are `none`, `zscore`,
+  and `rank`.
+- Factors with `direction=-1` are multiplied by `-1` before standardization so
+  larger processed values consistently indicate the preferred direction.
+- Rank standardization is centered on zero with an approximate range of
+  `[-1, 1]`, using average ranks for ties.
+- Industry and market-cap neutralization are not implemented in V2-D1. The next
+  stage is V2-D2 industry and market-cap neutralization.
+
+V2-D1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-D1.
+
+V2-D2 completed scope:
+- Established same-date industry and size neutralization with
+  `NeutralizationConfig` and `FactorNeutralizer`.
+- V2-D2 consumes factor values already processed by V2-D1 and an exposure panel
+  keyed by `trade_date` and `ts_code`; default exposures are `industry` and
+  `log_total_mv`.
+- Neutralized values are OLS residuals from a same-date design matrix containing
+  an intercept, stable drop-first industry dummies, and standardized size
+  exposure as configured. Small industries below `min_industry_size` are
+  excluded.
+- Every regression, industry structure, size statistic, and optional residual
+  z-score is isolated by `trade_date`. Exposure forward fill, backward fill,
+  and cross-date filling are prohibited.
+- `log_total_mv` and `log_circ_mv` are exempt from size neutralization by default
+  but can still be industry-neutralized. Same-date stocks influence their shared
+  cross-sectional regression by design; future dates cannot affect past dates.
+- The research order is raw factor calculation, V2-D1 preprocessing, V2-D2
+  neutralization, optional residual z-scoring, then factor evaluation.
+- The next stage is factor IC, RankIC, and quantile-return evaluation.
+
+V2-D2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-D2.
+
+V2-E1 completed scope:
+- Established same-date Pearson IC and Spearman RankIC evaluation with
+  `FactorEvaluationConfig` and `FactorEvaluator`.
+- The evaluator consumes a processed factor panel and a caller-prepared forward
+  return panel aligned by `trade_date` and `ts_code`; it never constructs future
+  returns or infers a holding period.
+- `universe_count` is the factor-panel stock count for a date, `n_obs` is the
+  finite factor-return pair count, and `coverage = n_obs / universe_count`.
+- IC is same-date Pearson correlation. RankIC is same-date Spearman correlation
+  implemented with average ranks followed by Pearson correlation.
+- Every correlation, rank, and sample count is isolated by `trade_date`; pooled
+  historical correlations and cross-date ranking are prohibited.
+- ICIR is mean IC divided by sample standard deviation (`ddof=1`) and is not
+  annualized. Positive ratios use only finite metric periods.
+- Direction is not adjusted in evaluation. Inputs normally complete V2-D1
+  direction unification and may optionally complete V2-D2 neutralization first;
+  positive IC means higher factor values align with higher future returns.
+- Automatic `shift(-n)` labels, missing-value filling, winsorization, and
+  standardization are outside the evaluation module.
+- The next stage is V2-E2 quantile returns, long-short returns, and monotonicity
+  evaluation.
+
+V2-E1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-E1.
+
+V2-E2 completed scope:
+- Established same-date rank-based quantile, long-short, and group-return
+  monotonicity evaluation with `QuantileEvaluationConfig` and
+  `FactorQuantileEvaluator`.
+- Factors and caller-prepared forward returns align by `trade_date` and
+  `ts_code`. Quantile assignment uses same-date average factor ranks; tied
+  factor values remain together even when that leaves quantiles empty.
+- Quantile 1 is the lowest-factor group and Quantile N is the highest-factor
+  group. Group returns are equal-weight means of prepared forward returns, and
+  long-short return is the high-group return minus the low-group return.
+- Monotonicity is the same-date Spearman correlation between quantile number and
+  finite group return. Every rank, group, and statistic is isolated by date.
+- E2 never repeats direction adjustment or constructs forward returns. Inputs
+  normally complete V2-D1 direction unification and may complete V2-D2 first.
+- These outputs are factor evaluation, not a realizable backtest: no actual
+  rebalancing, compounding, costs, slippage, suspensions, or price-limit handling
+  is modeled. Long-short IR is not annualized.
+- The next stage is equal-weight, fixed-weight, and rolling IC-weighted
+  multi-factor combination.
+
+V2-E2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-E2.
+
+V2-F1 completed scope:
+- Established auditable equal-weight and fixed-weight multi-factor composition
+  with `FactorCompositionConfig` and `FactorComposer`.
+- Composition inputs must already have completed V2-D1 direction unification
+  and cross-sectional standardization. Optional V2-D2 neutralization must also
+  occur before composition.
+- F1 does not repeat direction adjustment, missing-value filling, winsorization,
+  standardization, or industry and size neutralization. Higher composite scores
+  indicate a more preferred combined factor direction, not a return forecast.
+- Equal composition assigns the same base weight to every selected factor.
+  Fixed composition matches non-negative weights by factor name; normalized and
+  raw fixed weights are both supported.
+- `require_all` scores only rows where every selected factor is finite.
+  `renormalize` rescales the valid factors' weights independently for each row,
+  subject to `min_valid_factors`.
+- `valid_factor_count` records the number of finite factor inputs and
+  `weight_coverage` records the observed share of configured base weight before
+  any row-level renormalization.
+- Every score is isolated by `trade_date` and `ts_code`; F1 does not construct
+  forward returns, select stocks, form holdings, rebalance, or run a backtest.
+- The next stage is V2-F2 rolling IC and RankIC dynamic weighting using only
+  information available strictly before each scoring date.
+
+V2-F1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-F1.
+
+V2-F2 completed scope:
+- Established rolling IC and RankIC dynamic factor weighting with
+  `RollingICWeightConfig` and `RollingICFactorComposer`.
+- F2 consumes evaluation results already generated by V2-E1. For score date
+  `t`, only finite IC or RankIC observations with evaluation date strictly
+  earlier than `t` are eligible; current-date and future results are excluded.
+- Historical windows retain the most recent configured number of valid
+  evaluation periods and audit `history_periods`, `history_start_date`, and
+  `history_end_date`.
+- The selected metric can be `ic` or `rank_ic`. The `zero` negative policy
+  maps negative historical means to zero, while `absolute` allocates positive
+  weight by historical correlation strength without flipping factor values.
+- When no positive historical weight is available, F2 can use equal-weight
+  fallback or leave weights unavailable. Partial valid history is normalized
+  without incorrectly triggering an all-factor fallback.
+- Dynamic scoring retains the F1 meanings of `require_all`, `renormalize`,
+  `valid_factor_count`, and `weight_coverage`.
+- Inputs must already have completed V2-D1 direction unification and
+  cross-sectional standardization. Optional V2-D2 neutralization must happen
+  before F2. F2 does not repeat direction adjustment, winsorization,
+  standardization, or neutralization.
+- A higher `composite_score` indicates a more preferred combined direction; it
+  is not an expected return. F2 does not construct forward returns, perform
+  Top N selection, rebalance, model costs, or run a backtest.
+- The next stage is V2-G pipeline integration and experiment-result storage.
+
+V2-F2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-F2.
+
+V2-G1 completed scope:
+- Established auditable future-return label construction with
+  `ForwardReturnConfig` and `ForwardReturnBuilder`.
+- `score_panel` and `price_panel` both use `trade_date` plus `ts_code` as unique
+  keys. The market trading calendar is the sorted set of every unique
+  `trade_date` in the complete price panel.
+- Entry and exit advance by market-calendar positions, never by one stock's
+  non-missing price rows. Defaults are `entry_lag_periods=1` and
+  `holding_periods=20`.
+- A valid label is `forward_return = exit_price / entry_price - 1`. Exact entry
+  and exit dates and prices remain in the output for audit.
+- Missing or invalid entry and exit prices keep the label missing. Dates are
+  never delayed for a suspension or missing quote, and no forward fill or
+  backward fill is performed.
+- Forward returns are evaluation labels, not factor features. Labels must not
+  enter factor calculation, preprocessing, neutralization, or composition.
+- `ForwardReturnBuilder` does not model costs, slippage, suspension execution,
+  price limits, Top N selection, portfolio mechanics, or an actual backtest.
+- The next stage is V2-G2 factor-research workflow orchestration.
+
+V2-G1 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine learning
+  modules during V2-G1.
+
+V2-G2 completed scope:
+- Established a pure in-memory factor-research orchestrator with
+  `FactorResearchConfig`, `FactorResearchResult`, and `FactorResearchRunner`.
+- The fixed order is full-history `FactorEngine` calculation, exact
+  `score_panel` key selection, D1 preprocessing, optional D2 neutralization,
+  G1 forward-return construction, E1 IC/RankIC, E2 quantile and long-short
+  evaluation, F1/F2 composition, and composite-score evaluation.
+- Time-series factors must be calculated from the complete input history before
+  score dates are selected. `score_panel` defines final research keys and must
+  never truncate the factor lookback history in advance.
+- Financial inputs must already be point-in-time aligned and mapped to
+  standardized `fin_*` fields. G2 does not perform vendor-field adaptation.
+- Forward returns are evaluation labels only and never enter preprocessing,
+  neutralization, or composition. Rolling weights retain the F2 rule that only
+  IC or RankIC observations strictly earlier than a score date are eligible.
+- G2 downloads no data and writes no files. It does not construct real
+  historical universe membership, select Top N stocks, manage holdings,
+  rebalance, model costs or execution constraints, or run a backtest.
+- V2-G3 owns experiment-result persistence. V2-G4 owns integration with the V1
+  pipeline configuration and CLI.
+
+V2-G2 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G2.
+
+V2-G3 completed scope:
+- Established research-result persistence and integrity verification for every
+  table in `FactorResearchResult`; each table is stored independently as
+  Parquet.
+- `manifest.json` stores requirements, the compact result summary, the runner
+  configuration snapshot, caller-provided experiment metadata, and per-table
+  row and column counts, column names, pandas dtypes, file size, and SHA-256.
+  It never embeds complete DataFrame contents.
+- Artifact file references are relative paths contained within the artifact
+  directory. Saving uses a collision-resistant sibling staging directory and
+  writes the manifest only after all selected Parquet files are complete.
+- `overwrite=False` is the default. An explicit overwrite first completes and
+  verifies staging, then replaces the old artifact through a recoverable
+  backup sequence without deleting the old target before staging succeeds.
+- `include_empty_tables` controls whether empty tables receive Parquet files;
+  either way, the manifest retains their schema and empty-state record.
+- Verification checks manifest structure, safe paths, file existence, file
+  size, SHA-256, Parquet readability, row count, column count, and ordered
+  column names. Corrupt or missing files are reported and are never repaired
+  automatically.
+- G3 consumes an existing `FactorResearchResult`; it does not run factor
+  research and does not modify the V1 `ExperimentManager`. V2-G4 will use the
+  run directory supplied by `ExperimentManager` to connect G2 and G3.
+
+V2-G3 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine
+  learning modules during V2-G3.
+
+V2-G4A completed scope:
+- Added an optional `factor_research` section to the V1 `PipelineConfig` using
+  `FactorResearchPipelineConfig` for validated nested configuration parsing
+  and serialization.
+- Old configurations without `factor_research` remain valid and default to
+  `enabled=False`; factor research is never enabled implicitly.
+- The configuration layer does not read input Parquet files, run
+  `FactorResearchRunner`, save G3 artifacts, create output directories, or
+  change `PipelineRunner` execution behavior.
+- Enabled research requires factor-input, score-panel, and price-panel path
+  strings. An exposure-panel path is additionally required when neutralization
+  is enabled; configuration does not require those paths to exist.
+- Nested objects represent the G2, D1, D2, E1, E2, F1, F2, G1, and G3
+  configurations. Evaluation, quantile evaluation, and forward-return
+  `return_col` values must match.
+- `PipelineConfig` retains its existing backtest, training, lookback, and
+  `required_start_date` logic unchanged.
+- V2-G4B will load input Parquet panels, run G2, and save results through G3.
+  V2-G4C will add CLI wiring and example configuration.
+
+V2-G4A constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G4A.
+
+V2-G4B completed scope:
+- Connected G2 research execution and G3 artifact persistence to the single
+  existing experiment run directory created by `PipelineRunner`.
+- Disabled factor research preserves V1 behavior and performs no research-input
+  reads, registry construction, G2 execution, or research artifact creation.
+- Enabled research reads factor input, score, price, and optional exposure
+  Parquet panels from configured paths.
+- Relative input paths resolve from the stable project root and never from the
+  current shell directory.
+- Each execution creates an independent `FactorRegistry` and uses the existing
+  example, price-volume, valuation, and financial registration functions.
+- The current run directory receives G2 results under `artifact_subdir` through
+  G3; no second experiment run or independent run identifier is created.
+- The runner returns only a compact research summary and never returns complete
+  input or result DataFrames.
+- Input, G2, and G3 failures propagate with context. G3 remains responsible for
+  staging cleanup, and the experiment run directory is not deleted.
+- G4B does not modify the CLI or `config/config.yaml`. V2-G4C owns CLI wiring,
+  example configuration, and end-to-end command acceptance.
+
+V2-G4B constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G4B.
+
+V2-G4C completed scope:
+- Completed the factor-research CLI integration and end-to-end command
+  acceptance while retaining `scripts/run_pipeline.py` as the unified entry
+  point.
+- Whether factor research executes is controlled exclusively by the
+  `factor_research` YAML section parsed by `PipelineConfig.from_yaml()`.
+- The CLI continues to delegate execution to `run_pipeline()` and therefore to
+  `FactorResearchPipelineExecutor`; it does not copy G2, G3, or G4B logic.
+- Human-readable success output includes the run directory and a compact
+  research summary. Enabled runs include the artifact directory, factor names,
+  composition method, input and major table shapes, and manifest verification
+  status.
+- CLI output never includes complete DataFrames or the complete manifest. The
+  optional `--json` output follows the same compact boundary.
+- The complete example is `config/factor_research.example.yaml`. Research is
+  disabled by default and the required input Parquet panels must be prepared
+  before enabling it.
+- Workflow and input-schema documentation is in
+  `docs/05_factor_research_workflow.md`.
+- CLI end-to-end tests create temporary Parquet inputs and output directories
+  under `tmp_path`, invoke the real script through `sys.executable`, and verify
+  the published G3 artifact.
+- V2 still does not implement Top N selection, holdings, rebalancing, or a real
+  portfolio backtest.
+- After G4C, the next stage is V2 release acceptance, merge, and the v0.3.0
+  tag.
+
+V2-G4C constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G4C.
