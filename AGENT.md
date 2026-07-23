@@ -1417,3 +1417,29 @@ V2-G3 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, pipeline, UI, strategy, backtest, or machine
   learning modules during V2-G3.
+
+V2-G4A completed scope:
+- Added an optional `factor_research` section to the V1 `PipelineConfig` using
+  `FactorResearchPipelineConfig` for validated nested configuration parsing
+  and serialization.
+- Old configurations without `factor_research` remain valid and default to
+  `enabled=False`; factor research is never enabled implicitly.
+- The configuration layer does not read input Parquet files, run
+  `FactorResearchRunner`, save G3 artifacts, create output directories, or
+  change `PipelineRunner` execution behavior.
+- Enabled research requires factor-input, score-panel, and price-panel path
+  strings. An exposure-panel path is additionally required when neutralization
+  is enabled; configuration does not require those paths to exist.
+- Nested objects represent the G2, D1, D2, E1, E2, F1, F2, G1, and G3
+  configurations. Evaluation, quantile evaluation, and forward-return
+  `return_col` values must match.
+- `PipelineConfig` retains its existing backtest, training, lookback, and
+  `required_start_date` logic unchanged.
+- V2-G4B will load input Parquet panels, run G2, and save results through G3.
+  V2-G4C will add CLI wiring and example configuration.
+
+V2-G4A constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G4A.
