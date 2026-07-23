@@ -205,11 +205,17 @@ from src.factors.research_pipeline import (
     FactorResearchResult,
     FactorResearchRunner,
 )
+from src.factors.research_artifacts import (
+    FactorResearchArtifactStore,
+    ResearchArtifactConfig,
+)
 
 __all__.extend(
     [
+        "FactorResearchArtifactStore",
         "FactorResearchConfig",
         "FactorResearchResult",
         "FactorResearchRunner",
+        "ResearchArtifactConfig",
     ]
 )

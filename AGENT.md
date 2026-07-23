@@ -1387,3 +1387,33 @@ V2-G2 constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, UI, strategy, backtest, or machine learning modules
   during V2-G2.
+
+V2-G3 completed scope:
+- Established research-result persistence and integrity verification for every
+  table in `FactorResearchResult`; each table is stored independently as
+  Parquet.
+- `manifest.json` stores requirements, the compact result summary, the runner
+  configuration snapshot, caller-provided experiment metadata, and per-table
+  row and column counts, column names, pandas dtypes, file size, and SHA-256.
+  It never embeds complete DataFrame contents.
+- Artifact file references are relative paths contained within the artifact
+  directory. Saving uses a collision-resistant sibling staging directory and
+  writes the manifest only after all selected Parquet files are complete.
+- `overwrite=False` is the default. An explicit overwrite first completes and
+  verifies staging, then replaces the old artifact through a recoverable
+  backup sequence without deleting the old target before staging succeeds.
+- `include_empty_tables` controls whether empty tables receive Parquet files;
+  either way, the manifest retains their schema and empty-state record.
+- Verification checks manifest structure, safe paths, file existence, file
+  size, SHA-256, Parquet readability, row count, column count, and ordered
+  column names. Corrupt or missing files are reported and are never repaired
+  automatically.
+- G3 consumes an existing `FactorResearchResult`; it does not run factor
+  research and does not modify the V1 `ExperimentManager`. V2-G4 will use the
+  run directory supplied by `ExperimentManager` to connect G2 and G3.
+
+V2-G3 constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, pipeline, UI, strategy, backtest, or machine
+  learning modules during V2-G3.
