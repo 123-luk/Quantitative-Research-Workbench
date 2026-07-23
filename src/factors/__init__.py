@@ -178,3 +178,15 @@ __all__.extend(
         "FactorCompositionConfig",
     ]
 )
+
+from src.factors.dynamic_composition import (
+    RollingICFactorComposer,
+    RollingICWeightConfig,
+)
+
+__all__.extend(
+    [
+        "RollingICFactorComposer",
+        "RollingICWeightConfig",
+    ]
+)
