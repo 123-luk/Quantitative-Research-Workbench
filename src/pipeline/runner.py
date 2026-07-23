@@ -8,6 +8,7 @@ from typing import Any
 from src.data.data_manager import DataManager
 from src.pipeline.config import PipelineConfig
 from src.pipeline.experiment import ExperimentManager
+from src.pipeline.research_execution import FactorResearchPipelineExecutor
 
 
 def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
@@ -48,6 +49,20 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
         "strategy_name": config.strategy_name,
         "stock_pool": config.stock_pool,
     }
+
+    if config.factor_research.enabled:
+        executor = FactorResearchPipelineExecutor(config.factor_research)
+        research_result = executor.execute(
+            run_dir,
+            metadata={
+                "pipeline_status": status,
+                "strategy_name": config.strategy_name,
+                "stock_pool": config.stock_pool,
+                "required_start_date": required_start_date,
+                "required_end_date": required_end_date,
+            },
+        )
+        summary["factor_research"] = research_result.to_dict()
 
     experiment_manager.save_config_snapshot(run_dir, config)
     experiment_manager.save_run_info(

@@ -1443,3 +1443,29 @@ V2-G4A constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, UI, strategy, backtest, or machine learning modules
   during V2-G4A.
+
+V2-G4B completed scope:
+- Connected G2 research execution and G3 artifact persistence to the single
+  existing experiment run directory created by `PipelineRunner`.
+- Disabled factor research preserves V1 behavior and performs no research-input
+  reads, registry construction, G2 execution, or research artifact creation.
+- Enabled research reads factor input, score, price, and optional exposure
+  Parquet panels from configured paths.
+- Relative input paths resolve from the stable project root and never from the
+  current shell directory.
+- Each execution creates an independent `FactorRegistry` and uses the existing
+  example, price-volume, valuation, and financial registration functions.
+- The current run directory receives G2 results under `artifact_subdir` through
+  G3; no second experiment run or independent run identifier is created.
+- The runner returns only a compact research summary and never returns complete
+  input or result DataFrames.
+- Input, G2, and G3 failures propagate with context. G3 remains responsible for
+  staging cleanup, and the experiment run directory is not deleted.
+- G4B does not modify the CLI or `config/config.yaml`. V2-G4C owns CLI wiring,
+  example configuration, and end-to-end command acceptance.
+
+V2-G4B constraints:
+- Use `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Do not automatically run `git commit` or `git push`.
+- Do not modify env files, UI, strategy, backtest, or machine learning modules
+  during V2-G4B.
