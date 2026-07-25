@@ -1502,3 +1502,43 @@ V2-G4C constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, UI, strategy, backtest, or machine learning modules
   during V2-G4C.
+
+## 2026-07-25 V3-A Machine Learning Dataset Contract
+
+V3-A completed scope:
+- Work was completed on branch `feature/ml-framework`, created from synchronized
+  `main` at `b2d5649e36d987761820e8b1690b9047d99a0aa4` (`v0.3.0`).
+- Added the public `src/ml` dataset contract without changing V1 or V2 modules.
+- `MLDatasetBuilder.build(factor_panel, forward_returns, feature_names)` consumes
+  the V2 final factor panel and audited forward-return table and returns an
+  `MLDataset` with ordered features, one regression-label Series, metadata, and
+  immutable audit statistics.
+- `trade_date + ts_code` keys are normalized, checked for duplicates, and
+  required to match exactly on both sides before a validated one-to-one merge.
+- Missing and positive/negative infinite labels are counted separately and
+  dropped. The builder rejects a dataset when no labeled sample remains.
+- Feature NaN values remain missing, positive/negative infinity becomes NaN and
+  is audited, and an entirely missing retained feature is rejected. V3-A does
+  not impute, winsorize, standardize, neutralize, or silently drop features.
+- `MLDataset` deep-copies constructor inputs and returns defensive copies from
+  its `features`, `labels`, and `metadata` properties.
+- V3-A files:
+  - `src/ml/__init__.py`
+  - `src/ml/contracts.py`
+  - `src/ml/dataset.py`
+  - `tests/test_ml_dataset.py`
+  - `AGENT.md`
+- Targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_ml_dataset.py -q`
+  completed with `59 passed`.
+- Public import check completed with `ml dataset imports ok`.
+- Syntax compilation completed with `syntax ok: 4 files`.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `949 passed, 11 warnings`.
+- The 11 warnings are existing pandas date-format `UserWarning` messages from
+  unchanged V2 invalid-date tests. The V3-A targeted suite introduced no warning
+  category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- V3-A does not implement time splitting, label availability windows, models,
