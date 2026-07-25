@@ -56,6 +56,18 @@ from src.ml.training import (
     WalkForwardTrainingIntegrityError,
     WalkForwardTrainingResult,
 )
+from src.ml.evaluation import (
+    CrossSectionalMetricSummary,
+    ModelEvaluationAudit,
+    ModelEvaluationConfig,
+    ModelEvaluationConfigError,
+    ModelEvaluationDataError,
+    ModelEvaluationError,
+    ModelEvaluationIntegrityError,
+    ModelEvaluationResult,
+    OOSModelEvaluator,
+    RegressionMetrics,
+)
 
 __all__ = [
     "ElasticNetModelAdapter",
@@ -105,5 +117,15 @@ __all__ = [
     "WalkForwardTrainingError",
     "WalkForwardTrainingIntegrityError",
     "WalkForwardTrainingResult",
+    "CrossSectionalMetricSummary",
+    "ModelEvaluationAudit",
+    "ModelEvaluationConfig",
+    "ModelEvaluationConfigError",
+    "ModelEvaluationDataError",
+    "ModelEvaluationError",
+    "ModelEvaluationIntegrityError",
+    "ModelEvaluationResult",
+    "OOSModelEvaluator",
+    "RegressionMetrics",
     "create_default_model_registry",
 ]

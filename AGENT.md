@@ -1805,3 +1805,61 @@ V3-E completed scope:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
   completed with `1216 passed, 11 warnings`.
 - The 11 warnings are the existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-E introduced no warning
+  category.
+
+## 2026-07-25 V3-F1 Strict OOS Model Evaluation
+
+V3-F1 completed scope:
+- Work continued in local development mode on branch `feature/ml-framework`
+  from committed V3-E HEAD
+  `8954336cc598a461dbee731bdac94e300e3e801d`.
+- Added frozen `ModelEvaluationConfig`, `RegressionMetrics`,
+  `CrossSectionalMetricSummary`, and `ModelEvaluationAudit` contracts, plus
+  defensively copied `ModelEvaluationResult` tables.
+- Added `OOSModelEvaluator`. It reads only
+  `WalkForwardTrainingResult.predictions` and `.audit`; it does not access
+  features, plans, training partitions, registries, adapters, or estimators,
+  and does not invoke any training or prediction API.
+- Overall and per-fold regression metrics are MAE, RMSE, and R-squared.
+  R-squared is explicitly invalid for fewer than two observations or a
+  constant target; MAE and RMSE remain available in those cases.
+- Daily Pearson IC uses a deterministic centered-vector correlation. Daily
+  Spearman RankIC applies pandas average ranks to target and prediction before
+  the same correlation calculation. Ties are not broken by code, row order,
+  ordinal ranking, or randomness.
+- Cross-sectional invalidity retains the date with a NaN metric, `False`
+  validity flag, and stable reason. Invalid dates do not enter means,
+  deviations, or information ratios.
+- IC and RankIC summaries use arithmetic mean, sample standard deviation with
+  `ddof=1`, and unannualized mean-to-standard-deviation ratios. Fewer than two
+  valid dates or zero standard deviation produces no information ratio.
+- `date_metrics` contains one sorted row per prediction date with fold,
+  observation count, both correlations, validity flags, and invalid reasons.
+  `fold_metrics` contains one row per continuous fold with prediction date
+  bounds, row/date counts, regression metrics, and both correlation summaries.
+- Prediction validation checks the exact seven-column contract, named unique
+  increasing dataset index, unique prediction keys, finite float64-convertible
+  target and prediction, non-empty codes, datetime fields, and non-negative
+  continuous integer fold ids.
+- Training-audit reconciliation checks total rows, dates, folds, global date
+  bounds, fold order, model names, per-fold rows, and per-fold prediction date
+  bounds. Coverage must be exactly 1.0; inconsistent input fails atomically.
+- Evaluation results retain no prediction detail in their audit, no training
+  result, and no model objects. DataFrame properties return deep copies and
+  `as_dict()` converts timestamps and NaN values to JSON-safe representations.
+- V3-F1 does not implement portfolio returns, turnover, costs, net-value
+  curves, model persistence, or any importance method. The next planned stage
+  is V3-F2 Walk-Forward permutation importance.
+- Targeted evaluation test command completed with `60 passed`.
+- Complete V3 ML test command completed with `386 passed`.
+- Public imports, minimal construction, three-file syntax, prohibited-pattern,
+  and training/model API scans completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1276 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-F1 introduced no warning
+  category, including constant-correlation cases.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
