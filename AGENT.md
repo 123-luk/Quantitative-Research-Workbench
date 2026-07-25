@@ -1925,3 +1925,53 @@ V3-F2 completed scope:
 - Fixed interpreter:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next planned stage: V3-G in-memory ML orchestration.
+
+## 2026-07-25 V3-G In-Memory ML Experiment Orchestration
+
+V3-G completed scope:
+- Work continued locally on branch `feature/ml-framework` from committed
+  V3-F2 HEAD `57008616e26f3a67b2aa5b0f7c911b7083d1261a`.
+- Added immutable `PermutationImportanceOptionsConfig`,
+  `MLExperimentConfig`, and `MLExperimentAudit`, plus controlled
+  `MLExperimentResult` and `MLExperimentRunner`.
+- The fixed sequential stage chain is Dataset build, Walk-Forward split,
+  Training, Evaluation, optional Permutation Importance, integrity
+  validation, and result construction.
+- The orchestrator uses only public V3 APIs. It does not duplicate dataset,
+  splitting, training, evaluation, permutation, preprocessing, or estimator
+  algorithms.
+- A single combined in-memory panel is defensively copied and passed to the
+  existing DatasetBuilder as factor and label input. Feature names are the
+  non-key, non-date, non-price, non-label columns; the Builder remains
+  responsible for final schema, alignment, and value validation.
+- Permutation Importance is disabled by default. When enabled, its model name
+  and complete model parameter mapping come only from TrainingConfig.
+  Importance independently retrains its folds and does not reuse discarded
+  Training models.
+- Cross-stage validation checks Dataset feature identity, Plan/Training fold
+  counts, Training/Evaluation model, coverage, row/date/fold counts and date
+  ranges, and all corresponding Training/Importance parameters, features,
+  folds, dates, scoring, repetitions, and scope.
+- Stage failures are chained with one of the fixed stage names and abort the
+  experiment without a partial result or saved runner state.
+- The result retains the real dataset audit, defensive Plan, TrainingResult,
+  EvaluationResult, optional ImportanceResult, and compact experiment audit.
+  It does not retain the raw frame, MLDataset, Registry, runners, Adapters, or
+  estimators.
+- The orchestration layer is strictly in memory: it writes no artifact,
+  configuration, log, or experiment directory and has no Pipeline, CLI, UI,
+  network, persistence, tuning, comparison, or portfolio integration.
+- Targeted orchestration test command completed with `35 passed`.
+- Complete V3 ML test command completed with `470 passed`.
+- Public imports, minimal configuration, model-parameter preservation,
+  three-file syntax, persistence/integration, and internal-algorithm scans
+  completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1360 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-G introduced no warning
+  category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V3-H Artifact Persistence.

@@ -80,6 +80,18 @@ from src.ml.importance import (
     WalkForwardPermutationImportanceResult,
     WalkForwardPermutationImportanceRunner,
 )
+from src.ml.orchestration import (
+    MLExperimentAudit,
+    MLExperimentConfig,
+    MLExperimentConfigError,
+    MLExperimentDataError,
+    MLExperimentError,
+    MLExperimentIntegrityError,
+    MLExperimentResult,
+    MLExperimentRunner,
+    MLExperimentStageError,
+    PermutationImportanceOptionsConfig,
+)
 
 __all__ = [
     "ElasticNetModelAdapter",
@@ -149,5 +161,15 @@ __all__ = [
     "WalkForwardPermutationImportanceIntegrityError",
     "WalkForwardPermutationImportanceResult",
     "WalkForwardPermutationImportanceRunner",
+    "MLExperimentAudit",
+    "MLExperimentConfig",
+    "MLExperimentConfigError",
+    "MLExperimentDataError",
+    "MLExperimentError",
+    "MLExperimentIntegrityError",
+    "MLExperimentResult",
+    "MLExperimentRunner",
+    "MLExperimentStageError",
+    "PermutationImportanceOptionsConfig",
     "create_default_model_registry",
 ]
