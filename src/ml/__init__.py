@@ -11,6 +11,25 @@ from src.ml.contracts import (
     MLDatasetValueError,
 )
 from src.ml.dataset import MLDatasetBuilder
+from src.ml.models import (
+    ElasticNetModelAdapter,
+    ElasticNetModelConfig,
+    ModelConfigError,
+    ModelDataError,
+    ModelError,
+    ModelFeatureMismatchError,
+    ModelFitAudit,
+    ModelFitError,
+    ModelNotFittedError,
+    ModelParameterSpec,
+    ModelPredictionError,
+    ModelRegistry,
+    ModelRegistryError,
+    RegressionModelAdapter,
+    RidgeModelAdapter,
+    RidgeModelConfig,
+    create_default_model_registry,
+)
 from src.ml.splitting import (
     WalkForwardConfig,
     WalkForwardConfigError,
@@ -24,6 +43,8 @@ from src.ml.splitting import (
 )
 
 __all__ = [
+    "ElasticNetModelAdapter",
+    "ElasticNetModelConfig",
     "MLDataset",
     "MLDatasetAlignmentError",
     "MLDatasetAudit",
@@ -33,6 +54,20 @@ __all__ = [
     "MLDatasetError",
     "MLDatasetSchemaError",
     "MLDatasetValueError",
+    "ModelConfigError",
+    "ModelDataError",
+    "ModelError",
+    "ModelFeatureMismatchError",
+    "ModelFitAudit",
+    "ModelFitError",
+    "ModelNotFittedError",
+    "ModelParameterSpec",
+    "ModelPredictionError",
+    "ModelRegistry",
+    "ModelRegistryError",
+    "RegressionModelAdapter",
+    "RidgeModelAdapter",
+    "RidgeModelConfig",
     "WalkForwardConfig",
     "WalkForwardConfigError",
     "WalkForwardDataError",
@@ -42,4 +77,5 @@ __all__ = [
     "WalkForwardPlan",
     "WalkForwardSplit",
     "WalkForwardSplitter",
+    "create_default_model_registry",
 ]

@@ -1602,3 +1602,58 @@ V3-B completed scope:
 
 V3-B constraints:
 - Do not automatically run `git commit`, `git push`, or create or modify tags.
+
+## 2026-07-25 V3-C Model Protocol and Linear Baselines
+
+V3-C completed scope:
+- Work continued on branch `feature/ml-framework`. V3-A and V3-B are complete
+  and locally committed; V3-C remains uncommitted for user review.
+- Added `src/ml/models` with a uniform `RegressionModelAdapter` protocol,
+  explicit model exception hierarchy, immutable `ModelParameterSpec`, and
+  sample-free immutable `ModelFitAudit`.
+- Added frozen `RidgeModelConfig` and `ElasticNetModelConfig`. Both expose
+  `from_dict`, `as_dict`, `parameter_schema`, and `to_estimator_params`;
+  unknown, incorrectly typed, out-of-range, and unsupported values fail
+  immediately instead of being ignored.
+- Defaults remain overrideable. Complete resolved defaults plus user overrides
+  are recorded in every successful fit audit. Adapters never hard-code values
+  over validated user configuration.
+- Added `RidgeModelAdapter` and `ElasticNetModelAdapter`. Every fit creates a
+  fresh sklearn `Pipeline` containing `SimpleImputer(strategy="median")`,
+  `StandardScaler`, and the configured estimator.
+- Imputer, scaler, and estimator fit only on training data. Validation data is
+  contract-checked and audited but never participates in fit, preprocessing
+  statistics, coefficient estimation, or parameter selection.
+- Training and prediction require exact feature names and order. Missing
+  features, extra features, reordered features, reserved metadata fields,
+  invalid numeric conversion, infinity, and all-missing training features are
+  rejected explicitly.
+- Constant features are retained and audited after training-median imputation;
+  sklearn scaling handles them normally.
+- Prediction preserves the caller's index and returns finite float64 values in
+  a Series named `prediction`.
+- Linear feature importance contains original feature name and position,
+  standardized-input coefficient, absolute coefficient, stable descending
+  importance rank, and positive/negative/zero direction.
+- Added an explicit `ModelRegistry` containing `ridge` and `elastic_net`.
+  It supplies stable JSON-safe parameter schemas and defaults for future YAML,
+  CLI, and Streamlit UI override layers without UI-specific training logic.
+- V3-C does not yet track the source of each override. It does not implement
+  model save/load, persistence, automatic tuning, tree models, LightGBM,
+  XGBoost, Pipeline integration, CLI integration, or UI integration.
+- Linear adapter targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_linear_model_adapters.py -q`
+  completed with `65 passed`.
+- Registry targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_model_registry.py -q`
+  completed with `18 passed`.
+- V3 ML module test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_ml_dataset.py tests/test_walk_forward_splitter.py tests/test_linear_model_adapters.py tests/test_model_registry.py -q`
+  completed with `188 passed`.
+- Public import, configurable parameter, JSON schema, six-file syntax, and
+  forbidden-pattern checks all completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1078 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged V2 invalid-date tests. V3-C introduced no warning category.
