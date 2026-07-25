@@ -17,11 +17,19 @@ from src.ml.models.linear import (
     RidgeModelAdapter,
     RidgeModelConfig,
 )
+from src.ml.models.tree import (
+    HistGradientBoostingModelAdapter,
+    HistGradientBoostingModelConfig,
+)
 
 
 @dataclass(frozen=True)
 class _ModelRegistration:
-    config_class: type[RidgeModelConfig] | type[ElasticNetModelConfig]
+    config_class: (
+        type[RidgeModelConfig]
+        | type[ElasticNetModelConfig]
+        | type[HistGradientBoostingModelConfig]
+    )
     adapter_class: type[RegressionModelAdapter]
 
 
@@ -47,11 +55,20 @@ class ModelRegistry:
                 ElasticNetModelConfig,
                 ElasticNetModelAdapter,
             )
+            self.register(
+                "hist_gradient_boosting",
+                HistGradientBoostingModelConfig,
+                HistGradientBoostingModelAdapter,
+            )
 
     def register(
         self,
         model_name: str,
-        config_class: type[RidgeModelConfig] | type[ElasticNetModelConfig],
+        config_class: (
+            type[RidgeModelConfig]
+            | type[ElasticNetModelConfig]
+            | type[HistGradientBoostingModelConfig]
+        ),
         adapter_class: type[RegressionModelAdapter],
     ) -> None:
         """Register a project-owned config class and adapter class explicitly."""
@@ -119,5 +136,5 @@ class ModelRegistry:
 
 
 def create_default_model_registry() -> ModelRegistry:
-    """Create an independent registry containing only V3-C linear models."""
+    """Create an independent registry containing the supported core models."""
     return ModelRegistry()

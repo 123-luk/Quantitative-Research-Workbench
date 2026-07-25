@@ -40,6 +40,10 @@ class ModelFeatureMismatchError(ModelDataError):
     """Raised when validation or prediction features do not exactly match training."""
 
 
+
+class ModelFeatureImportanceUnavailableError(ModelError):
+    """Raised when a fitted model has no supported native feature importance."""
+
 class ModelFitError(ModelError):
     """Raised when the estimator cannot be fitted safely."""
 
@@ -52,7 +56,15 @@ class ModelRegistryError(ModelError):
     """Raised for invalid model registry operations."""
 
 
-_VALUE_TYPES = {"int", "optional_int", "float", "bool", "str", "choice"}
+_VALUE_TYPES = {
+    "int",
+    "optional_int",
+    "float",
+    "optional_float",
+    "bool",
+    "str",
+    "choice",
+}
 _UI_CONTROLS = {"number", "checkbox", "select"}
 _RESERVED_FEATURES = {
     "trade_date",
@@ -97,6 +109,12 @@ def _validate_schema_default(spec: "ModelParameterSpec") -> None:
         )
     elif spec.value_type == "float":
         valid = (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(float(value))
+        )
+    elif spec.value_type == "optional_float":
+        valid = value is None or (
             isinstance(value, (int, float))
             and not isinstance(value, bool)
             and math.isfinite(float(value))
@@ -245,10 +263,15 @@ class ModelFitAudit:
     validation_used_for_fit: bool
     resolved_parameters: tuple[tuple[str, object], ...]
     preprocessing_parameters: tuple[tuple[str, object], ...]
-    estimator_intercept: float
+    estimator_intercept: float | None
     python_version: str
     numpy_version: str
     sklearn_version: str
+    native_missing_support: bool = False
+    imputer_enabled: bool = True
+    scaler_enabled: bool = True
+    best_iteration: int | None = None
+    n_iterations: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.model_name, str) or not self.model_name:
@@ -269,7 +292,14 @@ class ModelFitAudit:
             raise ModelConfigError("fit audit feature_names must be unique")
         for field_name in _PAIR_FIELDS:
             pairs = getattr(self, field_name)
-            expected = () if field_name == "validation_missing_counts" and not self.validation_provided else self.feature_names
+            if field_name == "validation_missing_counts":
+                expected = self.feature_names if self.validation_provided else ()
+            elif field_name == "imputation_values":
+                expected = self.feature_names if self.imputer_enabled else ()
+            elif field_name in {"scaler_means", "scaler_scales"}:
+                expected = self.feature_names if self.scaler_enabled else ()
+            else:
+                expected = self.feature_names
             if tuple(name for name, _ in pairs) != tuple(expected):
                 raise ModelConfigError(
                     f"fit audit {field_name} order must match feature_names"
@@ -277,12 +307,18 @@ class ModelFitAudit:
         for field_name in ("train_missing_counts", "validation_missing_counts"):
             if any(value < 0 for _, value in getattr(self, field_name)):
                 raise ModelConfigError(f"fit audit {field_name} cannot be negative")
-        if self.validation_used_for_fit:
-            raise ModelConfigError(
-                "fit audit validation_used_for_fit must be False for linear models"
-            )
-        if not math.isfinite(float(self.estimator_intercept)):
+        if self.estimator_intercept is not None and not math.isfinite(
+            float(self.estimator_intercept)
+        ):
             raise ModelConfigError("fit audit estimator_intercept must be finite")
+        for field_name in ("best_iteration", "n_iterations"):
+            value = getattr(self, field_name)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value < 0
+            ):
+                raise ModelConfigError(
+                    f"fit audit {field_name} must be None or a non-negative integer"
+                )
         if not set(self.constant_features).issubset(self.feature_names):
             raise ModelConfigError(
                 "fit audit constant_features must be training features"
@@ -310,10 +346,19 @@ class ModelFitAudit:
             "preprocessing_parameters": _json_safe(
                 dict(self.preprocessing_parameters)
             ),
-            "estimator_intercept": float(self.estimator_intercept),
+            "estimator_intercept": (
+                None
+                if self.estimator_intercept is None
+                else float(self.estimator_intercept)
+            ),
             "python_version": self.python_version,
             "numpy_version": self.numpy_version,
             "sklearn_version": self.sklearn_version,
+            "native_missing_support": self.native_missing_support,
+            "imputer_enabled": self.imputer_enabled,
+            "scaler_enabled": self.scaler_enabled,
+            "best_iteration": self.best_iteration,
+            "n_iterations": self.n_iterations,
         }
 
 
@@ -584,6 +629,11 @@ class RegressionModelAdapter(ABC):
                 python_version=platform.python_version(),
                 numpy_version=np.__version__,
                 sklearn_version=sklearn.__version__,
+                native_missing_support=False,
+                imputer_enabled=True,
+                scaler_enabled=True,
+                best_iteration=None,
+                n_iterations=None,
             )
             importance = self._make_importance(feature_names, coefficients)
         except ModelError:
@@ -670,6 +720,10 @@ class RegressionModelAdapter(ABC):
             "fitted": True,
             "config": _json_safe(self._config_as_dict()),
             "fit_audit": self._audit.as_dict(),
-            "intercept": float(self._audit.estimator_intercept),
+            "intercept": (
+                None
+                if self._audit.estimator_intercept is None
+                else float(self._audit.estimator_intercept)
+            ),
             "feature_names": list(self._audit.feature_names),
         }

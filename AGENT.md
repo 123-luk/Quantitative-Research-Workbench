@@ -1703,3 +1703,57 @@ V3-D0 completed scope:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
   completed with `1078 passed, 11 warnings`.
 - The 11 warnings remain the existing pandas date-format `UserWarning`
+  messages from unchanged V2 invalid-date tests. V3-D0 introduced no new
+  warning category.
+
+## 2026-07-25 V3-D1 HistGradientBoosting Adapter
+
+V3-D1 completed scope:
+- Work continued in local development mode on branch `feature/ml-framework`
+  from committed V3-D0 dependency-governance commit
+  `92bd2d6f0a360c40e6d29add6581f69cefaf94cf`.
+- Added frozen `HistGradientBoostingModelConfig` and
+  `HistGradientBoostingModelAdapter` for sklearn 1.9.0.
+- All 16 public project parameters are validated, JSON-safe, and available
+  through stable parameter schemas for future YAML, CLI, and Streamlit UI
+  layers. Unknown and deliberately unsupported complex parameters are rejected.
+- Supported losses are `squared_error`, `absolute_error`, `poisson`, `gamma`,
+  and `quantile`. Quantile configuration is validated against its loss.
+- HistGradientBoosting uses sklearn's native NaN handling. It does not create
+  or use a SimpleImputer, StandardScaler, or sklearn Pipeline. Positive and
+  negative infinity remain explicit model-data errors.
+- The estimator always receives `validation_fraction=None`, preventing sklearn
+  from creating an internal random validation split.
+- With `early_stopping=False`, validation data is optional and is used only for
+  contract checks and audit counts; it is never passed to estimator fit.
+- With `early_stopping=True`, separate non-overlapping external validation data
+  is mandatory and is passed through sklearn 1.9.0 `X_val` and `y_val`.
+  `validation_used_for_fit` records the resulting distinction.
+- Every adapter fit creates a new estimator, including when `warm_start=True`;
+  trees are never reused across adapter fit calls.
+- `ModelParameterSpec` now supports `optional_float` without changing existing
+  Ridge or ElasticNet schema semantics.
+- `ModelFitAudit` now supports optional estimator intercepts and records native
+  missing support, imputer/scaler enablement, best iteration when available,
+  and estimator iteration count. Linear audits retain their prior intercept,
+  imputer, scaler, and feature-importance behavior.
+- HistGradientBoosting exposes no project-supported native feature importance.
+  A fitted adapter raises `ModelFeatureImportanceUnavailableError`; permutation
+  importance remains explicitly deferred to V3-F.
+- The default registry now lists `elastic_net`, `hist_gradient_boosting`, and
+  `ridge`. LightGBM and XGBoost remain unimplemented and unregistered.
+- HistGradientBoosting targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_hist_gradient_boosting_adapter.py -q`
+  completed with `75 passed`.
+- Linear and registry regression test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_linear_model_adapters.py tests/test_model_registry.py -q`
+  completed with `86 passed`.
+- All V3 ML test command completed with `266 passed`.
+- Public import, configurable parameter, JSON schema, nine-file syntax, and
+  forbidden-pattern checks all completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1156 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged V2 invalid-date tests. V3-D1 introduced no warning category.
+- Fixed interpreter:

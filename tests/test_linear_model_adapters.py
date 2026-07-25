@@ -208,6 +208,12 @@ def test_normal_fit_predict_audit_metadata_and_importance(adapter: object) -> No
     )
     assert audit.imputation_values[0] == ("factor_a", 4.0)
     assert audit.constant_features == ("constant",)
+    assert isinstance(audit.estimator_intercept, float)
+    assert not audit.native_missing_support
+    assert audit.imputer_enabled
+    assert audit.scaler_enabled
+    assert audit.best_iteration is None
+    assert audit.n_iterations is None
     assert not audit.validation_provided
     assert not audit.validation_used_for_fit
     assert dict(audit.resolved_parameters) == adapter.config.as_dict()

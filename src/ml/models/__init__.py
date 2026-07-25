@@ -5,6 +5,7 @@ from src.ml.models.base import (
     ModelDataError,
     ModelError,
     ModelFeatureMismatchError,
+    ModelFeatureImportanceUnavailableError,
     ModelFitAudit,
     ModelFitError,
     ModelNotFittedError,
@@ -20,15 +21,22 @@ from src.ml.models.linear import (
     RidgeModelConfig,
 )
 from src.ml.models.registry import ModelRegistry, create_default_model_registry
+from src.ml.models.tree import (
+    HistGradientBoostingModelAdapter,
+    HistGradientBoostingModelConfig,
+)
 
 __all__ = [
     "ElasticNetModelAdapter",
     "ElasticNetModelConfig",
     "ModelConfigError",
+    "HistGradientBoostingModelAdapter",
+    "HistGradientBoostingModelConfig",
     "ModelDataError",
     "ModelError",
     "ModelFeatureMismatchError",
     "ModelFitAudit",
+    "ModelFeatureImportanceUnavailableError",
     "ModelFitError",
     "ModelNotFittedError",
     "ModelParameterSpec",

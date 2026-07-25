@@ -10,6 +10,8 @@ import pytest
 from src.ml import (
     ElasticNetModelAdapter,
     ElasticNetModelConfig,
+    HistGradientBoostingModelAdapter,
+    HistGradientBoostingModelConfig,
     ModelConfigError,
     ModelRegistry,
     ModelRegistryError,
@@ -22,7 +24,9 @@ from src.ml import (
 
 def test_default_registry_models_are_stable_and_complete() -> None:
     registry = ModelRegistry()
-    assert registry.list_models() == ("elastic_net", "ridge")
+    assert registry.list_models() == (
+        "elastic_net", "hist_gradient_boosting", "ridge"
+    )
 
 
 @pytest.mark.parametrize(
@@ -30,6 +34,11 @@ def test_default_registry_models_are_stable_and_complete() -> None:
     [
         ("ridge", RidgeModelAdapter, RidgeModelConfig),
         ("elastic_net", ElasticNetModelAdapter, ElasticNetModelConfig),
+        (
+            "hist_gradient_boosting",
+            HistGradientBoostingModelAdapter,
+            HistGradientBoostingModelConfig,
+        ),
     ],
 )
 def test_create_defaults_returns_expected_adapter(
@@ -119,6 +128,27 @@ def test_arbitrary_estimator_callable_is_rejected() -> None:
                 "warm_start",
             ],
         ),
+        (
+            "hist_gradient_boosting",
+            [
+                "loss",
+                "quantile",
+                "learning_rate",
+                "max_iter",
+                "max_leaf_nodes",
+                "max_depth",
+                "min_samples_leaf",
+                "l2_regularization",
+                "max_features",
+                "max_bins",
+                "early_stopping",
+                "n_iter_no_change",
+                "tol",
+                "warm_start",
+                "random_state",
+                "verbose",
+            ],
+        ),
     ],
 )
 def test_parameter_schema_is_stable_complete_and_json_safe(
@@ -186,6 +216,29 @@ def test_all_public_parameters_can_flow_through_registry() -> None:
         == elastic_params
     )
 
+
+    tree_params = {
+        "learning_rate": 0.05,
+        "max_iter": 300,
+        "max_depth": 6,
+        "early_stopping": False,
+        "random_state": 123,
+    }
+    tree = registry.create("hist_gradient_boosting", tree_params)
+    assert isinstance(tree, HistGradientBoostingModelAdapter)
+    for name, value in tree_params.items():
+        assert tree.config.as_dict()[name] == value
+
+
+def test_tree_defaults_are_complete_and_defensive() -> None:
+    registry = ModelRegistry()
+    defaults = registry.get_default_parameters("hist_gradient_boosting")
+    schema_defaults = {
+        spec.name: spec.default
+        for spec in registry.get_parameter_schema("hist_gradient_boosting")
+    }
+    assert defaults == schema_defaults
+    defaults["max_iter"] = 999
 
 def test_fit_audit_keeps_every_registry_resolved_parameter() -> None:
     X = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [3.0, 2.0, 1.0]})
