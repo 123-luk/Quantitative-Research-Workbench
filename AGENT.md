@@ -1863,3 +1863,65 @@ V3-F1 completed scope:
   category, including constant-correlation cases.
 - Fixed interpreter:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+
+## 2026-07-25 V3-F2 Walk-Forward OOS Permutation Importance
+
+V3-F2 completed scope:
+- Work continued locally on branch `feature/ml-framework` from committed
+  V3-F1 HEAD `5510d0a837ba1e3f093ed7abbde78bcd97a5d857`.
+- Added immutable `WalkForwardPermutationImportanceConfig`, per-fold and
+  aggregate audits, defensive result tables, and
+  `WalkForwardPermutationImportanceRunner`.
+- Every fold creates and fits one fresh registry Adapter. The fitted Adapter
+  produces one baseline prediction and one prediction per
+  feature/repetition; it is discarded before the next fold.
+- Permutations occur only in the fold's prediction feature block and only
+  within each `trade_date` cross-section. Training and validation features
+  are never permuted, rows and indices are not reordered, and feature values
+  never cross date boundaries.
+- NaN values participate in the date-local permutation, preserving each
+  date's value multiset and NaN count. Constant and one-row cross-sections
+  remain valid.
+- Supported scores are RMSE and MAE. Both are lower-is-better, so importance
+  is `permuted_score - baseline_score`. Negative and zero importance values
+  are retained without clipping, absolute conversion, or normalization.
+- Independent deterministic random streams use NumPy `SeedSequence` with
+  permutation random state, fold id, feature position, and repetition id.
+  Global NumPy random state is never changed, and model randomness remains
+  controlled only by user model parameters.
+- `repeat_importance` records every fold/feature/repetition observation.
+  `fold_importance` uses arithmetic mean, sample standard deviation with
+  `ddof=1`, extrema, and positive fraction. `feature_importance` aggregates
+  fold/repetition observations equally, without row/date/stock weighting,
+  and ranks descending means with feature-position tie breaks.
+- The runner independently revalidates dataset structure and the complete
+  Plan contract, including positional indices, disjoint partitions, global
+  prediction uniqueness, complete date cross-sections, declared date
+  boundaries, temporal order, and strict label exit-date cutoffs.
+- Validation data is passed according to the split contract, while
+  `validation_used_for_fit` is copied from `ModelFitAudit`; the runner does
+  not infer use from the model name.
+- Prediction targets are never passed to model fitting or prediction. They
+  are read only for OOS baseline and permuted score calculations.
+- Model creation, fitting, baseline prediction, permutation prediction, or
+  scoring failures abort the complete run through a chained contextual fold
+  error. Partial folds, features, or repetitions are never returned.
+- Result and audit objects retain no model, Adapter, dataset, Plan,
+  prediction detail, target, or permuted feature block.
+- The implementation does not call native model importance, sklearn
+  inspection importance, the existing training runner, or the OOS evaluator.
+  It does not implement SHAP, portfolio simulation, persistence, parallel
+  scheduling, or Pipeline/CLI/UI integration.
+- Targeted importance test command completed with `49 passed`.
+- Complete V3 ML test command completed with `435 passed`.
+- Public imports, minimal construction, three-file syntax, prohibited-feature,
+  and training/evaluation entry scans completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1325 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-F2 introduced no warning
+  category, including constant-feature permutations.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V3-G in-memory ML orchestration.

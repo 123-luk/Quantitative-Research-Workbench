@@ -68,6 +68,18 @@ from src.ml.evaluation import (
     OOSModelEvaluator,
     RegressionMetrics,
 )
+from src.ml.importance import (
+    PermutationImportanceFoldAudit,
+    WalkForwardPermutationImportanceAudit,
+    WalkForwardPermutationImportanceConfig,
+    WalkForwardPermutationImportanceConfigError,
+    WalkForwardPermutationImportanceDataError,
+    WalkForwardPermutationImportanceError,
+    WalkForwardPermutationImportanceFoldError,
+    WalkForwardPermutationImportanceIntegrityError,
+    WalkForwardPermutationImportanceResult,
+    WalkForwardPermutationImportanceRunner,
+)
 
 __all__ = [
     "ElasticNetModelAdapter",
@@ -127,5 +139,15 @@ __all__ = [
     "ModelEvaluationResult",
     "OOSModelEvaluator",
     "RegressionMetrics",
+    "PermutationImportanceFoldAudit",
+    "WalkForwardPermutationImportanceAudit",
+    "WalkForwardPermutationImportanceConfig",
+    "WalkForwardPermutationImportanceConfigError",
+    "WalkForwardPermutationImportanceDataError",
+    "WalkForwardPermutationImportanceError",
+    "WalkForwardPermutationImportanceFoldError",
+    "WalkForwardPermutationImportanceIntegrityError",
+    "WalkForwardPermutationImportanceResult",
+    "WalkForwardPermutationImportanceRunner",
     "create_default_model_registry",
 ]
