@@ -1757,3 +1757,51 @@ V3-D1 completed scope:
 - The 11 warnings remain existing pandas date-format `UserWarning` messages
   from unchanged V2 invalid-date tests. V3-D1 introduced no warning category.
 - Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+
+## 2026-07-25 V3-E Walk-Forward Model Trainer
+
+V3-E completed scope:
+- Work continued in local development mode on branch `feature/ml-framework`
+  from committed V3-D1 HEAD
+  `daa6d3a200dc3592d63b261052c23ce7922c25c6`.
+- V3-D2B remains deferred because no compatible local wheel is available and
+  dependency installation is prohibited in the current offline workflow.
+- Added immutable, JSON-safe `WalkForwardTrainingConfig`,
+  `WalkForwardFoldAudit`, and `WalkForwardTrainingAudit` contracts.
+- Added `WalkForwardTrainer`, which consumes the real `MLDataset` and
+  `WalkForwardPlan` contracts and creates a fresh registry adapter for every
+  split. No estimator or adapter is reused across folds or retained in the
+  result.
+- Split indices are dataset row positions and are extracted consistently with
+  `iloc`. Train, validation, and prediction partitions are passed separately;
+  the prediction target is read only after prediction and never participates
+  in fitting.
+- The trainer defensively revalidates index ranges and uniqueness, partition
+  disjointness, complete date cross-sections, gap-free prediction coverage,
+  temporal order, and strict `exit_trade_date` cutoffs before fitting.
+- Validation frames are always provided because the current V3-B
+  `WalkForwardSplit` contract requires a non-empty validation partition.
+  `validation_used_for_fit` is copied from each adapter's `ModelFitAudit`;
+  the trainer does not infer it from the model name.
+- Successful folds produce one unified OOS frame with exact columns
+  `trade_date`, `ts_code`, `entry_trade_date`, `exit_trade_date`, `target`,
+  `prediction`, and `fold_id`. The original dataset index is retained, named
+  `dataset_index`, and sorted only after all folds are combined.
+- `WalkForwardTrainingResult.predictions` returns a deep defensive copy.
+  Results and audits retain no dataset, plan, adapter, estimator, complete
+  indices, or sample matrices.
+- Model creation, fit, or prediction failure aborts the complete run as a
+  chained `WalkForwardFoldError`; failed folds are never skipped and partial
+  results are never returned.
+- V3-E does not implement model evaluation, portfolio simulation, persistence,
+  automatic tuning, or Pipeline/CLI/UI integration. Model evaluation and
+  permutation importance remain planned for V3-F.
+- Targeted trainer test command completed with `60 passed`.
+- Complete V3 ML test command completed with `326 passed`.
+- Public imports, minimal construction, three-file syntax, and prohibited
+  pattern checks completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1216 passed, 11 warnings`.
+- The 11 warnings are the existing pandas date-format `UserWarning` messages

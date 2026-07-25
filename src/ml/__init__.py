@@ -44,6 +44,18 @@ from src.ml.splitting import (
     WalkForwardSplit,
     WalkForwardSplitter,
 )
+from src.ml.training import (
+    WalkForwardFoldAudit,
+    WalkForwardFoldError,
+    WalkForwardTrainer,
+    WalkForwardTrainingAudit,
+    WalkForwardTrainingConfig,
+    WalkForwardTrainingConfigError,
+    WalkForwardTrainingDataError,
+    WalkForwardTrainingError,
+    WalkForwardTrainingIntegrityError,
+    WalkForwardTrainingResult,
+)
 
 __all__ = [
     "ElasticNetModelAdapter",
@@ -83,5 +95,15 @@ __all__ = [
     "WalkForwardPlan",
     "WalkForwardSplit",
     "WalkForwardSplitter",
+    "WalkForwardFoldAudit",
+    "WalkForwardFoldError",
+    "WalkForwardTrainer",
+    "WalkForwardTrainingAudit",
+    "WalkForwardTrainingConfig",
+    "WalkForwardTrainingConfigError",
+    "WalkForwardTrainingDataError",
+    "WalkForwardTrainingError",
+    "WalkForwardTrainingIntegrityError",
+    "WalkForwardTrainingResult",
     "create_default_model_registry",
 ]
