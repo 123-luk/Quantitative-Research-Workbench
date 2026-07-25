@@ -1657,3 +1657,49 @@ V3-C completed scope:
   completed with `1078 passed, 11 warnings`.
 - The 11 warnings remain existing pandas date-format `UserWarning` messages
   from unchanged V2 invalid-date tests. V3-C introduced no warning category.
+
+## 2026-07-25 V3-D0 Dependency Governance
+
+V3-D0 completed scope:
+- Work continued locally on branch `feature/ml-framework` at
+  `47f4c399c4665ac36a97073aeeebcf43e0f1f7e8`, which contains the locally
+  committed V3-A, V3-B, and V3-C stages.
+- `requirements.txt` now declares `pyarrow` directly because the production
+  data and research artifact paths use pandas Parquet I/O. No existing
+  dependency was removed or renamed.
+- Added `constraints-v3-core.txt` as the exact tested core environment snapshot.
+  `requirements.txt` remains the direct dependency declaration; the constraints
+  file supplements it and is not a complete lock file.
+- Added `docs/06_dependency_policy.md` covering the validated environment,
+  installation, core and test dependency roles, version upgrades, joblib,
+  optional model dependencies, and reproducibility limitations.
+- The validated environment is Windows with Python `3.12.2` and:
+  - numpy `2.4.6`
+  - pandas `3.0.3`
+  - scipy `1.17.1`
+  - statsmodels `0.14.6`
+  - scikit-learn `1.9.0`
+  - PyYAML `6.0.3`
+  - pyarrow `24.0.0`
+  - pytest `9.0.3`
+- The reproducible core installation form is
+  `python -m pip install -r requirements.txt -c constraints-v3-core.txt`.
+  The documentation also identifies the fixed `E:` interpreter command as a
+  current-development-machine example rather than a universal path.
+- LightGBM and XGBoost remain uninstalled and undeclared. They require actual
+  Python 3.12 installation and test validation in V3-D2 before versions are
+  recorded in a separate optional dependency file.
+- joblib remains a transitive scikit-learn dependency. Production code does not
+  directly import it, and V3-C does not persist models. Direct declaration is
+  deferred until production code actually imports it in V3-H.
+- The constraints/runtime comparison completed with
+  `constraints match runtime`.
+- The requirements policy check completed with
+  `requirements dependency policy ok`.
+- `python -m pip check` completed with `No broken requirements found`.
+- Core dependency imports completed with `core dependency imports ok`.
+- Existing V3 model imports completed with `existing ml imports ok`.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1078 passed, 11 warnings`.
+- The 11 warnings remain the existing pandas date-format `UserWarning`
