@@ -11,6 +11,17 @@ from src.ml.contracts import (
     MLDatasetValueError,
 )
 from src.ml.dataset import MLDatasetBuilder
+from src.ml.splitting import (
+    WalkForwardConfig,
+    WalkForwardConfigError,
+    WalkForwardDataError,
+    WalkForwardError,
+    WalkForwardInsufficientHistoryError,
+    WalkForwardIntegrityError,
+    WalkForwardPlan,
+    WalkForwardSplit,
+    WalkForwardSplitter,
+)
 
 __all__ = [
     "MLDataset",
@@ -22,4 +33,13 @@ __all__ = [
     "MLDatasetError",
     "MLDatasetSchemaError",
     "MLDatasetValueError",
+    "WalkForwardConfig",
+    "WalkForwardConfigError",
+    "WalkForwardDataError",
+    "WalkForwardError",
+    "WalkForwardInsufficientHistoryError",
+    "WalkForwardIntegrityError",
+    "WalkForwardPlan",
+    "WalkForwardSplit",
+    "WalkForwardSplitter",
 ]

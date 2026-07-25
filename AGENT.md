@@ -1542,3 +1542,63 @@ V3-A completed scope:
 - Fixed interpreter:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - V3-A does not implement time splitting, label availability windows, models,
+  trainers, evaluation, persistence, Pipeline integration, or CLI integration.
+
+## 2026-07-25 V3-B Walk-Forward Splitting and Label Availability
+
+V3-B completed scope:
+- Work continued on synchronized branch `feature/ml-framework` at V3-A commit
+  `0d6e5e3d0e0cf18cfaa5e953362d9d0e2d5b6dca`.
+- `WalkForwardConfig` defines `train_window_periods`, `validation_periods`,
+  `window_type`, `retrain_frequency`, and `embargo_periods`.
+- Every period is a count of sorted unique `MLDataset.metadata.trade_date`
+  values; periods are independent of natural-day, week, or month frequency.
+- Rolling windows use the most recent fixed number of eligible training score
+  dates. Expanding windows use all eligible history after the minimum startup
+  requirement is met.
+- A complete score date is label-mature for a cutoff only when its date-level
+  maximum `exit_trade_date` is strictly earlier than the cutoff.
+- Date-level maximum exit dates prevent partial-stock maturity from splitting a
+  cross-section between partitions.
+- Validation uses the latest fixed number of mature dates after embargo removal
+  and strictly before the prediction block start.
+- Train-validation purge removes every earlier score date whose date-level
+  maximum exit date reaches or crosses the validation start.
+- Embargo removes the configured number of most recent mature history dates and
+  never counts naturally unavailable dates.
+- `retrain_frequency` creates consecutive, non-overlapping prediction-date
+  blocks; the final block may be shorter and all dates after startup are covered.
+- Insufficient initial dates are recorded and skipped until the first valid
+  split. Any later interruption raises `WalkForwardIntegrityError`.
+- Partition indices are original `MLDataset` RangeIndex row positions and always
+  include complete score-date cross-sections.
+- Public V3-B API includes the five walk-forward exceptions,
+  `WalkForwardConfig`, `WalkForwardSplit`, `WalkForwardPlan`, and
+  `WalkForwardSplitter`.
+- V3-B files:
+  - `src/ml/splitting.py`
+  - `src/ml/__init__.py`
+  - `tests/test_walk_forward_splitter.py`
+  - `AGENT.md`
+- Targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_walk_forward_splitter.py -q`
+  completed with `46 passed`.
+- V3 ML module test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_ml_dataset.py tests/test_walk_forward_splitter.py -q`
+  completed with `105 passed`.
+- Public import check completed with `ml splitting imports ok`.
+- Syntax compilation completed with `syntax ok: 3 files`.
+- The forbidden split/library pattern scan returned no matches.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `995 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged V2 invalid-date tests. V3-B introduced no warning category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- V3-B does not implement models, training, transformation, evaluation,
+  persistence, Pipeline integration, or CLI integration.
+- The next stage is V3-C model protocol and linear baseline.
+
+V3-B constraints:
+- Do not automatically run `git commit`, `git push`, or create or modify tags.
