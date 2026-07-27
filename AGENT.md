@@ -2236,3 +2236,43 @@ V4-B completed scope:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next planned stage: V4-C Modeling Panel Artifact.
 - V4 remains local-only and will not be pushed before all V4 stages complete.
+
+## 2026-07-27 V4-C Modeling Panel Artifact Persistence
+
+阶段：V4-C Modeling Panel Artifact Persistence
+
+修改文件：
+- src/modeling_panel/artifacts.py
+- src/modeling_panel/__init__.py
+- tests/test_modeling_panel_artifacts.py
+- AGENT.md
+
+实现摘要：
+- 新增 Modeling Panel Artifact schema 1.0，固定四文件布局：modeling_panel.parquet、config.json、audit.json、manifest.json。
+- 新增 frozen Artifact Config、FileRecord、Manifest、ValidationIssue、ValidationReport 与 WriteResult contracts。
+- Artifact Config 支持 zstd/snappy 与严格 bool `verify_after_write`；不支持 overwrite、append 或 partial write。
+- 实现严格 UTF-8 JSON：拒绝 duplicate keys、NaN、Infinity、-Infinity、溢出非有限数字、trailing garbage 与非 object 顶层。
+- Parquet 使用 pyarrow、`index=False` 和配置 compression；Manifest 记录写后重读的 pandas dtypes。
+- 写入后对 Result panel 执行值语义 roundtrip 比较，不从 Artifact 重建 ModelingPanelResult。
+- 对三个 payload 流式计算 SHA-256 与 size；manifest-last。
+- 使用同父目录唯一 `.tmp-<name>-<uuid>` staging，发布前强制完整校验，`os.replace` 原子发布，可选发布后校验，并在失败时清理本次 staging/新发布目录。
+- Validator 拒绝 Artifact/文件 symlink、非 regular file、路径穿越、额外条目和缺失固定文件；普通损坏返回 deterministic issue report。
+- 实现 Manifest↔Config、Manifest↔Audit、Manifest↔Parquet、Audit↔Config 与 Audit↔Parquet 跨文件一致性检查。
+- 不保存模型、estimator、pickle、joblib、CSV、原始 factor panel、原始 forward returns 或 unmatched DataFrame。
+- 未实现 load Result；未修改或调用 src/ml/artifacts.py、src/factors/research_artifacts.py 的私有 helper。
+
+验证结果：
+- Targeted Artifact tests：14 passed。
+- Modeling Panel tests：210 passed。
+- 相关 Artifact/ML 回归：416 passed（受限沙箱内 sklearn named-pipe 权限失败后，在允许的非受限测试进程中重跑通过）。
+- Full pytest：1744 passed, 2 skipped, 11 warnings。
+- 2 skipped 为仓库既有条件跳过；11 warnings 与 V4-B 基线数量相同，均来自既有 pandas 日期解析告警。
+- Public import、纯内存 Builder + 临时 Artifact smoke、syntax compile、禁止集成/不安全序列化/跨模块私有 helper/overwrite-backup 扫描均通过。
+- 固定 Python：E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe
+
+安全与工作流说明：
+- 未安装、升级或卸载依赖。
+- 未执行远程 Git；未 add、commit、push 或 tag。
+- Artifact smoke 仅使用系统临时目录，未在仓库生成 Artifact/output。
+- 下一阶段：V4-D Factor Research Integration。
+- V4 全部完成前不 push。
