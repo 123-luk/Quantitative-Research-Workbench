@@ -529,13 +529,25 @@ def test_artifact_failure_is_wrapped_and_does_not_retry(
     assert calls == 1
 
 
-def test_executor_rejects_disabled_config_and_invalid_run_dir(
+def test_executor_disabled_result_and_override_policy(tmp_path: Path) -> None:
+    missing_root = tmp_path / "missing-root"
+    executor = MLExperimentPipelineExecutor(
+        MLExperimentPipelineConfig(), project_root=missing_root
+    )
+    result = executor.execute(tmp_path / "missing-run")
+    assert result == MLExperimentPipelineResult.disabled()
+    assert result.panel_path is None
+    assert not missing_root.exists()
+    with pytest.raises(MLPipelineExecutionError, match="disabled"):
+        executor.execute(
+            tmp_path / "missing-run",
+            panel_path_override="panel.parquet",
+        )
+
+
+def test_executor_rejects_invalid_run_dir(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(MLPipelineExecutionError, match="enabled"):
-        MLExperimentPipelineExecutor(
-            MLExperimentPipelineConfig(), project_root=tmp_path
-        )
     panel = _write_panel(tmp_path / "panel.parquet")
     executor = MLExperimentPipelineExecutor(
         _config(panel), project_root=tmp_path
@@ -547,6 +559,100 @@ def test_executor_rejects_disabled_config_and_invalid_run_dir(
     with pytest.raises(MLPipelineExecutionError, match="directory"):
         executor.execute(file_run)
 
+
+def _override_config() -> MLExperimentPipelineConfig:
+    return MLExperimentPipelineConfig(
+        enabled=True,
+        panel_path=None,
+        experiment=_experiment(),
+    )
+
+
+@pytest.mark.parametrize("as_string", [False, True])
+def test_executor_override_only_records_actual_path(
+    tmp_path: Path, as_string: bool
+) -> None:
+    root = tmp_path / "project"
+    panel = _write_panel(root / "inputs" / "panel.parquet")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    config = _override_config()
+    before = config.to_dict()
+    override: str | Path = Path("inputs/panel.parquet")
+    if as_string:
+        override = str(override)
+    result = MLExperimentPipelineExecutor(
+        config, project_root=root
+    ).execute(run_dir, panel_path_override=override)
+    assert result.panel_path == str(panel.resolve())
+    assert config.to_dict() == before
+
+
+def test_executor_panel_source_conflict_and_missing(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    panel = _write_panel(root / "panel.parquet")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    with pytest.raises(MLPipelineExecutionError, match="conflict"):
+        MLExperimentPipelineExecutor(
+            _config(panel), project_root=root
+        ).execute(run_dir, panel_path_override=panel)
+    with pytest.raises(MLPipelineExecutionError, match="exactly one"):
+        MLExperimentPipelineExecutor(
+            _override_config(), project_root=root
+        ).execute(run_dir)
+
+
+@pytest.mark.parametrize("mode", ["missing", "directory", "suffix"])
+def test_executor_override_uses_existing_reader_path_safety(
+    tmp_path: Path, mode: str
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    override = root / "override.parquet"
+    if mode == "directory":
+        override.mkdir()
+    elif mode == "suffix":
+        override = root / "override.csv"
+        override.write_text("csv", encoding="utf-8")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    with pytest.raises(MLPipelinePanelError):
+        MLExperimentPipelineExecutor(
+            _override_config(), project_root=root
+        ).execute(run_dir, panel_path_override=override)
+
+
+def test_executor_override_reader_and_runner_are_each_called_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    panel = _write_panel(root / "panel.parquet")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    read_calls = 0
+    run_calls = 0
+    original_read = execution_module.read_ml_modeling_panel
+    original_runner = execution_module.MLExperimentRunner
+
+    def counted_read(*args: object, **kwargs: object) -> pd.DataFrame:
+        nonlocal read_calls
+        read_calls += 1
+        return original_read(*args, **kwargs)  # type: ignore[arg-type]
+
+    class CountedRunner:
+        def run(self, *args: object, **kwargs: object) -> MLExperimentResult:
+            nonlocal run_calls
+            run_calls += 1
+            return original_runner().run(*args, **kwargs)
+
+    monkeypatch.setattr(execution_module, "read_ml_modeling_panel", counted_read)
+    monkeypatch.setattr(execution_module, "MLExperimentRunner", CountedRunner)
+    result = MLExperimentPipelineExecutor(
+        _override_config(), project_root=root
+    ).execute(run_dir, panel_path_override=panel)
+    assert result.enabled is True
+    assert read_calls == run_calls == 1
 
 class _ReadyDataManager:
     def prepare_data(self, config: object) -> dict[str, object]:

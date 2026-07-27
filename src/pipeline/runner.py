@@ -9,7 +9,17 @@ from src.data.data_manager import DataManager
 from src.pipeline.config import PipelineConfig
 from src.pipeline.experiment import ExperimentManager
 from src.pipeline.ml_execution import MLExperimentPipelineExecutor
-from src.pipeline.research_execution import FactorResearchPipelineExecutor
+from src.pipeline.modeling_panel_config import (
+    ModelingPanelPipelineExecutionError,
+)
+from src.pipeline.modeling_panel_execution import (
+    ModelingPanelPipelineExecutor,
+    ModelingPanelPipelineResult,
+)
+from src.pipeline.research_execution import (
+    FactorResearchExecutionResult,
+    FactorResearchPipelineExecutor,
+)
 
 
 def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
@@ -51,9 +61,10 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
         "stock_pool": config.stock_pool,
     }
 
+    factor_research_result = FactorResearchExecutionResult.disabled()
     if config.factor_research.enabled:
         executor = FactorResearchPipelineExecutor(config.factor_research)
-        research_result = executor.execute(
+        factor_research_result = executor.execute(
             run_dir,
             metadata={
                 "pipeline_status": status,
@@ -63,12 +74,45 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
                 "required_end_date": required_end_date,
             },
         )
-        summary["factor_research"] = research_result.to_dict()
+        summary["factor_research"] = factor_research_result.to_dict()
+
+    modeling_panel_result = ModelingPanelPipelineResult.disabled()
+    if config.modeling_panel.enabled:
+        modeling_executor = ModelingPanelPipelineExecutor(
+            config.modeling_panel
+        )
+        research_input = (
+            factor_research_result
+            if config.modeling_panel.source.mode == "factor_research"
+            else None
+        )
+        modeling_panel_result = modeling_executor.execute(
+            run_dir,
+            factor_research_result=research_input,
+        )
+        summary["modeling_panel"] = modeling_panel_result.as_dict()
 
     if config.ml_experiment.enabled:
-        ml_result = MLExperimentPipelineExecutor(
-            config.ml_experiment
-        ).execute(run_dir)
+        if config.modeling_panel.enabled:
+            if (
+                not modeling_panel_result.enabled
+                or modeling_panel_result.panel_path is None
+            ):
+                raise ModelingPanelPipelineExecutionError(
+                    "enabled Modeling Panel stage returned no panel_path"
+                )
+            ml_executor = MLExperimentPipelineExecutor(
+                config.ml_experiment
+            )
+            ml_result = ml_executor.execute(
+                run_dir,
+                panel_path_override=modeling_panel_result.panel_path,
+            )
+        else:
+            ml_executor = MLExperimentPipelineExecutor(
+                config.ml_experiment
+            )
+            ml_result = ml_executor.execute(run_dir)
         summary["ml_experiment"] = ml_result.to_dict()
 
     experiment_manager.save_config_snapshot(run_dir, config)

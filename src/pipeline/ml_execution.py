@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import math
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -157,7 +158,7 @@ def _finite_optional(field_name: str, value: object) -> float | None:
 
 @dataclass(frozen=True)
 class MLExperimentPipelineResult:
-    """Compact immutable Pipeline summary for one successful ML experiment."""
+    """Compact immutable Pipeline summary for one optional ML experiment."""
 
     enabled: bool
     model_name: str | None
@@ -175,12 +176,68 @@ class MLExperimentPipelineResult:
     permutation_importance_completed: bool
     artifacts_saved: bool
     artifact_dir: str | None
+    panel_path: str | None = None
 
     def __post_init__(self) -> None:
-        if self.enabled is not True:
-            raise MLPipelineIntegrityError(
-                "MLExperimentPipelineResult represents only enabled runs"
+        if type(self.enabled) is not bool:
+            raise MLPipelineIntegrityError("enabled must be a bool")
+        if not self.enabled:
+            disabled_values = (
+                self.model_name,
+                self.n_folds,
+                self.n_prediction_rows,
+                self.n_prediction_dates,
+                self.mae,
+                self.rmse,
+                self.r2,
+                self.r2_valid,
+                self.r2_invalid_reason,
+                self.pearson_ic_mean,
+                self.rank_ic_mean,
+                self.permutation_importance_enabled,
+                self.permutation_importance_completed,
+                self.artifacts_saved,
+                self.artifact_dir,
+                self.panel_path,
             )
+            if disabled_values != (
+                None,
+                0,
+                0,
+                0,
+                None,
+                None,
+                None,
+                False,
+                None,
+                None,
+                None,
+                False,
+                False,
+                False,
+                None,
+                None,
+            ):
+                raise MLPipelineIntegrityError(
+                    "disabled ML result fields must use empty defaults"
+                )
+            json.dumps(self.to_dict(), allow_nan=False)
+            return
+        if not isinstance(self.panel_path, str) or not self.panel_path:
+            raise MLPipelineIntegrityError(
+                "enabled ML result requires panel_path"
+            )
+        panel_path = Path(self.panel_path)
+        if (
+            not panel_path.is_absolute()
+            or panel_path.is_symlink()
+            or not panel_path.is_file()
+            or panel_path.suffix.lower() != ".parquet"
+        ):
+            raise MLPipelineIntegrityError(
+                "enabled ML result panel_path is invalid"
+            )
+        object.__setattr__(self, "panel_path", str(panel_path.resolve()))
         if not isinstance(self.model_name, str) or not self.model_name:
             raise MLPipelineIntegrityError("model_name must be non-empty")
         for field_name in (
@@ -239,11 +296,35 @@ class MLExperimentPipelineResult:
             )
         json.dumps(self.to_dict(), allow_nan=False)
 
+    @classmethod
+    def disabled(cls) -> MLExperimentPipelineResult:
+        """Return the stable empty result for a disabled ML executor."""
+        return cls(
+            enabled=False,
+            model_name=None,
+            n_folds=0,
+            n_prediction_rows=0,
+            n_prediction_dates=0,
+            mae=None,
+            rmse=None,
+            r2=None,
+            r2_valid=False,
+            r2_invalid_reason=None,
+            pearson_ic_mean=None,
+            rank_ic_mean=None,
+            permutation_importance_enabled=False,
+            permutation_importance_completed=False,
+            artifacts_saved=False,
+            artifact_dir=None,
+            panel_path=None,
+        )
+
     def to_dict(self) -> dict[str, object]:
         """Return a compact JSON-safe summary without tables or parameters."""
         return {
             "enabled": self.enabled,
             "model_name": self.model_name,
+            "panel_path": self.panel_path,
             "n_folds": self.n_folds,
             "n_prediction_rows": self.n_prediction_rows,
             "n_prediction_dates": self.n_prediction_dates,
@@ -278,23 +359,36 @@ class MLExperimentPipelineExecutor:
             raise MLPipelineExecutionError(
                 "config must be MLExperimentPipelineConfig"
             )
-        if not config.enabled:
-            raise MLPipelineExecutionError(
-                "MLExperimentPipelineExecutor requires enabled=True"
-            )
         root_value = (
             Path(__file__).resolve().parents[2]
             if project_root is None
             else project_root
         )
+        if not isinstance(root_value, (str, Path)):
+            raise MLPipelineExecutionError(
+                "project_root must be a str or pathlib.Path"
+            )
         self.config = config
-        self.project_root = _directory(root_value, "project_root")
+        self.project_root = (
+            _directory(root_value, "project_root")
+            if config.enabled
+            else Path(root_value)
+        )
 
     def execute(
         self,
         run_dir: str | Path,
+        *,
+        panel_path_override: str | os.PathLike[str] | None = None,
     ) -> MLExperimentPipelineResult:
         """Run one independent ML experiment in an existing Pipeline run."""
+        if not self.config.enabled:
+            if panel_path_override is not None:
+                raise MLPipelineExecutionError(
+                    "disabled ML execution does not accept panel_path_override"
+                )
+            return MLExperimentPipelineResult.disabled()
+        panel_source = self._select_panel_path(panel_path_override)
         if not isinstance(run_dir, (str, Path)):
             raise MLPipelineExecutionError(
                 "run_dir must be a str or pathlib.Path"
@@ -312,15 +406,21 @@ class MLExperimentPipelineExecutor:
                 f"run_dir must be a directory: {run_path}"
             )
         experiment_config = self.config.experiment
-        if experiment_config is None or self.config.panel_path is None:
+        if experiment_config is None:
             raise MLPipelineIntegrityError(
                 "enabled ML configuration is incomplete"
             )
         panel = read_ml_modeling_panel(
-            self.config.panel_path,
+            panel_source,
             project_root=self.project_root,
             label_col=experiment_config.dataset_config.label_col,
         )
+        configured_panel = Path(panel_source).expanduser()
+        actual_panel_path = (
+            configured_panel
+            if configured_panel.is_absolute()
+            else self.project_root / configured_panel
+        ).resolve()
         try:
             experiment_result = MLExperimentRunner().run(
                 frame=panel,
@@ -344,7 +444,28 @@ class MLExperimentPipelineExecutor:
             experiment_result,
             run_path=run_path,
             artifact_dir=artifact_dir,
+            panel_path=actual_panel_path,
         )
+
+    def _select_panel_path(
+        self,
+        override: str | os.PathLike[str] | None,
+    ) -> str | Path:
+        configured = self.config.panel_path
+        if override is not None and not isinstance(override, (str, os.PathLike)):
+            raise MLPipelineExecutionError(
+                "panel_path_override must be a str, os.PathLike, or None"
+            )
+        if configured is not None and override is not None:
+            raise MLPipelineExecutionError(
+                "ML panel source conflict: config panel_path and override "
+                "are both configured"
+            )
+        if configured is None and override is None:
+            raise MLPipelineExecutionError(
+                "ML execution requires exactly one panel path source"
+            )
+        return configured if configured is not None else Path(os.fspath(override))
 
     def _save_artifacts(
         self,
@@ -395,6 +516,7 @@ class MLExperimentPipelineExecutor:
         *,
         run_path: Path,
         artifact_dir: str | None,
+        panel_path: Path,
     ) -> MLExperimentPipelineResult:
         audit = experiment_result.audit
         evaluation = experiment_result.evaluation_result
@@ -453,4 +575,5 @@ class MLExperimentPipelineExecutor:
             ),
             artifacts_saved=artifacts_saved,
             artifact_dir=artifact_dir,
+            panel_path=str(panel_path),
         )

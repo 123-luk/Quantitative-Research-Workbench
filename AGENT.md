@@ -2159,3 +2159,381 @@ Maintenance fix completed:
 - Tree module import, two-file syntax, and all `ModelError` reference checks
   completed successfully.
 - Full pytest completed with `1534 passed, 2 skipped, 11 warnings`, zero
+
+## 2026-07-27 V4-A Modeling Panel Contracts
+
+V4-A completed scope:
+- Work is on local branch `feature/modeling-panel` from V4 baseline HEAD
+  `c79f6770a4ae0629d45aeda8dde98e7b5e4e233f`.
+- V4 development mode uses local commits for each stage and no push before V4
+  is complete. This stage did not create a commit or push.
+- The V4-A0 read-only review is complete, and V4-A Modeling Panel contracts
+  are complete.
+- Added the independent `src/modeling_panel` package with schema version
+  `1.0`, fixed keys `trade_date` / `ts_code`, and fixed audit columns for
+  entry/exit dates and prices.
+- `ModelingPanelConfig` defines `label_column`, mutually exclusive
+  `include_features` / `exclude_features`, `unmatched_policy`, strict boolean
+  rules for entry ordering and missing labels, and allows missing labels by
+  default.
+- `ModelingPanelUnmatchedAudit` stores only bounded, deterministic sampled
+  keys. `ModelingPanelAudit` stores validated aggregate statistics and never
+  stores complete unmatched tables.
+- `ModelingPanelResult` deep-copies its DataFrame at construction and on every
+  `panel` access. It does not retain original factor or return inputs.
+- This stage did not implement the Builder, Artifact persistence, Pipeline,
+  CLI, YAML, or ML integration.
+- Targeted contract tests completed with `94 passed`.
+- Related Factor Research, forward-return, ML dataset/runner, and contract
+  regressions completed with `296 passed, 2 warnings`.
+- Full pytest completed with `1628 passed, 2 skipped, 11 warnings`, zero
+  failures. The two skips remain existing platform-conditional symlink cases;
+  the warnings remain the existing pandas date-format `UserWarning` category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V4-B Modeling Panel Builder.
+
+## 2026-07-27 V4-B Modeling Panel Builder
+
+V4-B completed scope:
+- Added the pure in-memory API
+  `ModelingPanelBuilder(config).build(factor_panel, forward_returns)` on local
+  branch `feature/modeling-panel` from V4-A HEAD
+  `dce2c28e905d1a28d903713652a99239c10dfb4b`.
+- The Builder deep-copies both inputs, requires fixed
+  `trade_date` / `ts_code` keys and the fixed return audit/label columns, and
+  rejects duplicate keys before alignment.
+- Feature resolution supports mutually exclusive include/exclude modes,
+  preserves explicit/source order, and never treats extra return columns as
+  features.
+- Alignment uses a validated one-to-one inner merge with bidirectional
+  `audit_and_drop` / `error` unmatched policies and deterministic bounded
+  samples of at most 20 keys.
+- Known label/audit columns and invalid time or formula relationships are hard
+  leakage errors. Suspicious feature-name prefixes are deterministic audit
+  warnings and are not claimed as proof of leakage.
+- Features, label, and prices require non-boolean numeric dtypes. Infinities
+  are rejected, feature NaN values are audited, and missing labels follow the
+  configured policy. Non-missing prices must be strictly positive.
+- Entry/exit structural completeness and time ordering are enforced. Forward
+  labels are checked against `exit_price / entry_price - 1` with
+  `rtol=1e-10` and `atol=1e-12` without rewriting label values.
+- Output rows use stable key `mergesort`, a RangeIndex, and the fixed order of
+  keys, ordered features, entry/exit dates and prices, then label.
+- Audit statistics include coverage, missingness, constant/suspicious
+  features, distributions, time/formula counts, and warnings in a fixed
+  category order.
+- No files are read or written. `src/ml` and V4-A contracts were not modified,
+  and Artifact, Pipeline, CLI, YAML, and model execution remain out of scope.
+- Targeted Builder tests completed with `102 passed`.
+- Contracts plus Builder tests completed with `196 passed`.
+- Related Modeling Panel, ML dataset/runner, forward-return, and Factor
+  Research regressions completed with `398 passed, 2 warnings`.
+- Full pytest completed with `1730 passed, 2 skipped, 11 warnings`, zero
+  failures. The skips remain existing platform-conditional symlink cases and
+  the warnings remain the existing pandas date-format `UserWarning` category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V4-C Modeling Panel Artifact.
+- V4 remains local-only and will not be pushed before all V4 stages complete.
+
+## 2026-07-27 V4-C Modeling Panel Artifact Persistence
+
+阶段：V4-C Modeling Panel Artifact Persistence
+
+修改文件：
+- src/modeling_panel/artifacts.py
+- src/modeling_panel/__init__.py
+- tests/test_modeling_panel_artifacts.py
+- AGENT.md
+
+实现摘要：
+- 新增 Modeling Panel Artifact schema 1.0，固定四文件布局：modeling_panel.parquet、config.json、audit.json、manifest.json。
+- 新增 frozen Artifact Config、FileRecord、Manifest、ValidationIssue、ValidationReport 与 WriteResult contracts。
+- Artifact Config 支持 zstd/snappy 与严格 bool `verify_after_write`；不支持 overwrite、append 或 partial write。
+- 实现严格 UTF-8 JSON：拒绝 duplicate keys、NaN、Infinity、-Infinity、溢出非有限数字、trailing garbage 与非 object 顶层。
+- Parquet 使用 pyarrow、`index=False` 和配置 compression；Manifest 记录写后重读的 pandas dtypes。
+- 写入后对 Result panel 执行值语义 roundtrip 比较，不从 Artifact 重建 ModelingPanelResult。
+- 对三个 payload 流式计算 SHA-256 与 size；manifest-last。
+- 使用同父目录唯一 `.tmp-<name>-<uuid>` staging，发布前强制完整校验，`os.replace` 原子发布，可选发布后校验，并在失败时清理本次 staging/新发布目录。
+- Validator 拒绝 Artifact/文件 symlink、非 regular file、路径穿越、额外条目和缺失固定文件；普通损坏返回 deterministic issue report。
+- 实现 Manifest↔Config、Manifest↔Audit、Manifest↔Parquet、Audit↔Config 与 Audit↔Parquet 跨文件一致性检查。
+- 不保存模型、estimator、pickle、joblib、CSV、原始 factor panel、原始 forward returns 或 unmatched DataFrame。
+- 未实现 load Result；未修改或调用 src/ml/artifacts.py、src/factors/research_artifacts.py 的私有 helper。
+
+验证结果：
+- Targeted Artifact tests：14 passed。
+- Modeling Panel tests：210 passed。
+- 相关 Artifact/ML 回归：416 passed（受限沙箱内 sklearn named-pipe 权限失败后，在允许的非受限测试进程中重跑通过）。
+- Full pytest：1744 passed, 2 skipped, 11 warnings。
+- 2 skipped 为仓库既有条件跳过；11 warnings 与 V4-B 基线数量相同，均来自既有 pandas 日期解析告警。
+- Public import、纯内存 Builder + 临时 Artifact smoke、syntax compile、禁止集成/不安全序列化/跨模块私有 helper/overwrite-backup 扫描均通过。
+- 固定 Python：E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe
+
+安全与工作流说明：
+- 未安装、升级或卸载依赖。
+- 未执行远程 Git；未 add、commit、push 或 tag。
+- Artifact smoke 仅使用系统临时目录，未在仓库生成 Artifact/output。
+- 下一阶段：V4-D Factor Research Integration。
+- V4 全部完成前不 push。
+
+## 2026-07-27 V4-D Factor Research Published Outputs Integration
+
+阶段：V4-D Factor Research Published Outputs Integration
+
+修改文件：
+- src/pipeline/research_execution.py
+- src/pipeline/__init__.py
+- tests/test_modeling_panel_factor_research_integration.py
+- AGENT.md
+
+实现摘要：
+- 新增 frozen `FactorResearchPublishedOutputs`，字段为 artifact_dir、final_factor_panel_path、forward_returns_path、feature_names、label_column。
+- 路径只来自本次 Factor Research execution 刚返回的 manifest 与 artifact_dir；不扫描最近目录，不使用 glob、mtime、latest 或全局状态。
+- 按真实 manifest table record 的 `name` 精确定位 `final_factor_panel` 与 `forward_returns`，实际路径为 `tables/final_factor_panel.parquet` 和 `tables/forward_returns.parquet`；未使用 basename fallback。
+- 严格拒绝 absolute/drive/URL/dot/dotdot/backslash 路径、Artifact 外路径、symlink chain、缺失或非 regular payload、重复/缺失 table record。
+- feature_names 由本次 `FactorResearchResult.factor_names`、配置 `research.factor_names` 和 manifest `result_summary.factor_names` 三方同序核对。
+- label_column 由本次 `FactorResearchResult.forward_return_col`、配置 `forward_returns.return_col` 和 manifest `result_summary.forward_return_col` 三方核对，支持 custom label。
+- 使用 pyarrow 仅读取 Parquet schema metadata；同时核对 manifest `column_names`，不读取业务值、不 merge、不重建 Modeling Panel。
+- final factor panel 必须含 keys 与全部 features，且不含 label/entry-exit audit columns；forward returns 必须含 keys、entry/exit dates、prices 和 label。
+- 扩展 frozen `FactorResearchExecutionResult`，实际成功 execution 挂载 `published_outputs`；`to_dict()` 对成功结果增加 detached JSON-safe published_outputs，同时保持 disabled result 既有稳定结构。
+- Artifact save 失败时不构建 outputs；outputs 解析失败时 execution 整体抛错，不返回部分 Result。
+- 测试验证两次 execution 路径隔离、伪造较新目录不影响绑定，以及 published paths 可直接交给 ModelingPanelBuilder，包括 custom label。
+- 生产 `research_execution.py` 不导入或调用 ModelingPanelBuilder、ModelingPanelArtifactStore 或 ML。
+
+验证结果：
+- Targeted integration：15 passed。
+- Factor Research integration regression：132 passed。
+- Modeling Panel compatibility：225 passed。
+- Pipeline regression：45 passed；仓库不存在独立 tests/test_pipeline_runner.py，runner 回归位于 tests/test_factor_research_execution.py。
+- Public import、syntax compile、目录扫描、Modeling/ML integration、网络和跨模块私有 helper 扫描均通过。
+- Full pytest：1759 passed, 2 skipped, 11 warnings。
+- 2 skipped 与 11 warnings 均为既有类别和数量；warnings 来自既有 pandas 日期解析告警。
+- 固定 Python：E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe
+
+范围与工作流：
+- 未修改 src/factors、src/modeling_panel、src/ml、Pipeline runner/config。
+- 本阶段未实现 Modeling Panel stage、CLI、YAML 或 docs。
+- 未安装、升级或卸载依赖。
+- 未执行远程 Git；未 add、commit、push 或 tag。
+- 所有运行数据仅写入 pytest/tmp_path，仓库内无 Artifact/output 残留。
+- 下一阶段：V4-E Pipeline / CLI / YAML / docs。
+- V4 完成前不 push。
+
+## 2026-07-27 V4-E1 Modeling Panel Pipeline Config + Executor
+
+阶段：V4-E 拆分后的 V4-E1；V4-E2 为 Runner chaining + ML panel
+override，V4-E3 为 CLI + YAML + docs。
+
+实现摘要：
+- 新增 frozen `ModelingPanelSourceConfig`，支持 `files` 与
+  `factor_research` 两种严格输入模式；配置层只规范化 Path 与校验
+  `.parquet`，不 resolve、expanduser 或访问文件系统。
+- `files` 模式要求两条明确且不同的 Parquet 路径；Executor 将相对路径
+  基于 `project_root` 解析，允许明确的绝对外部路径，并在归一化后再次
+  拒绝同一文件。不存在、目录、symlink 或读取失败均转换为 Pipeline
+  execution error；不扫描目录、不使用 latest/mtime、不 fallback。
+- `factor_research` 模式只消费当前
+  `FactorResearchExecutionResult.published_outputs` 的两条发布路径和
+  metadata；拒绝缺失、错误类型、disabled execution 或无 published
+  outputs，不重新解析 manifest，也不扫描 Artifact。
+- published label 必须与 Builder config 一致；include features 必须与
+  published features 精确同序一致；exclude 只能产生 published features
+  的有序严格子集，构建后再次核对 label/features。
+- 新增 frozen `ModelingPanelOutputConfig`；Artifact 持久化是唯一成功输出，
+  `save_artifact` 固定为 true，`artifact_subdir` 仅允许单一安全目录名，
+  compression 支持 zstd/snappy，`verify_after_write` 为 strict bool。
+- 新增 frozen `ModelingPanelPipelineConfig`，默认 disabled；嵌套使用现有
+  `ModelingPanelConfig`，严格拒绝未知字段，支持 detached JSON-safe
+  roundtrip。`PipelineConfig` 新增默认 disabled 的 `modeling_panel`，
+  from_dict/to_dict 保持旧 Factor Research 与 ML 配置语义。
+- 新增 Pipeline 专用异常层次：
+  `ModelingPanelPipelineError`、ConfigError、ExecutionError。仓库没有公共
+  `PipelineError` 基类，因此未虚构继承；Builder/Artifact 异常在 Executor
+  边界转换并保留 exception chain。
+- 新增 frozen `ModelingPanelPipelineResult`，返回 enabled/source mode、
+  absolute Artifact/panel/manifest paths、features、label、输入/输出行数和
+  warnings；disabled 使用稳定空值，结果不保存 DataFrame、核心 Result、
+  Config 或 Factor Research result。
+- Executor disabled 时不访问文件系统；enabled 时要求既有非 symlink
+  `run_dir`，只写其直接子目录。每次只调用一次 Builder 和一次 Artifact
+  Store，依赖 Store 的 no-overwrite，不删除、备份或覆盖既有 Artifact。
+- 公开导出了 Source/Output/Pipeline Config、三种 Pipeline error、Result
+  与 Executor。
+
+范围：
+- 未修改 Pipeline Runner、`src/modeling_panel`、`src/factors` 或 `src/ml`。
+- 未实现 Runner chaining、ML panel override、CLI、YAML 文件或 docs；
+  未调用 ML。
+- 未扫描目录，未安装/升级/卸载依赖，未执行远程 Git；未 add、commit、
+  push 或 tag。测试数据仅写入 `tmp_path`，仓库内不生成生产 Artifact。
+
+验证结果：
+- Targeted Config：29 passed。
+- Targeted Execution：25 passed, 2 skipped。
+- Modeling Panel Pipeline：279 passed, 2 skipped。
+- Pipeline Config regression：122 passed。
+- Related regression：115 passed, 4 skipped。
+- Public import、6 文件 syntax compile，以及 Runner/CLI、ML、目录扫描、
+  CSV/不安全序列化禁止扫描均通过。
+- Full pytest：1813 passed, 4 skipped, 11 warnings，zero failures。
+- 4 skipped 为 Windows 平台条件 symlink 用例；其中 2 个是本阶段新增的
+  symlink 边界测试。11 warnings 数量和类别与 V4-D 基线一致，均为既有
+  pandas 日期解析 `UserWarning`。
+- 固定 Python：
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
+- 下一阶段：V4-E2 Runner chaining + ML panel override。
+- V4 全部完成前不 push。
+## 2026-07-27 V4-E2 Pipeline Runner Chaining + ML Panel Override
+
+阶段：V4-E2 Runner chaining + ML panel override。
+
+实现摘要：
+- Runner 最终顺序为 cache check → create run_dir → optional Factor
+  Research → optional Modeling Panel → optional ML Experiment → snapshots /
+  summary；三个 stage 串行使用同一个本次 run_dir，上游失败时下游不构造
+  或执行。
+- `PipelineConfig` 增加跨 stage 来源校验，但不修改任何 frozen nested
+  config：Modeling Panel 的 `factor_research` source 必须显式启用 Factor
+  Research；`files` source 与 Factor Research 是否启用相互独立。
+- ML enabled 时 panel 来源严格恰好一个：旧的
+  `ml_experiment.panel_path`，或本次 enabled Modeling Panel Result 的
+  `panel_path`。两者同时存在或同时缺失均在顶层配置构造阶段失败；ML
+  disabled 不要求来源。
+- `MLExperimentPipelineConfig` 现在只验证自身字段：enabled 时仍要求
+  experiment，但允许 panel_path=None；非 None panel path 仍必须是
+  `.parquet`。旧的直接 panel_path 模式保持可用。
+- `MLExperimentPipelineExecutor.execute()` 新增 keyword-only
+  `panel_path_override: str | os.PathLike[str] | None = None`。enabled 时
+  config path 与 override 恰好一个；relative override 与既有 config path
+  一样基于 project_root，统一交给原 panel reader 做 regular file、
+  symlink、suffix 和 Parquet 验证。
+- Executor 不修改 config、不使用 `dataclasses.replace`、不构造临时
+  config；实际使用的 absolute panel path 写入
+  `MLExperimentPipelineResult.panel_path`。Result 新增稳定 disabled
+  factory；disabled execution 不访问 run_dir/project_root，且拒绝
+  override。
+- Runner 保留本次 `FactorResearchExecutionResult` 对象；仅
+  factor_research source 将同一对象传给 Modeling Panel，files source
+  明确传 None。Modeling Panel summary 使用本次 Result 的 `as_dict()`。
+- Modeling Panel enabled + ML enabled 时，Runner 只把本次
+  `ModelingPanelPipelineResult.panel_path` 作为 override 传给 ML；不自行
+  拼文件名、不重读 manifest、不扫描其他 run。直接 ML 模式不传 override。
+- Modeling Panel 成功而 ML 失败时，已发布的前序 Artifact 保留；两次
+  run 使用各自 Result 对象与路径，不使用全局状态或前一次结果。
+- disabled stage 继续沿用 Runner 既有 summary omission 风格；enabled
+  Modeling Panel summary 新增 `modeling_panel` key。config snapshot 已
+  通过 `PipelineConfig.to_dict()` 包含 modeling_panel。
+
+范围：
+- 未修改 `src/ml`、`src/modeling_panel`、`src/factors`、Factor Research
+  execution、Modeling Panel E1 config/executor 或 Artifact 格式。
+- 未实现 CLI、YAML 集成/示例或 docs；未安装、升级或卸载依赖。
+- 不使用 glob/rglob/iterdir/os.walk/latest/mtime 扫描 panel，不执行网络
+  或远程 Git。
+- 未 add、commit、push 或 tag；V4 全部完成前不 push。
+
+验证结果：
+- Targeted ML Config：36 passed。
+- Targeted ML Execution：39 passed, 2 skipped。
+- Targeted Chaining：9 passed。
+- Pipeline integration：168 passed, 4 skipped。
+- Public import 与 5 文件 syntax compile 通过。
+- directory scan、ML core diff、CLI/docs diff 均干净；config rewrite scan
+  仅命中既有 datetime timestamp replace 以及局部 panel_path/Result 参数，
+  没有 frozen config mutation 或临时 config。
+- Related regression：388 passed, 4 skipped。
+- Full pytest：1834 passed, 4 skipped, 11 warnings，zero failures。
+- 4 skipped 均为 Windows 平台条件 symlink 用例；11 warnings 数量和类别
+  与 V4-E1 基线一致，均为既有 pandas 日期解析 `UserWarning`。
+- 固定 Python：
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
+- 下一阶段：V4-E3 CLI + YAML + docs。
+## 2026-07-27 V4-E3 CLI + YAML Example + Modeling Panel Docs
+
+阶段：V4-E3 CLI、YAML 示例与 Modeling Panel 用户文档。
+
+真实 CLI 与实现：
+- 真实统一入口为 `scripts/run_pipeline.py --config PATH`，使用 argparse、
+  PyYAML `safe_load` 和 `run_pipeline()`。未新增任何 Modeling Panel
+  stage-specific 参数；YAML 仍是 Modeling Panel 的单一配置来源。
+- 现有 `PipelineConfig.from_yaml()` 只支持旧 grouped YAML，未读取
+  `modeling_panel`。因此脚本增加最小 dual-schema loader：包含
+  `modeling_panel` 的完整 direct PipelineConfig YAML 经
+  `safe_load → PipelineConfig.from_dict()`；旧 grouped YAML 继续交给
+  `PipelineConfig.from_yaml()`，Factor Research/ML CLI 兼容测试保持通过。
+- CLI 不解析 Modeling Panel 嵌套字段，不读取 Parquet，不调用 Builder、
+  Artifact Store 或 ML core，不拼 Artifact path，也不扫描目录。CLI
+  Modeling Panel config/execution error 使用简洁单行 stderr 和非零退出码。
+- Compact JSON/human output 现在透传本次 Runner 的 `modeling_panel`
+  summary。既有 Factor Research 与 ML summary 结构保持。
+- 显式 ML CLI leaves 合并后重新通过 `PipelineConfig.from_dict()`，确保
+  Modeling Panel + ML 的单一 panel 来源规则仍由顶层 Config 统一验证。
+
+示例与文档：
+- 新增 `config/modeling_panel_pipeline.example.yaml`，使用真实 direct
+  PipelineConfig schema。默认 Factor Research disabled、Modeling Panel
+  enabled/files mode、ML disabled，required_datasets 为空；两条输入为项目
+  相对的本地 Parquet 占位路径，不触发网络。
+- 示例注释说明 factor_research source 依赖、files 独立性，以及 chained
+  ML 必须 `panel_path: null`、direct ML 必须显式 `.parquet` path。
+- 新增中文 `docs/05_modeling_panel_pipeline.md`，覆盖作用与非目标、数据流、
+  输入表、时间安全、unmatched policy、四文件 Artifact、SHA-256/
+  manifest-last/no-overwrite、真实 YAML、三种运行方式、路径语义、
+  PowerShell 命令、summary/audit/manifest/Validator、常见错误与 V3 ML
+  兼容。
+- README 增加最小 Modeling Panel 入口、Factor Research → Modeling
+  Panel → ML 数据链路、示例/文档链接、PowerShell 命令、四文件布局和
+  no-overwrite 提示；未宣称完全防泄漏或未实现能力。
+
+路径与命令：
+- `--config` 相对路径基于 CLI 调用时 cwd。
+- Pipeline 执行阶段的 files source 和相对 output_dir 基于项目根目录。
+- run_dir 为 `<output_dir>/runs/<run_id>/`；Modeling Panel 输出为
+  `<run_dir>/<artifact_subdir>/`。
+- 固定命令：
+  `& "E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" scripts/run_pipeline.py --config "config/modeling_panel_pipeline.example.yaml"`。
+
+验证结果：
+- Targeted CLI/YAML/docs：19 passed。
+- Pipeline config/chaining regression：79 passed。
+- Existing CLI regression（新增 + Factor Research + ML）：77 passed。
+- Example `safe_load + PipelineConfig.from_dict` 通过，Modeling Panel
+  enabled=True。
+- Public CLI `--help` exit 0；2 文件 syntax compile 通过。
+- YAML unsafe loader、CLI core-call、目录扫描、额外 stage 参数扫描均干净；
+  README/docs/example 引用扫描通过。
+- Related regression：187 passed, 4 skipped。
+- Full pytest：1853 passed, 4 skipped, 11 warnings，zero failures。
+- 4 skipped 均为 Windows 平台条件 symlink 用例；11 warnings 数量和类别
+  与 V4-E2 基线一致，均为既有 pandas 日期解析 `UserWarning`。
+
+范围与工作流：
+- 未修改 Runner、Pipeline Config/Executor、ML Config/Executor、Factor
+  Research、`src/modeling_panel`、`src/factors` 或 `src/ml`。
+- 未修改 `src/pipeline/ml_cli.py`，因为真实必要逻辑位于脚本本身。
+- 未安装、升级或卸载依赖；未执行远程 Git；未 add、commit、push 或 tag。
+- 测试在 monkeypatched Runner/tmp_path 边界内运行，仓库内无
+  Modeling Panel Artifact 或新 output/runs 残留。
+- 下一阶段：V4-F E2E / release readiness。
+- V4 完成前不 push。
+
+## 2026-07-27 V4-F E2E / v0.5.0 Release Readiness
+
+- V4-F 本地端到端验收与发布准备已完成；目标 tag 为 `v0.5.0`，固定解释器为 `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
+- 真实 E2E 覆盖：`files → Modeling Panel Artifact`（真实 Runner、Builder、Store、Validator）以及 `Modeling Panel → ML`（本次持久化 Parquet 通过 `panel_path_override` 交给真实 ML Executor，并实际训练 Ridge）。
+- Factor Research 边界是明确标注的 orchestration integration：从真实 frozen `FactorResearchExecutionResult.published_outputs` 与合法 tmp Parquet 开始，真实执行 Modeling Panel Executor/Builder/Store/Validator；没有伪装成完整 Factor Research calculation E2E。
+- 验证同一 config 两次运行得到独立 run_dir/Artifact、分别通过 Validator，不复用前次 Result，不使用 sleep/mtime；显式同目录二次 Store.write 按 no-overwrite 失败且首个 Artifact 字节不变。
+- 失败传播覆盖 Builder duplicate-key、Artifact target collision 与受控 ML failure：上游失败不执行下游，不留下 staging；ML 失败不回滚已发布且仍可 validate 的 Modeling Panel Artifact。
+- Builder 输出顺序、warnings/unmatched audit 确定；输入 DataFrame、Pipeline config 与 ML config 均保持不变；Pipeline Result 不保留 DataFrame，summary 可用 `json.dumps(..., allow_nan=False)`。
+- CLI `--help` exit 0，example YAML `safe_load + PipelineConfig.from_dict` 通过；README/docs 链接存在。`pip check` 无 broken requirements，公开导入与指定 12 个文件的内存 `compile()` 通过。
+- Canonical version audit：仓库没有独立 package/version 文件，release 由 Git tag 表达；本地 `v0.5.0` 不存在，验收时 describe 为 `v0.4.0-7-g0b8db00`。
+- Targeted E2E：`10 passed in 11.09s`。
+- V4 suite：`317 passed, 2 skipped in 20.10s`。
+- Pipeline / ML / Factor Research regression：`162 passed, 2 skipped in 45.50s`。
+- Full pytest：`1863 passed, 4 skipped, 11 warnings in 152.48s`；相对 V4-E3 1853 passed 基线增加 10 passed，failed=0。4 skipped 均为既有 Windows symlink 权限条件用例；11 warnings 均为既有 pandas 非法日期解析 `UserWarning`。
+- HistGradientBoosting 回归在受限沙箱内曾因 Windows named-pipe 权限失败；未修改代码或环境变量，在允许本地线程池的相同解释器中按原命令重跑通过，并在全量测试中再次通过。
+- TODO/placeholder、危险模式与 secret-like 扫描通过；测试只写 `tmp_path`，仓库没有本阶段 Artifact、`.tmp-*`、backup 或 staging 残留。
+- 本阶段未修改生产代码，未安装/升级/卸载依赖，未执行远程 Git，未 add、commit、push、tag、merge 或 rebase。
+- 发布准备记录：`docs/06_v0.5.0_release_readiness.md`。
+- 下一步：本地提交 V4-F；fresh fetch/remote divergence check；合并 `feature/modeling-panel → main`；合并后全量测试；annotated tag `v0.5.0`；一次性 push main 与 tag。

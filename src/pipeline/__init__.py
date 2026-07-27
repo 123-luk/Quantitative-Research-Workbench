@@ -15,6 +15,18 @@ from src.pipeline.ml_config import (
     MLPipelineConfigError,
     MLPipelineError,
 )
+from src.pipeline.modeling_panel_config import (
+    ModelingPanelOutputConfig,
+    ModelingPanelPipelineConfig,
+    ModelingPanelPipelineConfigError,
+    ModelingPanelPipelineError,
+    ModelingPanelPipelineExecutionError,
+    ModelingPanelSourceConfig,
+)
+from src.pipeline.modeling_panel_execution import (
+    ModelingPanelPipelineExecutor,
+    ModelingPanelPipelineResult,
+)
 from src.pipeline.ml_execution import (
     MLExperimentPipelineExecutor,
     MLExperimentPipelineResult,
@@ -27,6 +39,7 @@ from src.pipeline.ml_execution import (
 from src.pipeline.research_config import FactorResearchPipelineConfig
 from src.pipeline.research_execution import (
     FactorResearchExecutionResult,
+    FactorResearchPublishedOutputs,
     FactorResearchPipelineExecutor,
 )
 from src.pipeline.runner import run_pipeline
@@ -44,12 +57,21 @@ __all__ = [
     "MLPipelineExecutionError",
     "MLPipelineIntegrityError",
     "MLPipelinePanelError",
+    "ModelingPanelOutputConfig",
+    "ModelingPanelPipelineConfig",
+    "ModelingPanelPipelineConfigError",
+    "ModelingPanelPipelineError",
+    "ModelingPanelPipelineExecutionError",
+    "ModelingPanelPipelineExecutor",
+    "ModelingPanelPipelineResult",
+    "ModelingPanelSourceConfig",
     "read_ml_modeling_panel",
     "exit_code_for_ml_error",
     "format_ml_human_summary",
     "merge_ml_cli_overrides",
     "parse_ml_model_params",
     "FactorResearchExecutionResult",
+    "FactorResearchPublishedOutputs",
     "FactorResearchPipelineExecutor",
     "FactorResearchPipelineConfig",
     "PipelineConfig",
