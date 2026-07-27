@@ -2319,3 +2319,68 @@ V4-B completed scope:
 - 所有运行数据仅写入 pytest/tmp_path，仓库内无 Artifact/output 残留。
 - 下一阶段：V4-E Pipeline / CLI / YAML / docs。
 - V4 完成前不 push。
+
+## 2026-07-27 V4-E1 Modeling Panel Pipeline Config + Executor
+
+阶段：V4-E 拆分后的 V4-E1；V4-E2 为 Runner chaining + ML panel
+override，V4-E3 为 CLI + YAML + docs。
+
+实现摘要：
+- 新增 frozen `ModelingPanelSourceConfig`，支持 `files` 与
+  `factor_research` 两种严格输入模式；配置层只规范化 Path 与校验
+  `.parquet`，不 resolve、expanduser 或访问文件系统。
+- `files` 模式要求两条明确且不同的 Parquet 路径；Executor 将相对路径
+  基于 `project_root` 解析，允许明确的绝对外部路径，并在归一化后再次
+  拒绝同一文件。不存在、目录、symlink 或读取失败均转换为 Pipeline
+  execution error；不扫描目录、不使用 latest/mtime、不 fallback。
+- `factor_research` 模式只消费当前
+  `FactorResearchExecutionResult.published_outputs` 的两条发布路径和
+  metadata；拒绝缺失、错误类型、disabled execution 或无 published
+  outputs，不重新解析 manifest，也不扫描 Artifact。
+- published label 必须与 Builder config 一致；include features 必须与
+  published features 精确同序一致；exclude 只能产生 published features
+  的有序严格子集，构建后再次核对 label/features。
+- 新增 frozen `ModelingPanelOutputConfig`；Artifact 持久化是唯一成功输出，
+  `save_artifact` 固定为 true，`artifact_subdir` 仅允许单一安全目录名，
+  compression 支持 zstd/snappy，`verify_after_write` 为 strict bool。
+- 新增 frozen `ModelingPanelPipelineConfig`，默认 disabled；嵌套使用现有
+  `ModelingPanelConfig`，严格拒绝未知字段，支持 detached JSON-safe
+  roundtrip。`PipelineConfig` 新增默认 disabled 的 `modeling_panel`，
+  from_dict/to_dict 保持旧 Factor Research 与 ML 配置语义。
+- 新增 Pipeline 专用异常层次：
+  `ModelingPanelPipelineError`、ConfigError、ExecutionError。仓库没有公共
+  `PipelineError` 基类，因此未虚构继承；Builder/Artifact 异常在 Executor
+  边界转换并保留 exception chain。
+- 新增 frozen `ModelingPanelPipelineResult`，返回 enabled/source mode、
+  absolute Artifact/panel/manifest paths、features、label、输入/输出行数和
+  warnings；disabled 使用稳定空值，结果不保存 DataFrame、核心 Result、
+  Config 或 Factor Research result。
+- Executor disabled 时不访问文件系统；enabled 时要求既有非 symlink
+  `run_dir`，只写其直接子目录。每次只调用一次 Builder 和一次 Artifact
+  Store，依赖 Store 的 no-overwrite，不删除、备份或覆盖既有 Artifact。
+- 公开导出了 Source/Output/Pipeline Config、三种 Pipeline error、Result
+  与 Executor。
+
+范围：
+- 未修改 Pipeline Runner、`src/modeling_panel`、`src/factors` 或 `src/ml`。
+- 未实现 Runner chaining、ML panel override、CLI、YAML 文件或 docs；
+  未调用 ML。
+- 未扫描目录，未安装/升级/卸载依赖，未执行远程 Git；未 add、commit、
+  push 或 tag。测试数据仅写入 `tmp_path`，仓库内不生成生产 Artifact。
+
+验证结果：
+- Targeted Config：29 passed。
+- Targeted Execution：25 passed, 2 skipped。
+- Modeling Panel Pipeline：279 passed, 2 skipped。
+- Pipeline Config regression：122 passed。
+- Related regression：115 passed, 4 skipped。
+- Public import、6 文件 syntax compile，以及 Runner/CLI、ML、目录扫描、
+  CSV/不安全序列化禁止扫描均通过。
+- Full pytest：1813 passed, 4 skipped, 11 warnings，zero failures。
+- 4 skipped 为 Windows 平台条件 symlink 用例；其中 2 个是本阶段新增的
+  symlink 边界测试。11 warnings 数量和类别与 V4-D 基线一致，均为既有
+  pandas 日期解析 `UserWarning`。
+- 固定 Python：
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
+- 下一阶段：V4-E2 Runner chaining + ML panel override。
+- V4 全部完成前不 push。

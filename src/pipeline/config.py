@@ -12,6 +12,7 @@ from typing import Any
 
 import yaml
 
+from src.pipeline.modeling_panel_config import ModelingPanelPipelineConfig
 from src.pipeline.research_config import FactorResearchPipelineConfig
 from src.pipeline.ml_config import MLExperimentPipelineConfig
 
@@ -42,6 +43,9 @@ class PipelineConfig:
     factor_research: FactorResearchPipelineConfig = field(
         default_factory=FactorResearchPipelineConfig
     )
+    modeling_panel: ModelingPanelPipelineConfig = field(
+        default_factory=ModelingPanelPipelineConfig
+    )
     ml_experiment: MLExperimentPipelineConfig = field(
         default_factory=MLExperimentPipelineConfig
     )
@@ -58,6 +62,9 @@ class PipelineConfig:
             raise TypeError(
                 "factor_research must be a FactorResearchPipelineConfig or Mapping."
             )
+        self.modeling_panel = ModelingPanelPipelineConfig.from_dict(
+            self.modeling_panel
+        )
         self.ml_experiment = MLExperimentPipelineConfig.from_dict(
             self.ml_experiment
         )
@@ -134,6 +141,9 @@ class PipelineConfig:
         raw_research = values.get("factor_research")
         if isinstance(raw_research, Mapping):
             values["factor_research"] = FactorResearchPipelineConfig.from_dict(raw_research)
+        values["modeling_panel"] = ModelingPanelPipelineConfig.from_dict(
+            values.get("modeling_panel")
+        )
         values["ml_experiment"] = MLExperimentPipelineConfig.from_dict(
             values.get("ml_experiment")
         )
@@ -157,9 +167,10 @@ class PipelineConfig:
         result = {
             name: deepcopy(getattr(self, name))
             for name in self.__dataclass_fields__
-            if name not in {"factor_research", "ml_experiment"}
+            if name not in {"factor_research", "modeling_panel", "ml_experiment"}
         }
         result["factor_research"] = self.factor_research.to_dict()
+        result["modeling_panel"] = self.modeling_panel.as_dict()
         result["ml_experiment"] = self.ml_experiment.to_dict()
         result["required_start_date"] = self.required_start_date
         result["required_end_date"] = self.required_end_date
