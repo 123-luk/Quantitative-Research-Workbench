@@ -13,6 +13,7 @@ from src.pipeline import (
     FactorResearchPipelineConfig,
     MLExperimentPipelineConfig,
     MLPipelineConfigError,
+    ModelingPanelPipelineConfig,
     PipelineConfig,
 )
 
@@ -44,6 +45,7 @@ def _pipeline_values(
     ml: object = None,
     *,
     factor_research: object | None = None,
+    modeling_panel: object | None = None,
 ) -> dict[str, object]:
     values: dict[str, object] = {
         "backtest_start": "2024-01-01",
@@ -69,6 +71,8 @@ def _pipeline_values(
         values["ml_experiment"] = ml
     if factor_research is not None:
         values["factor_research"] = factor_research
+    if modeling_panel is not None:
+        values["modeling_panel"] = modeling_panel
     return values
 
 
@@ -106,7 +110,7 @@ def test_disabled_does_not_require_panel_experiment_or_id() -> None:
 @pytest.mark.parametrize(
     ("values", "message"),
     [
-        ({"enabled": True, "experiment": _experiment_mapping()}, "panel_path"),
+
         (
             {"enabled": True, "panel_path": "panel.parquet"},
             "experiment",
@@ -129,6 +133,23 @@ def test_enabled_and_artifact_dependencies(
     with pytest.raises(MLPipelineConfigError, match=message):
         MLExperimentPipelineConfig.from_dict(values)
 
+
+def test_enabled_without_panel_is_valid_at_ml_stage_level() -> None:
+    config = MLExperimentPipelineConfig.from_dict(
+        {"enabled": True, "experiment": _experiment_mapping()}
+    )
+    assert config.enabled is True
+    assert config.panel_path is None
+    assert MLExperimentPipelineConfig.from_dict(config.to_dict()) == config
+
+
+def test_panel_path_requires_parquet_suffix_without_filesystem_io(
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "missing" / "panel.csv"
+    with pytest.raises(MLPipelineConfigError, match="parquet"):
+        _enabled(panel_path=str(missing))
+    assert not missing.parent.exists()
 
 def test_text_fields_strip_and_nested_artifact_root_normalizes() -> None:
     config = _enabled(
@@ -261,6 +282,92 @@ def test_pipeline_factor_research_and_ml_are_independent() -> None:
     assert config.factor_research.enabled is False
     assert config.ml_experiment.enabled is True
 
+
+def _modeling_files() -> ModelingPanelPipelineConfig:
+    return ModelingPanelPipelineConfig.from_dict(
+        {
+            "enabled": True,
+            "source": {
+                "mode": "files",
+                "factor_panel_path": "factors.parquet",
+                "forward_returns_path": "returns.parquet",
+            },
+        }
+    )
+
+
+def _modeling_research() -> ModelingPanelPipelineConfig:
+    return ModelingPanelPipelineConfig.from_dict(
+        {"enabled": True, "source": {"mode": "factor_research"}}
+    )
+
+
+def _enabled_research() -> FactorResearchPipelineConfig:
+    from src.factors.research_pipeline import FactorResearchConfig
+
+    return FactorResearchPipelineConfig(
+        enabled=True,
+        factor_input_path="factor.parquet",
+        score_panel_path="score.parquet",
+        price_panel_path="price.parquet",
+        research=FactorResearchConfig(
+            factor_names=("factor_a",),
+            composition_method="equal",
+        ),
+    )
+
+
+def test_pipeline_ml_panel_source_rules() -> None:
+    direct = PipelineConfig.from_dict(_pipeline_values(_enabled()))
+    generated = PipelineConfig.from_dict(
+        _pipeline_values(
+            _enabled(panel_path=None),
+            modeling_panel=_modeling_files(),
+        )
+    )
+    assert direct.ml_experiment.panel_path == "data/panel.parquet"
+    assert generated.ml_experiment.panel_path is None
+    with pytest.raises(ValueError, match="exactly one"):
+        PipelineConfig.from_dict(_pipeline_values(_enabled(panel_path=None)))
+    with pytest.raises(ValueError, match="conflict"):
+        PipelineConfig.from_dict(
+            _pipeline_values(_enabled(), modeling_panel=_modeling_files())
+        )
+
+
+def test_pipeline_modeling_source_dependency_and_independence() -> None:
+    with pytest.raises(ValueError, match="factor_research.enabled"):
+        PipelineConfig.from_dict(
+            _pipeline_values(modeling_panel=_modeling_research())
+        )
+    linked = PipelineConfig.from_dict(
+        _pipeline_values(
+            factor_research=_enabled_research(),
+            modeling_panel=_modeling_research(),
+        )
+    )
+    files_without_research = PipelineConfig.from_dict(
+        _pipeline_values(modeling_panel=_modeling_files())
+    )
+    files_with_research = PipelineConfig.from_dict(
+        _pipeline_values(
+            factor_research=_enabled_research(),
+            modeling_panel=_modeling_files(),
+        )
+    )
+    assert linked.factor_research.enabled is True
+    assert files_without_research.factor_research.enabled is False
+    assert files_with_research.factor_research.enabled is True
+
+
+def test_pipeline_disabled_stages_and_cross_stage_roundtrip() -> None:
+    default = PipelineConfig.from_dict(_pipeline_values())
+    modeling_only = PipelineConfig.from_dict(
+        _pipeline_values(modeling_panel=_modeling_files())
+    )
+    assert default.ml_experiment.enabled is False
+    assert modeling_only.ml_experiment.enabled is False
+    assert PipelineConfig.from_dict(modeling_only.to_dict()) == modeling_only
 
 def _write_yaml(path: Path, ml_text: str = "") -> Path:
     path.write_text(

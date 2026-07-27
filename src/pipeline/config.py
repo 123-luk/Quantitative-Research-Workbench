@@ -68,8 +68,35 @@ class PipelineConfig:
         self.ml_experiment = MLExperimentPipelineConfig.from_dict(
             self.ml_experiment
         )
+        self._validate_stage_dependencies()
         if parse_date(self.backtest_start) > parse_date(self.backtest_end):
             raise ValueError("backtest_start must be earlier than or equal to backtest_end.")
+
+    def _validate_stage_dependencies(self) -> None:
+        """Validate explicit cross-stage inputs without mutating nested configs."""
+        if (
+            self.modeling_panel.enabled
+            and self.modeling_panel.source.mode == "factor_research"
+            and not self.factor_research.enabled
+        ):
+            raise ValueError(
+                "modeling_panel source mode 'factor_research' requires "
+                "factor_research.enabled=True"
+            )
+        if not self.ml_experiment.enabled:
+            return
+        configured_panel = self.ml_experiment.panel_path is not None
+        generated_panel = self.modeling_panel.enabled
+        if configured_panel and generated_panel:
+            raise ValueError(
+                "ML panel source conflict: configure either ml_experiment.panel_path "
+                "or an enabled modeling_panel stage, not both"
+            )
+        if not configured_panel and not generated_panel:
+            raise ValueError(
+                "ML requires exactly one panel source: ml_experiment.panel_path "
+                "or an enabled modeling_panel stage"
+            )
 
     @classmethod
     def from_yaml(

@@ -28,6 +28,13 @@ def _optional_text(field_name: str, value: object) -> str | None:
     return value.strip()
 
 
+def _optional_panel_path(value: object) -> str | None:
+    path = _optional_text("panel_path", value)
+    if path is not None and Path(path).suffix.lower() != ".parquet":
+        raise MLPipelineConfigError("panel_path must use a .parquet suffix")
+    return path
+
+
 def _safe_artifact_root(value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         raise MLPipelineConfigError(
@@ -68,7 +75,7 @@ class MLExperimentPipelineConfig:
         if not isinstance(self.save_artifacts, bool):
             raise MLPipelineConfigError("save_artifacts must be a bool")
 
-        panel_path = _optional_text("panel_path", self.panel_path)
+        panel_path = _optional_panel_path(self.panel_path)
         experiment_id = _optional_text("experiment_id", self.experiment_id)
         artifact_root = _safe_artifact_root(self.artifact_root)
         object.__setattr__(self, "panel_path", panel_path)
@@ -104,10 +111,6 @@ class MLExperimentPipelineConfig:
             )
 
         if self.enabled:
-            if panel_path is None:
-                raise MLPipelineConfigError(
-                    "panel_path is required when ML is enabled"
-                )
             if experiment is None:
                 raise MLPipelineConfigError(
                     "experiment is required when ML is enabled"

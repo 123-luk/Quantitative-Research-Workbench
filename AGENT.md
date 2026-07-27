@@ -2384,3 +2384,68 @@ override，V4-E3 为 CLI + YAML + docs。
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
 - 下一阶段：V4-E2 Runner chaining + ML panel override。
 - V4 全部完成前不 push。
+## 2026-07-27 V4-E2 Pipeline Runner Chaining + ML Panel Override
+
+阶段：V4-E2 Runner chaining + ML panel override。
+
+实现摘要：
+- Runner 最终顺序为 cache check → create run_dir → optional Factor
+  Research → optional Modeling Panel → optional ML Experiment → snapshots /
+  summary；三个 stage 串行使用同一个本次 run_dir，上游失败时下游不构造
+  或执行。
+- `PipelineConfig` 增加跨 stage 来源校验，但不修改任何 frozen nested
+  config：Modeling Panel 的 `factor_research` source 必须显式启用 Factor
+  Research；`files` source 与 Factor Research 是否启用相互独立。
+- ML enabled 时 panel 来源严格恰好一个：旧的
+  `ml_experiment.panel_path`，或本次 enabled Modeling Panel Result 的
+  `panel_path`。两者同时存在或同时缺失均在顶层配置构造阶段失败；ML
+  disabled 不要求来源。
+- `MLExperimentPipelineConfig` 现在只验证自身字段：enabled 时仍要求
+  experiment，但允许 panel_path=None；非 None panel path 仍必须是
+  `.parquet`。旧的直接 panel_path 模式保持可用。
+- `MLExperimentPipelineExecutor.execute()` 新增 keyword-only
+  `panel_path_override: str | os.PathLike[str] | None = None`。enabled 时
+  config path 与 override 恰好一个；relative override 与既有 config path
+  一样基于 project_root，统一交给原 panel reader 做 regular file、
+  symlink、suffix 和 Parquet 验证。
+- Executor 不修改 config、不使用 `dataclasses.replace`、不构造临时
+  config；实际使用的 absolute panel path 写入
+  `MLExperimentPipelineResult.panel_path`。Result 新增稳定 disabled
+  factory；disabled execution 不访问 run_dir/project_root，且拒绝
+  override。
+- Runner 保留本次 `FactorResearchExecutionResult` 对象；仅
+  factor_research source 将同一对象传给 Modeling Panel，files source
+  明确传 None。Modeling Panel summary 使用本次 Result 的 `as_dict()`。
+- Modeling Panel enabled + ML enabled 时，Runner 只把本次
+  `ModelingPanelPipelineResult.panel_path` 作为 override 传给 ML；不自行
+  拼文件名、不重读 manifest、不扫描其他 run。直接 ML 模式不传 override。
+- Modeling Panel 成功而 ML 失败时，已发布的前序 Artifact 保留；两次
+  run 使用各自 Result 对象与路径，不使用全局状态或前一次结果。
+- disabled stage 继续沿用 Runner 既有 summary omission 风格；enabled
+  Modeling Panel summary 新增 `modeling_panel` key。config snapshot 已
+  通过 `PipelineConfig.to_dict()` 包含 modeling_panel。
+
+范围：
+- 未修改 `src/ml`、`src/modeling_panel`、`src/factors`、Factor Research
+  execution、Modeling Panel E1 config/executor 或 Artifact 格式。
+- 未实现 CLI、YAML 集成/示例或 docs；未安装、升级或卸载依赖。
+- 不使用 glob/rglob/iterdir/os.walk/latest/mtime 扫描 panel，不执行网络
+  或远程 Git。
+- 未 add、commit、push 或 tag；V4 全部完成前不 push。
+
+验证结果：
+- Targeted ML Config：36 passed。
+- Targeted ML Execution：39 passed, 2 skipped。
+- Targeted Chaining：9 passed。
+- Pipeline integration：168 passed, 4 skipped。
+- Public import 与 5 文件 syntax compile 通过。
+- directory scan、ML core diff、CLI/docs diff 均干净；config rewrite scan
+  仅命中既有 datetime timestamp replace 以及局部 panel_path/Result 参数，
+  没有 frozen config mutation 或临时 config。
+- Related regression：388 passed, 4 skipped。
+- Full pytest：1834 passed, 4 skipped, 11 warnings，zero failures。
+- 4 skipped 均为 Windows 平台条件 symlink 用例；11 warnings 数量和类别
+  与 V4-E1 基线一致，均为既有 pandas 日期解析 `UserWarning`。
+- 固定 Python：
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
+- 下一阶段：V4-E3 CLI + YAML + docs。
