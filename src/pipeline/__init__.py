@@ -27,6 +27,7 @@ from src.pipeline.ml_execution import (
 from src.pipeline.research_config import FactorResearchPipelineConfig
 from src.pipeline.research_execution import (
     FactorResearchExecutionResult,
+    FactorResearchPublishedOutputs,
     FactorResearchPipelineExecutor,
 )
 from src.pipeline.runner import run_pipeline
@@ -50,6 +51,7 @@ __all__ = [
     "merge_ml_cli_overrides",
     "parse_ml_model_params",
     "FactorResearchExecutionResult",
+    "FactorResearchPublishedOutputs",
     "FactorResearchPipelineExecutor",
     "FactorResearchPipelineConfig",
     "PipelineConfig",

@@ -2276,3 +2276,46 @@ V4-B completed scope:
 - Artifact smoke 仅使用系统临时目录，未在仓库生成 Artifact/output。
 - 下一阶段：V4-D Factor Research Integration。
 - V4 全部完成前不 push。
+
+## 2026-07-27 V4-D Factor Research Published Outputs Integration
+
+阶段：V4-D Factor Research Published Outputs Integration
+
+修改文件：
+- src/pipeline/research_execution.py
+- src/pipeline/__init__.py
+- tests/test_modeling_panel_factor_research_integration.py
+- AGENT.md
+
+实现摘要：
+- 新增 frozen `FactorResearchPublishedOutputs`，字段为 artifact_dir、final_factor_panel_path、forward_returns_path、feature_names、label_column。
+- 路径只来自本次 Factor Research execution 刚返回的 manifest 与 artifact_dir；不扫描最近目录，不使用 glob、mtime、latest 或全局状态。
+- 按真实 manifest table record 的 `name` 精确定位 `final_factor_panel` 与 `forward_returns`，实际路径为 `tables/final_factor_panel.parquet` 和 `tables/forward_returns.parquet`；未使用 basename fallback。
+- 严格拒绝 absolute/drive/URL/dot/dotdot/backslash 路径、Artifact 外路径、symlink chain、缺失或非 regular payload、重复/缺失 table record。
+- feature_names 由本次 `FactorResearchResult.factor_names`、配置 `research.factor_names` 和 manifest `result_summary.factor_names` 三方同序核对。
+- label_column 由本次 `FactorResearchResult.forward_return_col`、配置 `forward_returns.return_col` 和 manifest `result_summary.forward_return_col` 三方核对，支持 custom label。
+- 使用 pyarrow 仅读取 Parquet schema metadata；同时核对 manifest `column_names`，不读取业务值、不 merge、不重建 Modeling Panel。
+- final factor panel 必须含 keys 与全部 features，且不含 label/entry-exit audit columns；forward returns 必须含 keys、entry/exit dates、prices 和 label。
+- 扩展 frozen `FactorResearchExecutionResult`，实际成功 execution 挂载 `published_outputs`；`to_dict()` 对成功结果增加 detached JSON-safe published_outputs，同时保持 disabled result 既有稳定结构。
+- Artifact save 失败时不构建 outputs；outputs 解析失败时 execution 整体抛错，不返回部分 Result。
+- 测试验证两次 execution 路径隔离、伪造较新目录不影响绑定，以及 published paths 可直接交给 ModelingPanelBuilder，包括 custom label。
+- 生产 `research_execution.py` 不导入或调用 ModelingPanelBuilder、ModelingPanelArtifactStore 或 ML。
+
+验证结果：
+- Targeted integration：15 passed。
+- Factor Research integration regression：132 passed。
+- Modeling Panel compatibility：225 passed。
+- Pipeline regression：45 passed；仓库不存在独立 tests/test_pipeline_runner.py，runner 回归位于 tests/test_factor_research_execution.py。
+- Public import、syntax compile、目录扫描、Modeling/ML integration、网络和跨模块私有 helper 扫描均通过。
+- Full pytest：1759 passed, 2 skipped, 11 warnings。
+- 2 skipped 与 11 warnings 均为既有类别和数量；warnings 来自既有 pandas 日期解析告警。
+- 固定 Python：E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe
+
+范围与工作流：
+- 未修改 src/factors、src/modeling_panel、src/ml、Pipeline runner/config。
+- 本阶段未实现 Modeling Panel stage、CLI、YAML 或 docs。
+- 未安装、升级或卸载依赖。
+- 未执行远程 Git；未 add、commit、push 或 tag。
+- 所有运行数据仅写入 pytest/tmp_path，仓库内无 Artifact/output 残留。
+- 下一阶段：V4-E Pipeline / CLI / YAML / docs。
+- V4 完成前不 push。

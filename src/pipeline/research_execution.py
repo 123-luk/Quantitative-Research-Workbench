@@ -5,19 +5,136 @@ from __future__ import annotations
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 from src.factors.examples import register_example_factors
 from src.factors.financial_factors import register_financial_factors
 from src.factors.price_volume import register_price_volume_factors
 from src.factors.registry import FactorRegistry
 from src.factors.research_artifacts import FactorResearchArtifactStore
-from src.factors.research_pipeline import FactorResearchRunner
+from src.factors.research_pipeline import FactorResearchResult, FactorResearchRunner
 from src.factors.valuation import register_valuation_factors
 from src.pipeline.research_config import FactorResearchPipelineConfig
+
+
+_PUBLISHED_RESERVED_COLUMNS = {
+    "trade_date",
+    "ts_code",
+    "entry_trade_date",
+    "exit_trade_date",
+    "entry_price",
+    "exit_price",
+}
+
+
+def _absolute_path(value: str | Path, field_name: str) -> Path:
+    if not isinstance(value, (str, Path)):
+        raise TypeError(f"{field_name} must be a str or pathlib.Path.")
+    return Path(os.path.abspath(value))
+
+
+def _reject_symlink_chain(path: Path, artifact_dir: Path, field_name: str) -> None:
+    current = path
+    while current != artifact_dir:
+        if current.is_symlink():
+            raise ValueError(f"{field_name} must not traverse a symlink.")
+        parent = current.parent
+        if parent == current:
+            raise ValueError(f"{field_name} must remain inside artifact_dir.")
+        current = parent
+
+
+@dataclass(frozen=True)
+class FactorResearchPublishedOutputs:
+    """Validated references to this execution's Modeling Panel source tables."""
+
+    artifact_dir: Path
+    final_factor_panel_path: Path
+    forward_returns_path: Path
+    feature_names: tuple[str, ...]
+    label_column: str
+
+    def __post_init__(self) -> None:
+        artifact_dir = _absolute_path(self.artifact_dir, "artifact_dir")
+        if (
+            not artifact_dir.exists()
+            or not artifact_dir.is_dir()
+            or artifact_dir.is_symlink()
+        ):
+            raise ValueError(
+                "artifact_dir must be an existing non-symlink directory."
+            )
+        paths: list[Path] = []
+        for field_name in ("final_factor_panel_path", "forward_returns_path"):
+            path = _absolute_path(getattr(self, field_name), field_name)
+            try:
+                path.relative_to(artifact_dir)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{field_name} must remain inside artifact_dir."
+                ) from exc
+            if path == artifact_dir:
+                raise ValueError(f"{field_name} must identify a file.")
+            _reject_symlink_chain(path, artifact_dir, field_name)
+            if not path.exists() or not path.is_file() or path.is_symlink():
+                raise ValueError(
+                    f"{field_name} must be an existing non-symlink regular file."
+                )
+            if path.suffix.lower() != ".parquet":
+                raise ValueError(f"{field_name} must have a .parquet suffix.")
+            paths.append(path)
+        if paths[0] == paths[1]:
+            raise ValueError("Published Parquet paths must be different.")
+        if not isinstance(self.feature_names, tuple):
+            raise ValueError("feature_names must be a non-empty tuple of names.")
+        features = self.feature_names
+        if (
+            not features
+            or any(
+                not isinstance(name, str)
+                or not name.strip()
+                or name != name.strip()
+                for name in features
+            )
+            or len(features) != len(set(features))
+        ):
+            raise ValueError(
+                "feature_names must contain unique non-empty trimmed names."
+            )
+        if not isinstance(self.label_column, str) or not self.label_column.strip():
+            raise ValueError("label_column must be a non-empty string.")
+        label = self.label_column.strip()
+        conflicts = [
+            name for name in features if name in _PUBLISHED_RESERVED_COLUMNS
+        ]
+        if conflicts:
+            raise ValueError(
+                f"feature_names contains reserved columns: {conflicts!r}."
+            )
+        if label in features:
+            raise ValueError("label_column must not appear in feature_names.")
+        if label in _PUBLISHED_RESERVED_COLUMNS:
+            raise ValueError("label_column conflicts with a reserved column.")
+        object.__setattr__(self, "artifact_dir", artifact_dir)
+        object.__setattr__(self, "final_factor_panel_path", paths[0])
+        object.__setattr__(self, "forward_returns_path", paths[1])
+        object.__setattr__(self, "feature_names", features)
+        object.__setattr__(self, "label_column", label)
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return detached JSON-safe references without reading the files."""
+        return {
+            "artifact_dir": str(self.artifact_dir),
+            "final_factor_panel_path": str(self.final_factor_panel_path),
+            "forward_returns_path": str(self.forward_returns_path),
+            "feature_names": list(self.feature_names),
+            "label_column": self.label_column,
+        }
 
 
 def _json_safe(value: Any) -> Any:
@@ -43,6 +160,7 @@ class FactorResearchExecutionResult:
     table_shapes: dict[str, tuple[int, int]] = field(default_factory=dict)
     input_shapes: dict[str, dict[str, int]] = field(default_factory=dict)
     factor_names: tuple[str, ...] = ()
+    published_outputs: FactorResearchPublishedOutputs | None = None
     composition_method: str | None = None
 
     def __post_init__(self) -> None:
@@ -77,6 +195,12 @@ class FactorResearchExecutionResult:
             },
         )
         object.__setattr__(self, "factor_names", tuple(self.factor_names))
+        if self.published_outputs is not None and not isinstance(
+            self.published_outputs, FactorResearchPublishedOutputs
+        ):
+            raise TypeError(
+                "published_outputs must be FactorResearchPublishedOutputs or None."
+            )
 
     @classmethod
     def disabled(cls) -> "FactorResearchExecutionResult":
@@ -85,17 +209,241 @@ class FactorResearchExecutionResult:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a detached JSON-safe summary without full input or result data."""
-        return _json_safe(
-            {
-                "enabled": self.enabled,
-                "artifact_dir": self.artifact_dir,
-                "manifest": self.manifest,
-                "table_shapes": self.table_shapes,
-                "input_shapes": self.input_shapes,
-                "factor_names": self.factor_names,
-                "composition_method": self.composition_method,
-            }
+        values: dict[str, Any] = {
+            "enabled": self.enabled,
+            "artifact_dir": self.artifact_dir,
+            "manifest": self.manifest,
+            "table_shapes": self.table_shapes,
+            "input_shapes": self.input_shapes,
+            "factor_names": self.factor_names,
+            "composition_method": self.composition_method,
+        }
+        if self.published_outputs is not None:
+            values["published_outputs"] = self.published_outputs.as_dict()
+        return _json_safe(values)
+
+
+def _metadata_names(value: object, context: str) -> tuple[str, ...]:
+    if isinstance(value, (str, bytes)):
+        raise RuntimeError(f"{context} must be a sequence of names.")
+    try:
+        names = tuple(value)
+    except TypeError as exc:
+        raise RuntimeError(f"{context} must be a sequence of names.") from exc
+    if (
+        not names
+        or any(
+            not isinstance(name, str)
+            or not name.strip()
+            or name != name.strip()
+            for name in names
         )
+        or len(names) != len(set(names))
+    ):
+        raise RuntimeError(f"{context} contains invalid feature names.")
+    return names
+
+
+def _metadata_label(value: object, context: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"{context} must be a non-empty label name.")
+    return value.strip()
+
+
+def _find_manifest_table(
+    manifest: Mapping[str, Any], logical_name: str
+) -> Mapping[str, Any]:
+    tables = manifest.get("tables")
+    if not isinstance(tables, list):
+        raise RuntimeError("factor research manifest tables must be a list.")
+    matches = [
+        item
+        for item in tables
+        if isinstance(item, Mapping) and item.get("name") == logical_name
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"manifest must contain exactly one {logical_name!r} table record."
+        )
+    record = matches[0]
+    if record.get("saved") is not True:
+        raise RuntimeError(f"manifest table {logical_name!r} was not published.")
+    return record
+
+
+def _resolve_published_output_path(
+    artifact_dir: Path,
+    record: Mapping[str, Any],
+    logical_name: str,
+) -> Path:
+    relative_value = record.get("relative_path")
+    if not isinstance(relative_value, str) or not relative_value:
+        raise RuntimeError(
+            f"manifest table {logical_name!r} has no valid relative_path."
+        )
+    if (
+        "\\" in relative_value
+        or ":" in relative_value
+        or "://" in relative_value
+        or PurePosixPath(relative_value).is_absolute()
+        or PureWindowsPath(relative_value).is_absolute()
+        or PureWindowsPath(relative_value).drive
+    ):
+        raise RuntimeError(
+            f"manifest table {logical_name!r} has an unsafe relative_path."
+        )
+    raw_parts = relative_value.split("/")
+    if any(part in {"", ".", ".."} for part in raw_parts):
+        raise RuntimeError(
+            f"manifest table {logical_name!r} has an unsafe relative_path."
+        )
+    relative = PurePosixPath(relative_value)
+    if any(part in {".", ".."} for part in relative.parts):
+        raise RuntimeError(
+            f"manifest table {logical_name!r} has an unsafe relative_path."
+        )
+    if relative.name != f"{logical_name}.parquet":
+        raise RuntimeError(
+            f"manifest table {logical_name!r} has an unexpected basename."
+        )
+    path = _absolute_path(
+        artifact_dir.joinpath(*relative.parts),
+        f"{logical_name} path",
+    )
+    try:
+        path.relative_to(artifact_dir)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"manifest table {logical_name!r} escapes artifact_dir."
+        ) from exc
+    try:
+        _reject_symlink_chain(path, artifact_dir, logical_name)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"manifest table {logical_name!r} traverses a symlink."
+        ) from exc
+    if not path.exists() or not path.is_file() or path.is_symlink():
+        raise RuntimeError(
+            f"manifest table {logical_name!r} is not a regular published file."
+        )
+    if path.suffix.lower() != ".parquet":
+        raise RuntimeError(
+            f"manifest table {logical_name!r} is not a Parquet file."
+        )
+    return path
+
+
+def _parquet_schema_names(path: Path, logical_name: str) -> tuple[str, ...]:
+    try:
+        names = tuple(pq.read_schema(path).names)
+    except Exception as exc:
+        raise RuntimeError(
+            f"published table {logical_name!r} schema cannot be read."
+        ) from exc
+    if len(names) != len(set(names)):
+        raise RuntimeError(
+            f"published table {logical_name!r} has duplicate columns."
+        )
+    return names
+
+
+def _build_published_outputs(
+    result: FactorResearchResult,
+    manifest: Mapping[str, Any],
+    artifact_dir: Path,
+    configured_feature_names: tuple[str, ...],
+    configured_label_column: str,
+) -> FactorResearchPublishedOutputs:
+    if not isinstance(result, FactorResearchResult):
+        raise TypeError("result must be a FactorResearchResult.")
+    if not isinstance(manifest, Mapping):
+        raise TypeError("manifest must be a Mapping.")
+    root = _absolute_path(artifact_dir, "artifact_dir")
+    if not root.exists() or not root.is_dir() or root.is_symlink():
+        raise RuntimeError(
+            "factor research artifact_dir is not a non-symlink directory."
+        )
+    summary = manifest.get("result_summary")
+    if not isinstance(summary, Mapping):
+        raise RuntimeError("factor research manifest result_summary is invalid.")
+    feature_sources = (
+        _metadata_names(result.factor_names, "result.factor_names"),
+        _metadata_names(configured_feature_names, "configured factor_names"),
+        _metadata_names(summary.get("factor_names"), "manifest factor_names"),
+    )
+    if feature_sources[1:] != feature_sources[:-1]:
+        raise RuntimeError(
+            "factor_names metadata differs across result, config, and manifest."
+        )
+    label_sources = (
+        _metadata_label(result.forward_return_col, "result.forward_return_col"),
+        _metadata_label(configured_label_column, "configured return_col"),
+        _metadata_label(
+            summary.get("forward_return_col"),
+            "manifest forward_return_col",
+        ),
+    )
+    if label_sources[1:] != label_sources[:-1]:
+        raise RuntimeError(
+            "label metadata differs across result, config, and manifest."
+        )
+    features = feature_sources[0]
+    label = label_sources[0]
+    final_record = _find_manifest_table(manifest, "final_factor_panel")
+    returns_record = _find_manifest_table(manifest, "forward_returns")
+    final_path = _resolve_published_output_path(
+        root, final_record, "final_factor_panel"
+    )
+    returns_path = _resolve_published_output_path(
+        root, returns_record, "forward_returns"
+    )
+    final_columns = _parquet_schema_names(final_path, "final_factor_panel")
+    returns_columns = _parquet_schema_names(returns_path, "forward_returns")
+    for logical_name, record, actual_columns in (
+        ("final_factor_panel", final_record, final_columns),
+        ("forward_returns", returns_record, returns_columns),
+    ):
+        recorded_columns = record.get("column_names")
+        if (
+            not isinstance(recorded_columns, list)
+            or tuple(recorded_columns) != actual_columns
+        ):
+            raise RuntimeError(
+                f"manifest table {logical_name!r} columns differ from Parquet."
+            )
+    final_required = {"trade_date", "ts_code", *features}
+    missing_final = final_required - set(final_columns)
+    forbidden_final = {
+        label,
+        "entry_trade_date",
+        "exit_trade_date",
+        "entry_price",
+        "exit_price",
+    } & set(final_columns)
+    if missing_final or forbidden_final:
+        raise RuntimeError(
+            "published table 'final_factor_panel' schema is incompatible."
+        )
+    returns_required = {
+        "trade_date",
+        "ts_code",
+        "entry_trade_date",
+        "exit_trade_date",
+        "entry_price",
+        "exit_price",
+        label,
+    }
+    if returns_required - set(returns_columns):
+        raise RuntimeError(
+            "published table 'forward_returns' schema is incompatible."
+        )
+    return FactorResearchPublishedOutputs(
+        artifact_dir=root,
+        final_factor_panel_path=final_path,
+        forward_returns_path=returns_path,
+        feature_names=features,
+        label_column=label,
+    )
 
 
 class FactorResearchPipelineExecutor:
@@ -219,6 +567,19 @@ class FactorResearchPipelineExecutor:
                 f"factor research artifact save failed: {exc}"
             ) from exc
 
+        try:
+            published_outputs = _build_published_outputs(
+                result,
+                manifest,
+                artifact_dir,
+                research_config.factor_names,
+                self.config.forward_returns.return_col,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"factor research published outputs validation failed: {exc}"
+            ) from exc
+
         return FactorResearchExecutionResult(
             enabled=True,
             artifact_dir=str(artifact_dir),
@@ -226,6 +587,7 @@ class FactorResearchPipelineExecutor:
             table_shapes=result.table_shapes(),
             input_shapes=input_shapes,
             factor_names=research_config.factor_names,
+            published_outputs=published_outputs,
             composition_method=research_config.composition_method,
         )
 
