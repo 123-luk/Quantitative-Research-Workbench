@@ -1975,3 +1975,51 @@ V3-G completed scope:
 - Fixed interpreter:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next planned stage: V3-H Artifact Persistence.
+
+## 2026-07-25 V3-H ML Experiment Artifact Persistence
+
+V3-H completed scope:
+- Work continued in local-development mode on branch
+  `feature/ml-framework` from committed V3-G HEAD
+  `1d091d45af9b497556382e21161e11179a69882d`.
+- Added `MLExperimentArtifactStore`, `MLArtifactConfig`, immutable file,
+  manifest, validation-report, and write-result contracts, and the fixed
+  artifact schema version `1.0`.
+- Each experiment uses a fixed UTF-8 JSON plus pyarrow Parquet directory
+  structure. Predictions retain their `dataset_index`; evaluation tables and
+  optional importance tables are stored without their DataFrame index.
+- When permutation importance is disabled, no
+  `permutation_importance` directory or manifest records are created. The
+  fixed manifest artifact counts are 13 when disabled and 17 when enabled.
+- Every manifest record contains its POSIX relative path, media/type data,
+  byte size, chunked SHA-256 checksum, and Parquet table schema where
+  applicable. The manifest does not include itself.
+- JSON conversion rejects unknown objects, non-string mapping keys,
+  DataFrames, Series, ndarrays, callables, cycles, and non-finite values.
+  JSON is written as UTF-8 without BOM, with sorted keys, indentation, strict
+  finite values, and a final newline.
+- Every Parquet file is written with the configured zstd, snappy, or no
+  compression setting, immediately read back, and strictly compared for
+  rows, columns, dtypes, index, index name, order, and values.
+- Writes occur in a unique same-filesystem
+  `.<experiment_id>.tmp-<uuid>` directory. The manifest is written last,
+  staging is fully validated, and one atomic `os.replace` publishes the
+  formal directory. Existing targets are never overwritten and pre-rename
+  failures clean only the current staging directory.
+- Formal validation verifies the exact file set, schema version, safe paths,
+  regular files, sizes, SHA-256 values, strict JSON, Parquet schemas, and
+  cross-file experiment, training, evaluation, and importance integrity.
+- No estimator, Adapter, Registry, runner, MLDataset, raw frame, feature
+  matrix, or model-format file is saved. Pickle and joblib are not used.
+  Full `MLExperimentResult` loading is intentionally not implemented.
+- Targeted artifact persistence tests completed with `65 passed`.
+- Complete V3 ML tests completed with `535 passed`.
+- Public imports, no-side-effect construction, three-file syntax, prohibited
+  model-persistence, training/external-integration, and file-type scans
+  completed successfully.
+- Full pytest completed with `1425 passed, 11 warnings`, zero failures and
+  zero skips. The warnings remain the existing pandas date-format
+  `UserWarning` category from unchanged factor invalid-date tests.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V3-I Pipeline/CLI integration and documentation.
