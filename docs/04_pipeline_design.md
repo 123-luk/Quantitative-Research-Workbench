@@ -34,8 +34,10 @@ The V1 pipeline skeleton follows this flow:
 2. Compute `required_start_date` and `required_end_date`.
 3. Ask `DataManager` to check cache coverage for required datasets.
 4. Create a unique experiment run directory.
-5. Save `config_snapshot.yaml`, `run_info.json`, and `metrics.json`.
-6. Return a run summary with cache status and missing ranges.
+5. Optionally execute `factor_research`.
+6. Optionally execute `ml_experiment`.
+7. Save `config_snapshot.yaml`, `run_info.json`, and `metrics.json`.
+8. Return the run summary.
 
 ## Required Data Range
 
@@ -61,9 +63,33 @@ For example, `backtest_start = 2024-01-01`, `train_years = 10`, and
 
 - No real full-market data download.
 - No complete factor calculation.
-- No machine learning.
 - No Streamlit UI refactor.
 - No Kronos integration.
+
+## Current optional Pipeline stages
+
+The current execution order is:
+
+```text
+cache check
+  -> create run_dir
+  -> optional factor_research
+  -> optional ml_experiment
+  -> snapshots
+```
+
+Both optional stages are disabled by default and are not implicitly coupled.
+Factor Research does not automatically feed ML. The ML stage reads one
+independently prepared, pre-merged Parquet panel and does not generate labels
+or merge research tables.
+
+ML artifact persistence is separately disabled by default. When enabled, the
+public ArtifactStore writes into a validated relative child of the current
+`run_dir` and refuses to overwrite an existing experiment directory.
+
+The Pipeline does not expose an ML UI and does not implement automatic
+tuning, multi-model comparison, or portfolio backtesting. See
+[ML Experiment Guide](07_ml_experiment_guide.md) for the current contract.
 
 ## Roadmap
 

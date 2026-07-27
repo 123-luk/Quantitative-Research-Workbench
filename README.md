@@ -204,3 +204,29 @@ python scripts/run_research_pipeline.py --start 20240101 --end 20241231 --univer
 - 增加模型参数配置页面。
 - 增加报告导出功能。
 - 增加部署版本或 Docker 环境。
+
+## V3 machine-learning experiments
+
+The unified Pipeline entry point supports one optional, strictly
+out-of-sample ML experiment:
+
+```text
+python scripts/run_pipeline.py --config config/ml_experiment.example.yaml
+```
+
+ML is disabled by default. The current model registry supports `ridge`,
+`elastic_net`, and `hist_gradient_boosting`. LightGBM and XGBoost are not
+currently installed or supported.
+
+The ML input is one pre-merged Parquet modeling panel. Artifact persistence
+is also opt-in; it writes validated JSON and Parquet files under the current
+Pipeline run directory and does not save an estimator or model file.
+
+CLI values override only explicitly supplied YAML leaves. For example:
+
+```text
+python scripts/run_pipeline.py --config config/ml_experiment.example.yaml --ml --ml-model ridge --ml-model-params "{\"alpha\":2.0}"
+```
+
+See [ML Experiment Guide](docs/07_ml_experiment_guide.md) for the panel
+contract, configuration, CLI options, metrics, artifacts, and exit codes.

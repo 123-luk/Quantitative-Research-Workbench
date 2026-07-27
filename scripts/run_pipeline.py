@@ -9,7 +9,7 @@ import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +17,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.pipeline.config import PipelineConfig  # noqa: E402
+from src.pipeline.ml_cli import (  # noqa: E402
+    MLCLIError,
+    exit_code_for_ml_error,
+    format_ml_human_summary,
+    merge_ml_cli_overrides,
+    parse_ml_model_params,
+)
+from src.pipeline.ml_config import MLPipelineError  # noqa: E402
 from src.pipeline.runner import run_pipeline  # noqa: E402
 
 
@@ -31,7 +39,9 @@ MAJOR_RESEARCH_TABLES = (
 )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(
+    argv: Sequence[str] | None = None,
+) -> argparse.Namespace:
     """Parse command-line arguments for the pipeline skeleton."""
     parser = argparse.ArgumentParser(description="Run the V1 pipeline skeleton.")
     parser.add_argument(
@@ -61,7 +71,101 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the compact run summary as JSON.",
     )
-    return parser.parse_args()
+    ml_group = parser.add_mutually_exclusive_group()
+    ml_group.add_argument(
+        "--ml", dest="ml_enabled", action="store_true", default=None,
+        help="Enable the configured ML experiment.",
+    )
+    ml_group.add_argument(
+        "--no-ml", dest="ml_enabled", action="store_false",
+        help="Disable the configured ML experiment.",
+    )
+    parser.add_argument(
+        "--ml-panel", dest="ml_panel", default=None, metavar="PATH",
+        help="Override the pre-merged ML modeling panel Parquet path.",
+    )
+    parser.add_argument(
+        "--ml-model", dest="ml_model", default=None, metavar="NAME",
+        help="Override the configured ML model name.",
+    )
+    parser.add_argument(
+        "--ml-model-params", dest="ml_model_params", default=None,
+        metavar="JSON_OBJECT",
+        help="Replace all configured model parameters with a JSON object.",
+    )
+    importance_group = parser.add_mutually_exclusive_group()
+    importance_group.add_argument(
+        "--ml-permutation-importance",
+        dest="ml_permutation_importance",
+        action="store_true",
+        default=None,
+        help="Enable walk-forward permutation importance.",
+    )
+    importance_group.add_argument(
+        "--no-ml-permutation-importance",
+        dest="ml_permutation_importance",
+        action="store_false",
+        help="Disable walk-forward permutation importance.",
+    )
+    parser.add_argument(
+        "--ml-importance-repeats",
+        dest="ml_importance_repeats",
+        type=int,
+        default=None,
+        metavar="INT",
+        help="Override permutation-importance repetitions.",
+    )
+    parser.add_argument(
+        "--ml-importance-scoring",
+        dest="ml_importance_scoring",
+        choices=("rmse", "mae"),
+        default=None,
+        help="Override permutation-importance scoring.",
+    )
+    parser.add_argument(
+        "--ml-min-cross-section-size",
+        dest="ml_min_cross_section_size",
+        type=int,
+        default=None,
+        metavar="INT",
+        help="Override the evaluation minimum cross-section size.",
+    )
+    artifact_group = parser.add_mutually_exclusive_group()
+    artifact_group.add_argument(
+        "--ml-save-artifacts",
+        dest="ml_save_artifacts",
+        action="store_true",
+        default=None,
+        help="Enable ML artifact persistence.",
+    )
+    artifact_group.add_argument(
+        "--no-ml-save-artifacts",
+        dest="ml_save_artifacts",
+        action="store_false",
+        help="Disable ML artifact persistence.",
+    )
+    parser.add_argument(
+        "--ml-artifact-root",
+        dest="ml_artifact_root",
+        default=None,
+        metavar="RELATIVE_PATH",
+        help="Override the safe run-relative ML artifact directory.",
+    )
+    parser.add_argument(
+        "--ml-experiment-id",
+        dest="ml_experiment_id",
+        default=None,
+        metavar="ID",
+        help="Override the ML artifact experiment identifier.",
+    )
+    parser.add_argument(
+        "--ml-parquet-compression",
+        dest="ml_parquet_compression",
+        choices=("zstd", "snappy", "none"),
+        default=None,
+        help="Override ML artifact Parquet compression.",
+    )
+    return parser.parse_args(argv)
 
 
 def build_overrides(args: argparse.Namespace) -> dict[str, Any]:
@@ -78,6 +182,36 @@ def build_overrides(args: argparse.Namespace) -> dict[str, Any]:
         "transaction_cost": args.transaction_cost,
     }
     return {key: value for key, value in mapping.items() if value is not None}
+
+
+def build_ml_cli_overrides(
+    args: argparse.Namespace,
+) -> dict[str, object]:
+    """Build sparse ML overrides from explicitly supplied CLI options."""
+    mapping: dict[str, object | None] = {
+        "enabled": args.ml_enabled,
+        "panel_path": args.ml_panel,
+        "model_name": args.ml_model,
+        "permutation_importance_enabled": (
+            args.ml_permutation_importance
+        ),
+        "importance_repeats": args.ml_importance_repeats,
+        "importance_scoring": args.ml_importance_scoring,
+        "minimum_cross_section_size": (
+            args.ml_min_cross_section_size
+        ),
+        "save_artifacts": args.ml_save_artifacts,
+        "artifact_root": args.ml_artifact_root,
+        "experiment_id": args.ml_experiment_id,
+        "parquet_compression": args.ml_parquet_compression,
+    }
+    if args.ml_model_params is not None:
+        mapping["model_params"] = parse_ml_model_params(
+            args.ml_model_params
+        )
+    return {
+        key: value for key, value in mapping.items() if value is not None
+    }
 
 
 def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, Any]:
@@ -109,7 +243,7 @@ def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, A
             }
         )
 
-    return {
+    output = {
         "status": summary.get("status"),
         "required_start_date": summary.get("required_start_date"),
         "required_end_date": summary.get("required_end_date"),
@@ -122,6 +256,10 @@ def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, A
         "run_dir": summary.get("run_dir"),
         "factor_research": research_output,
     }
+    ml_summary = summary.get("ml_experiment")
+    if isinstance(ml_summary, dict):
+        output["ml_experiment"] = dict(ml_summary)
+    return output
 
 
 def print_human_summary(output: dict[str, Any]) -> None:
@@ -132,26 +270,33 @@ def print_human_summary(output: dict[str, Any]) -> None:
     print(f"Required start: {output.get('required_start_date')}")
     print(f"Required end: {output.get('required_end_date')}")
     print(f"Factor research enabled: {str(research['enabled']).lower()}")
-    if not research["enabled"]:
-        return
-    print(f"Artifact directory: {research.get('artifact_dir')}")
-    print(
-        "Factor names: "
-        + ", ".join(str(name) for name in research.get("factor_names", ()))
-    )
-    print(f"Composition method: {research.get('composition_method')}")
-    print(
-        "Input shapes: "
-        + json.dumps(research.get("input_shapes", {}), ensure_ascii=False)
-    )
-    print(
-        "Major table shapes: "
-        + json.dumps(research.get("table_shapes", {}), ensure_ascii=False)
-    )
-    print(
-        "Manifest verification status: "
-        + str(research.get("manifest_verification"))
-    )
+    if research["enabled"]:
+        print(f"Artifact directory: {research.get('artifact_dir')}")
+        print(
+            "Factor names: "
+            + ", ".join(
+                str(name) for name in research.get("factor_names", ())
+            )
+        )
+        print(f"Composition method: {research.get('composition_method')}")
+        print(
+            "Input shapes: "
+            + json.dumps(
+                research.get("input_shapes", {}), ensure_ascii=False
+            )
+        )
+        print(
+            "Major table shapes: "
+            + json.dumps(
+                research.get("table_shapes", {}), ensure_ascii=False
+            )
+        )
+        print(
+            "Manifest verification status: "
+            + str(research.get("manifest_verification"))
+        )
+    for line in format_ml_human_summary(output.get("ml_experiment")):
+        print(line)
 
 
 @contextmanager
@@ -165,26 +310,45 @@ def _working_directory(path: Path) -> Iterator[None]:
         os.chdir(previous)
 
 
-def main() -> int:
+def main(
+    argv: Sequence[str] | None = None,
+) -> int:
     """Run the pipeline and print a compact human or JSON summary."""
     invocation_cwd = Path.cwd()
-    args = parse_args()
+    args = parse_args(argv)
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = invocation_cwd / config_path
     config_path = config_path.resolve()
 
-    with _working_directory(PROJECT_ROOT):
-        config = PipelineConfig.from_yaml(
-            config_path=config_path,
-            overrides=build_overrides(args),
-        )
-        summary = run_pipeline(config)
-        output = build_output(config, summary)
-        if args.json:
-            print(json.dumps(output, ensure_ascii=False, allow_nan=False))
-        else:
-            print_human_summary(output)
+    try:
+        with _working_directory(PROJECT_ROOT):
+            config = PipelineConfig.from_yaml(
+                config_path=config_path,
+                overrides=build_overrides(args),
+            )
+            ml_overrides = build_ml_cli_overrides(args)
+            if ml_overrides:
+                config.ml_experiment = merge_ml_cli_overrides(
+                    config.ml_experiment,
+                    ml_overrides,
+                )
+            summary = run_pipeline(config)
+            output = build_output(config, summary)
+            if args.json:
+                print(
+                    json.dumps(
+                        output,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                    )
+                )
+            else:
+                print_human_summary(output)
+    except (MLCLIError, MLPipelineError) as exc:
+        message = " ".join(str(exc).splitlines())
+        print(f"ML pipeline error: {message}", file=sys.stderr)
+        return exit_code_for_ml_error(exc)
     return 0
 
 

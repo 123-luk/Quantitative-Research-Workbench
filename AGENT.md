@@ -1502,3 +1502,660 @@ V2-G4C constraints:
 - Do not automatically run `git commit` or `git push`.
 - Do not modify env files, UI, strategy, backtest, or machine learning modules
   during V2-G4C.
+
+## 2026-07-25 V3-A Machine Learning Dataset Contract
+
+V3-A completed scope:
+- Work was completed on branch `feature/ml-framework`, created from synchronized
+  `main` at `b2d5649e36d987761820e8b1690b9047d99a0aa4` (`v0.3.0`).
+- Added the public `src/ml` dataset contract without changing V1 or V2 modules.
+- `MLDatasetBuilder.build(factor_panel, forward_returns, feature_names)` consumes
+  the V2 final factor panel and audited forward-return table and returns an
+  `MLDataset` with ordered features, one regression-label Series, metadata, and
+  immutable audit statistics.
+- `trade_date + ts_code` keys are normalized, checked for duplicates, and
+  required to match exactly on both sides before a validated one-to-one merge.
+- Missing and positive/negative infinite labels are counted separately and
+  dropped. The builder rejects a dataset when no labeled sample remains.
+- Feature NaN values remain missing, positive/negative infinity becomes NaN and
+  is audited, and an entirely missing retained feature is rejected. V3-A does
+  not impute, winsorize, standardize, neutralize, or silently drop features.
+- `MLDataset` deep-copies constructor inputs and returns defensive copies from
+  its `features`, `labels`, and `metadata` properties.
+- V3-A files:
+  - `src/ml/__init__.py`
+  - `src/ml/contracts.py`
+  - `src/ml/dataset.py`
+  - `tests/test_ml_dataset.py`
+  - `AGENT.md`
+- Targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_ml_dataset.py -q`
+  completed with `59 passed`.
+- Public import check completed with `ml dataset imports ok`.
+- Syntax compilation completed with `syntax ok: 4 files`.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `949 passed, 11 warnings`.
+- The 11 warnings are existing pandas date-format `UserWarning` messages from
+  unchanged V2 invalid-date tests. The V3-A targeted suite introduced no warning
+  category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- V3-A does not implement time splitting, label availability windows, models,
+  trainers, evaluation, persistence, Pipeline integration, or CLI integration.
+
+## 2026-07-25 V3-B Walk-Forward Splitting and Label Availability
+
+V3-B completed scope:
+- Work continued on synchronized branch `feature/ml-framework` at V3-A commit
+  `0d6e5e3d0e0cf18cfaa5e953362d9d0e2d5b6dca`.
+- `WalkForwardConfig` defines `train_window_periods`, `validation_periods`,
+  `window_type`, `retrain_frequency`, and `embargo_periods`.
+- Every period is a count of sorted unique `MLDataset.metadata.trade_date`
+  values; periods are independent of natural-day, week, or month frequency.
+- Rolling windows use the most recent fixed number of eligible training score
+  dates. Expanding windows use all eligible history after the minimum startup
+  requirement is met.
+- A complete score date is label-mature for a cutoff only when its date-level
+  maximum `exit_trade_date` is strictly earlier than the cutoff.
+- Date-level maximum exit dates prevent partial-stock maturity from splitting a
+  cross-section between partitions.
+- Validation uses the latest fixed number of mature dates after embargo removal
+  and strictly before the prediction block start.
+- Train-validation purge removes every earlier score date whose date-level
+  maximum exit date reaches or crosses the validation start.
+- Embargo removes the configured number of most recent mature history dates and
+  never counts naturally unavailable dates.
+- `retrain_frequency` creates consecutive, non-overlapping prediction-date
+  blocks; the final block may be shorter and all dates after startup are covered.
+- Insufficient initial dates are recorded and skipped until the first valid
+  split. Any later interruption raises `WalkForwardIntegrityError`.
+- Partition indices are original `MLDataset` RangeIndex row positions and always
+  include complete score-date cross-sections.
+- Public V3-B API includes the five walk-forward exceptions,
+  `WalkForwardConfig`, `WalkForwardSplit`, `WalkForwardPlan`, and
+  `WalkForwardSplitter`.
+- V3-B files:
+  - `src/ml/splitting.py`
+  - `src/ml/__init__.py`
+  - `tests/test_walk_forward_splitter.py`
+  - `AGENT.md`
+- Targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_walk_forward_splitter.py -q`
+  completed with `46 passed`.
+- V3 ML module test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_ml_dataset.py tests/test_walk_forward_splitter.py -q`
+  completed with `105 passed`.
+- Public import check completed with `ml splitting imports ok`.
+- Syntax compilation completed with `syntax ok: 3 files`.
+- The forbidden split/library pattern scan returned no matches.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `995 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged V2 invalid-date tests. V3-B introduced no warning category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- V3-B does not implement models, training, transformation, evaluation,
+  persistence, Pipeline integration, or CLI integration.
+- The next stage is V3-C model protocol and linear baseline.
+
+V3-B constraints:
+- Do not automatically run `git commit`, `git push`, or create or modify tags.
+
+## 2026-07-25 V3-C Model Protocol and Linear Baselines
+
+V3-C completed scope:
+- Work continued on branch `feature/ml-framework`. V3-A and V3-B are complete
+  and locally committed; V3-C remains uncommitted for user review.
+- Added `src/ml/models` with a uniform `RegressionModelAdapter` protocol,
+  explicit model exception hierarchy, immutable `ModelParameterSpec`, and
+  sample-free immutable `ModelFitAudit`.
+- Added frozen `RidgeModelConfig` and `ElasticNetModelConfig`. Both expose
+  `from_dict`, `as_dict`, `parameter_schema`, and `to_estimator_params`;
+  unknown, incorrectly typed, out-of-range, and unsupported values fail
+  immediately instead of being ignored.
+- Defaults remain overrideable. Complete resolved defaults plus user overrides
+  are recorded in every successful fit audit. Adapters never hard-code values
+  over validated user configuration.
+- Added `RidgeModelAdapter` and `ElasticNetModelAdapter`. Every fit creates a
+  fresh sklearn `Pipeline` containing `SimpleImputer(strategy="median")`,
+  `StandardScaler`, and the configured estimator.
+- Imputer, scaler, and estimator fit only on training data. Validation data is
+  contract-checked and audited but never participates in fit, preprocessing
+  statistics, coefficient estimation, or parameter selection.
+- Training and prediction require exact feature names and order. Missing
+  features, extra features, reordered features, reserved metadata fields,
+  invalid numeric conversion, infinity, and all-missing training features are
+  rejected explicitly.
+- Constant features are retained and audited after training-median imputation;
+  sklearn scaling handles them normally.
+- Prediction preserves the caller's index and returns finite float64 values in
+  a Series named `prediction`.
+- Linear feature importance contains original feature name and position,
+  standardized-input coefficient, absolute coefficient, stable descending
+  importance rank, and positive/negative/zero direction.
+- Added an explicit `ModelRegistry` containing `ridge` and `elastic_net`.
+  It supplies stable JSON-safe parameter schemas and defaults for future YAML,
+  CLI, and Streamlit UI override layers without UI-specific training logic.
+- V3-C does not yet track the source of each override. It does not implement
+  model save/load, persistence, automatic tuning, tree models, LightGBM,
+  XGBoost, Pipeline integration, CLI integration, or UI integration.
+- Linear adapter targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_linear_model_adapters.py -q`
+  completed with `65 passed`.
+- Registry targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_model_registry.py -q`
+  completed with `18 passed`.
+- V3 ML module test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_ml_dataset.py tests/test_walk_forward_splitter.py tests/test_linear_model_adapters.py tests/test_model_registry.py -q`
+  completed with `188 passed`.
+- Public import, configurable parameter, JSON schema, six-file syntax, and
+  forbidden-pattern checks all completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1078 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged V2 invalid-date tests. V3-C introduced no warning category.
+
+## 2026-07-25 V3-D0 Dependency Governance
+
+V3-D0 completed scope:
+- Work continued locally on branch `feature/ml-framework` at
+  `47f4c399c4665ac36a97073aeeebcf43e0f1f7e8`, which contains the locally
+  committed V3-A, V3-B, and V3-C stages.
+- `requirements.txt` now declares `pyarrow` directly because the production
+  data and research artifact paths use pandas Parquet I/O. No existing
+  dependency was removed or renamed.
+- Added `constraints-v3-core.txt` as the exact tested core environment snapshot.
+  `requirements.txt` remains the direct dependency declaration; the constraints
+  file supplements it and is not a complete lock file.
+- Added `docs/06_dependency_policy.md` covering the validated environment,
+  installation, core and test dependency roles, version upgrades, joblib,
+  optional model dependencies, and reproducibility limitations.
+- The validated environment is Windows with Python `3.12.2` and:
+  - numpy `2.4.6`
+  - pandas `3.0.3`
+  - scipy `1.17.1`
+  - statsmodels `0.14.6`
+  - scikit-learn `1.9.0`
+  - PyYAML `6.0.3`
+  - pyarrow `24.0.0`
+  - pytest `9.0.3`
+- The reproducible core installation form is
+  `python -m pip install -r requirements.txt -c constraints-v3-core.txt`.
+  The documentation also identifies the fixed `E:` interpreter command as a
+  current-development-machine example rather than a universal path.
+- LightGBM and XGBoost remain uninstalled and undeclared. They require actual
+  Python 3.12 installation and test validation in V3-D2 before versions are
+  recorded in a separate optional dependency file.
+- joblib remains a transitive scikit-learn dependency. Production code does not
+  directly import it, and V3-C does not persist models. Direct declaration is
+  deferred until production code actually imports it in V3-H.
+- The constraints/runtime comparison completed with
+  `constraints match runtime`.
+- The requirements policy check completed with
+  `requirements dependency policy ok`.
+- `python -m pip check` completed with `No broken requirements found`.
+- Core dependency imports completed with `core dependency imports ok`.
+- Existing V3 model imports completed with `existing ml imports ok`.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1078 passed, 11 warnings`.
+- The 11 warnings remain the existing pandas date-format `UserWarning`
+  messages from unchanged V2 invalid-date tests. V3-D0 introduced no new
+  warning category.
+
+## 2026-07-25 V3-D1 HistGradientBoosting Adapter
+
+V3-D1 completed scope:
+- Work continued in local development mode on branch `feature/ml-framework`
+  from committed V3-D0 dependency-governance commit
+  `92bd2d6f0a360c40e6d29add6581f69cefaf94cf`.
+- Added frozen `HistGradientBoostingModelConfig` and
+  `HistGradientBoostingModelAdapter` for sklearn 1.9.0.
+- All 16 public project parameters are validated, JSON-safe, and available
+  through stable parameter schemas for future YAML, CLI, and Streamlit UI
+  layers. Unknown and deliberately unsupported complex parameters are rejected.
+- Supported losses are `squared_error`, `absolute_error`, `poisson`, `gamma`,
+  and `quantile`. Quantile configuration is validated against its loss.
+- HistGradientBoosting uses sklearn's native NaN handling. It does not create
+  or use a SimpleImputer, StandardScaler, or sklearn Pipeline. Positive and
+  negative infinity remain explicit model-data errors.
+- The estimator always receives `validation_fraction=None`, preventing sklearn
+  from creating an internal random validation split.
+- With `early_stopping=False`, validation data is optional and is used only for
+  contract checks and audit counts; it is never passed to estimator fit.
+- With `early_stopping=True`, separate non-overlapping external validation data
+  is mandatory and is passed through sklearn 1.9.0 `X_val` and `y_val`.
+  `validation_used_for_fit` records the resulting distinction.
+- Every adapter fit creates a new estimator, including when `warm_start=True`;
+  trees are never reused across adapter fit calls.
+- `ModelParameterSpec` now supports `optional_float` without changing existing
+  Ridge or ElasticNet schema semantics.
+- `ModelFitAudit` now supports optional estimator intercepts and records native
+  missing support, imputer/scaler enablement, best iteration when available,
+  and estimator iteration count. Linear audits retain their prior intercept,
+  imputer, scaler, and feature-importance behavior.
+- HistGradientBoosting exposes no project-supported native feature importance.
+  A fitted adapter raises `ModelFeatureImportanceUnavailableError`; permutation
+  importance remains explicitly deferred to V3-F.
+- The default registry now lists `elastic_net`, `hist_gradient_boosting`, and
+  `ridge`. LightGBM and XGBoost remain unimplemented and unregistered.
+- HistGradientBoosting targeted test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_hist_gradient_boosting_adapter.py -q`
+  completed with `75 passed`.
+- Linear and registry regression test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest tests/test_linear_model_adapters.py tests/test_model_registry.py -q`
+  completed with `86 passed`.
+- All V3 ML test command completed with `266 passed`.
+- Public import, configurable parameter, JSON schema, nine-file syntax, and
+  forbidden-pattern checks all completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1156 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged V2 invalid-date tests. V3-D1 introduced no warning category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+
+## 2026-07-25 V3-E Walk-Forward Model Trainer
+
+V3-E completed scope:
+- Work continued in local development mode on branch `feature/ml-framework`
+  from committed V3-D1 HEAD
+  `daa6d3a200dc3592d63b261052c23ce7922c25c6`.
+- V3-D2B remains deferred because no compatible local wheel is available and
+  dependency installation is prohibited in the current offline workflow.
+- Added immutable, JSON-safe `WalkForwardTrainingConfig`,
+  `WalkForwardFoldAudit`, and `WalkForwardTrainingAudit` contracts.
+- Added `WalkForwardTrainer`, which consumes the real `MLDataset` and
+  `WalkForwardPlan` contracts and creates a fresh registry adapter for every
+  split. No estimator or adapter is reused across folds or retained in the
+  result.
+- Split indices are dataset row positions and are extracted consistently with
+  `iloc`. Train, validation, and prediction partitions are passed separately;
+  the prediction target is read only after prediction and never participates
+  in fitting.
+- The trainer defensively revalidates index ranges and uniqueness, partition
+  disjointness, complete date cross-sections, gap-free prediction coverage,
+  temporal order, and strict `exit_trade_date` cutoffs before fitting.
+- Validation frames are always provided because the current V3-B
+  `WalkForwardSplit` contract requires a non-empty validation partition.
+  `validation_used_for_fit` is copied from each adapter's `ModelFitAudit`;
+  the trainer does not infer it from the model name.
+- Successful folds produce one unified OOS frame with exact columns
+  `trade_date`, `ts_code`, `entry_trade_date`, `exit_trade_date`, `target`,
+  `prediction`, and `fold_id`. The original dataset index is retained, named
+  `dataset_index`, and sorted only after all folds are combined.
+- `WalkForwardTrainingResult.predictions` returns a deep defensive copy.
+  Results and audits retain no dataset, plan, adapter, estimator, complete
+  indices, or sample matrices.
+- Model creation, fit, or prediction failure aborts the complete run as a
+  chained `WalkForwardFoldError`; failed folds are never skipped and partial
+  results are never returned.
+- V3-E does not implement model evaluation, portfolio simulation, persistence,
+  automatic tuning, or Pipeline/CLI/UI integration. Model evaluation and
+  permutation importance remain planned for V3-F.
+- Targeted trainer test command completed with `60 passed`.
+- Complete V3 ML test command completed with `326 passed`.
+- Public imports, minimal construction, three-file syntax, and prohibited
+  pattern checks completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1216 passed, 11 warnings`.
+- The 11 warnings are the existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-E introduced no warning
+  category.
+
+## 2026-07-25 V3-F1 Strict OOS Model Evaluation
+
+V3-F1 completed scope:
+- Work continued in local development mode on branch `feature/ml-framework`
+  from committed V3-E HEAD
+  `8954336cc598a461dbee731bdac94e300e3e801d`.
+- Added frozen `ModelEvaluationConfig`, `RegressionMetrics`,
+  `CrossSectionalMetricSummary`, and `ModelEvaluationAudit` contracts, plus
+  defensively copied `ModelEvaluationResult` tables.
+- Added `OOSModelEvaluator`. It reads only
+  `WalkForwardTrainingResult.predictions` and `.audit`; it does not access
+  features, plans, training partitions, registries, adapters, or estimators,
+  and does not invoke any training or prediction API.
+- Overall and per-fold regression metrics are MAE, RMSE, and R-squared.
+  R-squared is explicitly invalid for fewer than two observations or a
+  constant target; MAE and RMSE remain available in those cases.
+- Daily Pearson IC uses a deterministic centered-vector correlation. Daily
+  Spearman RankIC applies pandas average ranks to target and prediction before
+  the same correlation calculation. Ties are not broken by code, row order,
+  ordinal ranking, or randomness.
+- Cross-sectional invalidity retains the date with a NaN metric, `False`
+  validity flag, and stable reason. Invalid dates do not enter means,
+  deviations, or information ratios.
+- IC and RankIC summaries use arithmetic mean, sample standard deviation with
+  `ddof=1`, and unannualized mean-to-standard-deviation ratios. Fewer than two
+  valid dates or zero standard deviation produces no information ratio.
+- `date_metrics` contains one sorted row per prediction date with fold,
+  observation count, both correlations, validity flags, and invalid reasons.
+  `fold_metrics` contains one row per continuous fold with prediction date
+  bounds, row/date counts, regression metrics, and both correlation summaries.
+- Prediction validation checks the exact seven-column contract, named unique
+  increasing dataset index, unique prediction keys, finite float64-convertible
+  target and prediction, non-empty codes, datetime fields, and non-negative
+  continuous integer fold ids.
+- Training-audit reconciliation checks total rows, dates, folds, global date
+  bounds, fold order, model names, per-fold rows, and per-fold prediction date
+  bounds. Coverage must be exactly 1.0; inconsistent input fails atomically.
+- Evaluation results retain no prediction detail in their audit, no training
+  result, and no model objects. DataFrame properties return deep copies and
+  `as_dict()` converts timestamps and NaN values to JSON-safe representations.
+- V3-F1 does not implement portfolio returns, turnover, costs, net-value
+  curves, model persistence, or any importance method. The next planned stage
+  is V3-F2 Walk-Forward permutation importance.
+- Targeted evaluation test command completed with `60 passed`.
+- Complete V3 ML test command completed with `386 passed`.
+- Public imports, minimal construction, three-file syntax, prohibited-pattern,
+  and training/model API scans completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1276 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-F1 introduced no warning
+  category, including constant-correlation cases.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+
+## 2026-07-25 V3-F2 Walk-Forward OOS Permutation Importance
+
+V3-F2 completed scope:
+- Work continued locally on branch `feature/ml-framework` from committed
+  V3-F1 HEAD `5510d0a837ba1e3f093ed7abbde78bcd97a5d857`.
+- Added immutable `WalkForwardPermutationImportanceConfig`, per-fold and
+  aggregate audits, defensive result tables, and
+  `WalkForwardPermutationImportanceRunner`.
+- Every fold creates and fits one fresh registry Adapter. The fitted Adapter
+  produces one baseline prediction and one prediction per
+  feature/repetition; it is discarded before the next fold.
+- Permutations occur only in the fold's prediction feature block and only
+  within each `trade_date` cross-section. Training and validation features
+  are never permuted, rows and indices are not reordered, and feature values
+  never cross date boundaries.
+- NaN values participate in the date-local permutation, preserving each
+  date's value multiset and NaN count. Constant and one-row cross-sections
+  remain valid.
+- Supported scores are RMSE and MAE. Both are lower-is-better, so importance
+  is `permuted_score - baseline_score`. Negative and zero importance values
+  are retained without clipping, absolute conversion, or normalization.
+- Independent deterministic random streams use NumPy `SeedSequence` with
+  permutation random state, fold id, feature position, and repetition id.
+  Global NumPy random state is never changed, and model randomness remains
+  controlled only by user model parameters.
+- `repeat_importance` records every fold/feature/repetition observation.
+  `fold_importance` uses arithmetic mean, sample standard deviation with
+  `ddof=1`, extrema, and positive fraction. `feature_importance` aggregates
+  fold/repetition observations equally, without row/date/stock weighting,
+  and ranks descending means with feature-position tie breaks.
+- The runner independently revalidates dataset structure and the complete
+  Plan contract, including positional indices, disjoint partitions, global
+  prediction uniqueness, complete date cross-sections, declared date
+  boundaries, temporal order, and strict label exit-date cutoffs.
+- Validation data is passed according to the split contract, while
+  `validation_used_for_fit` is copied from `ModelFitAudit`; the runner does
+  not infer use from the model name.
+- Prediction targets are never passed to model fitting or prediction. They
+  are read only for OOS baseline and permuted score calculations.
+- Model creation, fitting, baseline prediction, permutation prediction, or
+  scoring failures abort the complete run through a chained contextual fold
+  error. Partial folds, features, or repetitions are never returned.
+- Result and audit objects retain no model, Adapter, dataset, Plan,
+  prediction detail, target, or permuted feature block.
+- The implementation does not call native model importance, sklearn
+  inspection importance, the existing training runner, or the OOS evaluator.
+  It does not implement SHAP, portfolio simulation, persistence, parallel
+  scheduling, or Pipeline/CLI/UI integration.
+- Targeted importance test command completed with `49 passed`.
+- Complete V3 ML test command completed with `435 passed`.
+- Public imports, minimal construction, three-file syntax, prohibited-feature,
+  and training/evaluation entry scans completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1325 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-F2 introduced no warning
+  category, including constant-feature permutations.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V3-G in-memory ML orchestration.
+
+## 2026-07-25 V3-G In-Memory ML Experiment Orchestration
+
+V3-G completed scope:
+- Work continued locally on branch `feature/ml-framework` from committed
+  V3-F2 HEAD `57008616e26f3a67b2aa5b0f7c911b7083d1261a`.
+- Added immutable `PermutationImportanceOptionsConfig`,
+  `MLExperimentConfig`, and `MLExperimentAudit`, plus controlled
+  `MLExperimentResult` and `MLExperimentRunner`.
+- The fixed sequential stage chain is Dataset build, Walk-Forward split,
+  Training, Evaluation, optional Permutation Importance, integrity
+  validation, and result construction.
+- The orchestrator uses only public V3 APIs. It does not duplicate dataset,
+  splitting, training, evaluation, permutation, preprocessing, or estimator
+  algorithms.
+- A single combined in-memory panel is defensively copied and passed to the
+  existing DatasetBuilder as factor and label input. Feature names are the
+  non-key, non-date, non-price, non-label columns; the Builder remains
+  responsible for final schema, alignment, and value validation.
+- Permutation Importance is disabled by default. When enabled, its model name
+  and complete model parameter mapping come only from TrainingConfig.
+  Importance independently retrains its folds and does not reuse discarded
+  Training models.
+- Cross-stage validation checks Dataset feature identity, Plan/Training fold
+  counts, Training/Evaluation model, coverage, row/date/fold counts and date
+  ranges, and all corresponding Training/Importance parameters, features,
+  folds, dates, scoring, repetitions, and scope.
+- Stage failures are chained with one of the fixed stage names and abort the
+  experiment without a partial result or saved runner state.
+- The result retains the real dataset audit, defensive Plan, TrainingResult,
+  EvaluationResult, optional ImportanceResult, and compact experiment audit.
+  It does not retain the raw frame, MLDataset, Registry, runners, Adapters, or
+  estimators.
+- The orchestration layer is strictly in memory: it writes no artifact,
+  configuration, log, or experiment directory and has no Pipeline, CLI, UI,
+  network, persistence, tuning, comparison, or portfolio integration.
+- Targeted orchestration test command completed with `35 passed`.
+- Complete V3 ML test command completed with `470 passed`.
+- Public imports, minimal configuration, model-parameter preservation,
+  three-file syntax, persistence/integration, and internal-algorithm scans
+  completed successfully.
+- Full test command:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed with `1360 passed, 11 warnings`.
+- The 11 warnings remain existing pandas date-format `UserWarning` messages
+  from unchanged factor invalid-date tests. V3-G introduced no warning
+  category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V3-H Artifact Persistence.
+
+## 2026-07-25 V3-H ML Experiment Artifact Persistence
+
+V3-H completed scope:
+- Work continued in local-development mode on branch
+  `feature/ml-framework` from committed V3-G HEAD
+  `1d091d45af9b497556382e21161e11179a69882d`.
+- Added `MLExperimentArtifactStore`, `MLArtifactConfig`, immutable file,
+  manifest, validation-report, and write-result contracts, and the fixed
+  artifact schema version `1.0`.
+- Each experiment uses a fixed UTF-8 JSON plus pyarrow Parquet directory
+  structure. Predictions retain their `dataset_index`; evaluation tables and
+  optional importance tables are stored without their DataFrame index.
+- When permutation importance is disabled, no
+  `permutation_importance` directory or manifest records are created. The
+  fixed manifest artifact counts are 13 when disabled and 17 when enabled.
+- Every manifest record contains its POSIX relative path, media/type data,
+  byte size, chunked SHA-256 checksum, and Parquet table schema where
+  applicable. The manifest does not include itself.
+- JSON conversion rejects unknown objects, non-string mapping keys,
+  DataFrames, Series, ndarrays, callables, cycles, and non-finite values.
+  JSON is written as UTF-8 without BOM, with sorted keys, indentation, strict
+  finite values, and a final newline.
+- Every Parquet file is written with the configured zstd, snappy, or no
+  compression setting, immediately read back, and strictly compared for
+  rows, columns, dtypes, index, index name, order, and values.
+- Writes occur in a unique same-filesystem
+  `.<experiment_id>.tmp-<uuid>` directory. The manifest is written last,
+  staging is fully validated, and one atomic `os.replace` publishes the
+  formal directory. Existing targets are never overwritten and pre-rename
+  failures clean only the current staging directory.
+- Formal validation verifies the exact file set, schema version, safe paths,
+  regular files, sizes, SHA-256 values, strict JSON, Parquet schemas, and
+  cross-file experiment, training, evaluation, and importance integrity.
+- No estimator, Adapter, Registry, runner, MLDataset, raw frame, feature
+  matrix, or model-format file is saved. Pickle and joblib are not used.
+  Full `MLExperimentResult` loading is intentionally not implemented.
+- Targeted artifact persistence tests completed with `65 passed`.
+- Complete V3 ML tests completed with `535 passed`.
+- Public imports, no-side-effect construction, three-file syntax, prohibited
+  model-persistence, training/external-integration, and file-type scans
+  completed successfully.
+- Full pytest completed with `1425 passed, 11 warnings`, zero failures and
+  zero skips. The warnings remain the existing pandas date-format
+  `UserWarning` category from unchanged factor invalid-date tests.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V3-I Pipeline/CLI integration and documentation.
+
+## 2026-07-27 V3-I1A ML Pipeline Integration
+
+V3-I1A completed scope:
+- Work continued in local-development mode on branch
+  `feature/ml-framework` from committed V3-H HEAD
+  `30396a2cc64502687a587c1730872545e1879256`. The V3-I0 read-only
+  Pipeline, CLI, and YAML configuration audit was completed before this
+  implementation.
+- Added the immutable `MLExperimentPipelineConfig`. The ML stage is disabled
+  by default, uses strict mapping fields, and round-trips nested
+  `MLExperimentConfig` through its public configuration API.
+- `PipelineConfig` now owns the optional top-level `ml_experiment` section.
+  Existing YAML without that section remains disabled, and existing
+  `factor_research` configuration stays independent.
+- Added a modeling-panel reader for one pre-merged pyarrow Parquet file. It
+  supports relative paths resolved against a stable project root and
+  absolute paths, rejects symlinks and non-Parquet inputs, checks the
+  required key/date/label columns and at least one candidate feature, and
+  preserves row order, column order, and dtypes.
+- CSV is not supported. The Pipeline does not generate or merge modeling
+  panels and does not fill, drop, sort, normalize, or standardize their
+  contents.
+- Added `MLExperimentPipelineExecutor`, which invokes the public
+  `MLExperimentRunner` API and optionally the public
+  `MLExperimentArtifactStore` API. It retains no panel, experiment result,
+  Registry, Adapter, model, or ArtifactStore state.
+- Artifact persistence remains disabled by default. When enabled, artifacts
+  are confined to a validated relative child of the current Pipeline
+  `run_dir`; existing experiment directories are not overwritten.
+- `run_pipeline` now runs the optional ML stage after the optional Factor
+  Research stage and uses the existing run directory. The two stages are
+  independently configured and are not implicitly coupled.
+- When ML is disabled, no panel is read, no model is trained, no ML artifact
+  directory is created, and the legacy summary key set remains unchanged.
+  The configuration snapshot still records the disabled ML configuration.
+- When ML succeeds, the Pipeline returns a compact ML summary with model,
+  fold and prediction counts, regression and IC summaries, importance
+  status, and artifact status. It does not return predictions, evaluation
+  tables, full model parameters, or an `MLExperimentResult`.
+- The CLI, example YAML, user documentation, ExperimentManager, `src/ml`,
+  and dependency declarations were not modified. CLI/example/documentation
+  integration remains assigned to V3-I1B.
+- Targeted V3-I1A tests completed with `63 passed, 2 skipped`.
+- Pipeline regression tests completed with `164 passed, 2 skipped`.
+- Complete V3 ML regression tests completed with `598 passed, 2 skipped`.
+- Public imports, default-disabled configuration, minimal enabled
+  configuration round-trip, seven-file syntax, prohibited algorithm,
+  persistence/external-integration, alternate-format, and private ML API
+  scans completed successfully.
+- Full pytest completed with `1488 passed, 2 skipped, 11 warnings`, zero
+  failures. The two skips are platform-conditional symlink cases. The 11
+  warnings remain existing pandas date-format `UserWarning` messages from
+  unchanged factor invalid-date tests; V3-I1A added no warning category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Known deferred maintenance issue: the HistGradientBoosting exception path
+  references an unimported `ModelError`, which can produce `NameError`.
+  This stage did not modify `src/ml/models/tree.py`.
+- Next planned stage: V3-I1B CLI, example YAML, documentation, and final
+  acceptance.
+
+## 2026-07-27 V3-I1B Unified ML Pipeline CLI
+
+V3-I1B completed scope:
+- Work continued in local-development mode on branch
+  `feature/ml-framework` from committed V3-I1A HEAD
+  `cebcc9fa9f1e4095b407b5b443ca2e5363243e35`.
+- V3 core feature development is complete through the unified Pipeline CLI,
+  example configuration, and user documentation.
+- The existing `scripts/run_pipeline.py` remains the single entry point and
+  now accepts opt-in ML options. `parse_args(argv=None)` and
+  `main(argv=None)` support direct testing while preserving `sys.argv`
+  behavior.
+- Precedence is built-in defaults, then YAML, then only explicitly supplied
+  CLI leaves. Unspecified argparse ML values are `None` and never replace
+  YAML. Panel, model, importance, and artifact options do not implicitly
+  enable ML.
+- `--ml-model-params` uses strict `json.loads` object parsing. NaN and
+  infinities are rejected, and eval, exec, and `ast.literal_eval` are not
+  used. The CLI mapping completely replaces, rather than shallow-merges, the
+  YAML model-parameter mapping.
+- ML, Artifact persistence, and permutation importance remain disabled by
+  default. Importance leaf overrides require enabled importance options;
+  explicit enable creates the established defaults, while explicit disable
+  removes the options.
+- ML-specific CLI and Pipeline errors print one compact stderr line and map
+  to stable exit codes 2 through 6. Artifact target collisions return 5.
+  Existing non-ML exceptions retain their prior propagation behavior.
+- Disabled JSON and human output remain unchanged and add no
+  `ml_experiment` key or disabled notice. Enabled output adds only a compact
+  ML summary and never prints predictions, complete model parameters,
+  DataFrames, or a manifest.
+- Added `config/ml_experiment.example.yaml`, disabled by default with Ridge,
+  safe relative paths, one pre-merged Parquet panel, Artifact persistence
+  off, and permutation importance off.
+- Added `docs/07_ml_experiment_guide.md` and updated README and Pipeline
+  design documentation. The guide records supported models, panel schema,
+  time-safe evaluation, CLI overrides, artifacts, and exit codes.
+- The current integration does not add Streamlit ML UI, automatic tuning,
+  multi-model comparison, portfolio backtesting, LightGBM, or XGBoost.
+- Targeted CLI/Pipeline tests completed with `121 passed, 2 skipped`.
+- Pipeline regression tests completed with `209 passed, 2 skipped`.
+- V3 ML plus integration tests completed with `643 passed, 2 skipped`.
+- Public imports, CLI help, example YAML, strict model-parameter parsing,
+  four-file syntax, default-disabled configuration, CLI import
+  no-side-effect, unsafe parser, model-call, sensitive-output, alternate
+  format, and documentation-claim checks completed successfully.
+- Full pytest completed with `1533 passed, 2 skipped, 11 warnings`, zero
+  failures. The two skips remain platform-conditional symlink cases. The 11
+  warnings remain the existing pandas date-format `UserWarning` category
+  from unchanged factor invalid-date tests.
+
+## 2026-07-27 HistGradientBoosting ModelError Maintenance
+
+Maintenance fix completed:
+- Work continued on local branch `feature/ml-framework` from committed
+  V3-I1B HEAD `997daf8608cc5107fee752a63542c7ab198b8b8a`.
+- Fixed the HistGradientBoosting fit exception path by importing the existing
+  public `ModelError` base class from `src.ml.models.base`.
+- A low-level estimator fit failure is now wrapped as the existing
+  `ModelFitError` instead of being masked by `NameError`.
+- The original low-level exception is retained as `__cause__` through
+  `raise ... from exc`.
+- Added a deterministic monkeypatched estimator-fit regression test that
+  checks the exception type, cause identity, compact error text, and
+  unchanged unfitted state.
+- The inherited prediction path already wraps failures with the existing
+  `ModelPredictionError` and had no undefined exception reference.
+- Normal model behavior, configuration, early stopping, native missing-value
+  handling, preprocessing, prediction, and audit contracts were unchanged.
+- Targeted HistGradientBoosting tests completed with `76 passed`.
+- Model regression tests completed with `306 passed`.
+- Tree module import, two-file syntax, and all `ModelError` reference checks
+  completed successfully.
+- Full pytest completed with `1534 passed, 2 skipped, 11 warnings`, zero

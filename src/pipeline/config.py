@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import calendar
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from typing import Any
 import yaml
 
 from src.pipeline.research_config import FactorResearchPipelineConfig
+from src.pipeline.ml_config import MLExperimentPipelineConfig
 
 
 @dataclass
@@ -40,6 +42,10 @@ class PipelineConfig:
     factor_research: FactorResearchPipelineConfig = field(
         default_factory=FactorResearchPipelineConfig
     )
+    ml_experiment: MLExperimentPipelineConfig = field(
+        default_factory=MLExperimentPipelineConfig
+    )
+
     def __post_init__(self) -> None:
         """Normalize dates and validate the backtest range."""
         self.backtest_start = normalize_date(self.backtest_start)
@@ -52,6 +58,9 @@ class PipelineConfig:
             raise TypeError(
                 "factor_research must be a FactorResearchPipelineConfig or Mapping."
             )
+        self.ml_experiment = MLExperimentPipelineConfig.from_dict(
+            self.ml_experiment
+        )
         if parse_date(self.backtest_start) > parse_date(self.backtest_end):
             raise ValueError("backtest_start must be earlier than or equal to backtest_end.")
 
@@ -103,6 +112,7 @@ class PipelineConfig:
                 ["daily", "daily_basic", "adj_factor"],
             ),
             "factor_research": merged.get("factor_research", {}),
+            "ml_experiment": merged.get("ml_experiment"),
         }
         direct_overrides = {
             key: value for key, value in (overrides or {}).items() if key in values
@@ -124,6 +134,9 @@ class PipelineConfig:
         raw_research = values.get("factor_research")
         if isinstance(raw_research, Mapping):
             values["factor_research"] = FactorResearchPipelineConfig.from_dict(raw_research)
+        values["ml_experiment"] = MLExperimentPipelineConfig.from_dict(
+            values.get("ml_experiment")
+        )
         return cls(**values)
 
     @property
@@ -141,8 +154,13 @@ class PipelineConfig:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a serializable dictionary representation."""
-        result = asdict(self)
+        result = {
+            name: deepcopy(getattr(self, name))
+            for name in self.__dataclass_fields__
+            if name not in {"factor_research", "ml_experiment"}
+        }
         result["factor_research"] = self.factor_research.to_dict()
+        result["ml_experiment"] = self.ml_experiment.to_dict()
         result["required_start_date"] = self.required_start_date
         result["required_end_date"] = self.required_end_date
         return result

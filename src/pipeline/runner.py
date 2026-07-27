@@ -8,6 +8,7 @@ from typing import Any
 from src.data.data_manager import DataManager
 from src.pipeline.config import PipelineConfig
 from src.pipeline.experiment import ExperimentManager
+from src.pipeline.ml_execution import MLExperimentPipelineExecutor
 from src.pipeline.research_execution import FactorResearchPipelineExecutor
 
 
@@ -63,6 +64,12 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
             },
         )
         summary["factor_research"] = research_result.to_dict()
+
+    if config.ml_experiment.enabled:
+        ml_result = MLExperimentPipelineExecutor(
+            config.ml_experiment
+        ).execute(run_dir)
+        summary["ml_experiment"] = ml_result.to_dict()
 
     experiment_manager.save_config_snapshot(run_dir, config)
     experiment_manager.save_run_info(
