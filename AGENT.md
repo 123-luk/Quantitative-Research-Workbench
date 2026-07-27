@@ -2192,3 +2192,47 @@ V4-A completed scope:
 - Fixed interpreter:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next planned stage: V4-B Modeling Panel Builder.
+
+## 2026-07-27 V4-B Modeling Panel Builder
+
+V4-B completed scope:
+- Added the pure in-memory API
+  `ModelingPanelBuilder(config).build(factor_panel, forward_returns)` on local
+  branch `feature/modeling-panel` from V4-A HEAD
+  `dce2c28e905d1a28d903713652a99239c10dfb4b`.
+- The Builder deep-copies both inputs, requires fixed
+  `trade_date` / `ts_code` keys and the fixed return audit/label columns, and
+  rejects duplicate keys before alignment.
+- Feature resolution supports mutually exclusive include/exclude modes,
+  preserves explicit/source order, and never treats extra return columns as
+  features.
+- Alignment uses a validated one-to-one inner merge with bidirectional
+  `audit_and_drop` / `error` unmatched policies and deterministic bounded
+  samples of at most 20 keys.
+- Known label/audit columns and invalid time or formula relationships are hard
+  leakage errors. Suspicious feature-name prefixes are deterministic audit
+  warnings and are not claimed as proof of leakage.
+- Features, label, and prices require non-boolean numeric dtypes. Infinities
+  are rejected, feature NaN values are audited, and missing labels follow the
+  configured policy. Non-missing prices must be strictly positive.
+- Entry/exit structural completeness and time ordering are enforced. Forward
+  labels are checked against `exit_price / entry_price - 1` with
+  `rtol=1e-10` and `atol=1e-12` without rewriting label values.
+- Output rows use stable key `mergesort`, a RangeIndex, and the fixed order of
+  keys, ordered features, entry/exit dates and prices, then label.
+- Audit statistics include coverage, missingness, constant/suspicious
+  features, distributions, time/formula counts, and warnings in a fixed
+  category order.
+- No files are read or written. `src/ml` and V4-A contracts were not modified,
+  and Artifact, Pipeline, CLI, YAML, and model execution remain out of scope.
+- Targeted Builder tests completed with `102 passed`.
+- Contracts plus Builder tests completed with `196 passed`.
+- Related Modeling Panel, ML dataset/runner, forward-return, and Factor
+  Research regressions completed with `398 passed, 2 warnings`.
+- Full pytest completed with `1730 passed, 2 skipped, 11 warnings`, zero
+  failures. The skips remain existing platform-conditional symlink cases and
+  the warnings remain the existing pandas date-format `UserWarning` category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V4-C Modeling Panel Artifact.
+- V4 remains local-only and will not be pushed before all V4 stages complete.
