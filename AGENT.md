@@ -2517,3 +2517,23 @@ override，V4-E3 为 CLI + YAML + docs。
   Modeling Panel Artifact 或新 output/runs 残留。
 - 下一阶段：V4-F E2E / release readiness。
 - V4 完成前不 push。
+
+## 2026-07-27 V4-F E2E / v0.5.0 Release Readiness
+
+- V4-F 本地端到端验收与发布准备已完成；目标 tag 为 `v0.5.0`，固定解释器为 `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
+- 真实 E2E 覆盖：`files → Modeling Panel Artifact`（真实 Runner、Builder、Store、Validator）以及 `Modeling Panel → ML`（本次持久化 Parquet 通过 `panel_path_override` 交给真实 ML Executor，并实际训练 Ridge）。
+- Factor Research 边界是明确标注的 orchestration integration：从真实 frozen `FactorResearchExecutionResult.published_outputs` 与合法 tmp Parquet 开始，真实执行 Modeling Panel Executor/Builder/Store/Validator；没有伪装成完整 Factor Research calculation E2E。
+- 验证同一 config 两次运行得到独立 run_dir/Artifact、分别通过 Validator，不复用前次 Result，不使用 sleep/mtime；显式同目录二次 Store.write 按 no-overwrite 失败且首个 Artifact 字节不变。
+- 失败传播覆盖 Builder duplicate-key、Artifact target collision 与受控 ML failure：上游失败不执行下游，不留下 staging；ML 失败不回滚已发布且仍可 validate 的 Modeling Panel Artifact。
+- Builder 输出顺序、warnings/unmatched audit 确定；输入 DataFrame、Pipeline config 与 ML config 均保持不变；Pipeline Result 不保留 DataFrame，summary 可用 `json.dumps(..., allow_nan=False)`。
+- CLI `--help` exit 0，example YAML `safe_load + PipelineConfig.from_dict` 通过；README/docs 链接存在。`pip check` 无 broken requirements，公开导入与指定 12 个文件的内存 `compile()` 通过。
+- Canonical version audit：仓库没有独立 package/version 文件，release 由 Git tag 表达；本地 `v0.5.0` 不存在，验收时 describe 为 `v0.4.0-7-g0b8db00`。
+- Targeted E2E：`10 passed in 11.09s`。
+- V4 suite：`317 passed, 2 skipped in 20.10s`。
+- Pipeline / ML / Factor Research regression：`162 passed, 2 skipped in 45.50s`。
+- Full pytest：`1863 passed, 4 skipped, 11 warnings in 152.48s`；相对 V4-E3 1853 passed 基线增加 10 passed，failed=0。4 skipped 均为既有 Windows symlink 权限条件用例；11 warnings 均为既有 pandas 非法日期解析 `UserWarning`。
+- HistGradientBoosting 回归在受限沙箱内曾因 Windows named-pipe 权限失败；未修改代码或环境变量，在允许本地线程池的相同解释器中按原命令重跑通过，并在全量测试中再次通过。
+- TODO/placeholder、危险模式与 secret-like 扫描通过；测试只写 `tmp_path`，仓库没有本阶段 Artifact、`.tmp-*`、backup 或 staging 残留。
+- 本阶段未修改生产代码，未安装/升级/卸载依赖，未执行远程 Git，未 add、commit、push、tag、merge 或 rebase。
+- 发布准备记录：`docs/06_v0.5.0_release_readiness.md`。
+- 下一步：本地提交 V4-F；fresh fetch/remote divergence check；合并 `feature/modeling-panel → main`；合并后全量测试；annotated tag `v0.5.0`；一次性 push main 与 tag。
