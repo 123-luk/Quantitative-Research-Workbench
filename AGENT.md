@@ -2135,3 +2135,27 @@ V3-I1B completed scope:
   failures. The two skips remain platform-conditional symlink cases. The 11
   warnings remain the existing pandas date-format `UserWarning` category
   from unchanged factor invalid-date tests.
+
+## 2026-07-27 HistGradientBoosting ModelError Maintenance
+
+Maintenance fix completed:
+- Work continued on local branch `feature/ml-framework` from committed
+  V3-I1B HEAD `997daf8608cc5107fee752a63542c7ab198b8b8a`.
+- Fixed the HistGradientBoosting fit exception path by importing the existing
+  public `ModelError` base class from `src.ml.models.base`.
+- A low-level estimator fit failure is now wrapped as the existing
+  `ModelFitError` instead of being masked by `NameError`.
+- The original low-level exception is retained as `__cause__` through
+  `raise ... from exc`.
+- Added a deterministic monkeypatched estimator-fit regression test that
+  checks the exception type, cause identity, compact error text, and
+  unchanged unfitted state.
+- The inherited prediction path already wraps failures with the existing
+  `ModelPredictionError` and had no undefined exception reference.
+- Normal model behavior, configuration, early stopping, native missing-value
+  handling, preprocessing, prediction, and audit contracts were unchanged.
+- Targeted HistGradientBoosting tests completed with `76 passed`.
+- Model regression tests completed with `306 passed`.
+- Tree module import, two-file syntax, and all `ModelError` reference checks
+  completed successfully.
+- Full pytest completed with `1534 passed, 2 skipped, 11 warnings`, zero

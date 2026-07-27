@@ -14,6 +14,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 
 from src.ml.models.base import (
     ModelConfigError,
+    ModelError,
     ModelDataError,
     ModelFeatureImportanceUnavailableError,
     ModelFitAudit,

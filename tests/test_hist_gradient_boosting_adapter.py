@@ -22,6 +22,7 @@ from src.ml import (
     ModelFeatureImportanceUnavailableError,
     ModelFeatureMismatchError,
     ModelFitAudit,
+    ModelFitError,
     ModelNotFittedError,
 )
 import src.ml.models.tree as tree_module
@@ -340,6 +341,32 @@ def test_failed_initial_fit_leaves_no_fitted_state() -> None:
         adapter.fit(X.assign(factor_a=np.inf), y)
     assert not adapter.is_fitted
     assert adapter.feature_names == ()
+
+
+def test_estimator_fit_failure_is_wrapped_without_name_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    X, y = _data()
+    original_error = RuntimeError("injected estimator fit failure")
+
+    def fail_fit(
+        estimator: HistGradientBoostingRegressor,
+        fit_x: object,
+        fit_y: object,
+        *args: object,
+        **kwargs: object,
+    ) -> HistGradientBoostingRegressor:
+        raise original_error
+
+    monkeypatch.setattr(HistGradientBoostingRegressor, "fit", fail_fit)
+    adapter = HistGradientBoostingModelAdapter(_fast_config())
+    with pytest.raises(ModelFitError, match="hist_gradient_boosting.*fit") as caught:
+        adapter.fit(X, y)
+    assert caught.value.__cause__ is original_error
+    assert not isinstance(caught.value, NameError)
+    assert X.to_string() not in str(caught.value)
+    assert y.to_string() not in str(caught.value)
+    assert not adapter.is_fitted
 
 
 def test_same_configuration_and_data_are_reproducible() -> None:
