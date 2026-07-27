@@ -2084,3 +2084,54 @@ V3-I1A completed scope:
   This stage did not modify `src/ml/models/tree.py`.
 - Next planned stage: V3-I1B CLI, example YAML, documentation, and final
   acceptance.
+
+## 2026-07-27 V3-I1B Unified ML Pipeline CLI
+
+V3-I1B completed scope:
+- Work continued in local-development mode on branch
+  `feature/ml-framework` from committed V3-I1A HEAD
+  `cebcc9fa9f1e4095b407b5b443ca2e5363243e35`.
+- V3 core feature development is complete through the unified Pipeline CLI,
+  example configuration, and user documentation.
+- The existing `scripts/run_pipeline.py` remains the single entry point and
+  now accepts opt-in ML options. `parse_args(argv=None)` and
+  `main(argv=None)` support direct testing while preserving `sys.argv`
+  behavior.
+- Precedence is built-in defaults, then YAML, then only explicitly supplied
+  CLI leaves. Unspecified argparse ML values are `None` and never replace
+  YAML. Panel, model, importance, and artifact options do not implicitly
+  enable ML.
+- `--ml-model-params` uses strict `json.loads` object parsing. NaN and
+  infinities are rejected, and eval, exec, and `ast.literal_eval` are not
+  used. The CLI mapping completely replaces, rather than shallow-merges, the
+  YAML model-parameter mapping.
+- ML, Artifact persistence, and permutation importance remain disabled by
+  default. Importance leaf overrides require enabled importance options;
+  explicit enable creates the established defaults, while explicit disable
+  removes the options.
+- ML-specific CLI and Pipeline errors print one compact stderr line and map
+  to stable exit codes 2 through 6. Artifact target collisions return 5.
+  Existing non-ML exceptions retain their prior propagation behavior.
+- Disabled JSON and human output remain unchanged and add no
+  `ml_experiment` key or disabled notice. Enabled output adds only a compact
+  ML summary and never prints predictions, complete model parameters,
+  DataFrames, or a manifest.
+- Added `config/ml_experiment.example.yaml`, disabled by default with Ridge,
+  safe relative paths, one pre-merged Parquet panel, Artifact persistence
+  off, and permutation importance off.
+- Added `docs/07_ml_experiment_guide.md` and updated README and Pipeline
+  design documentation. The guide records supported models, panel schema,
+  time-safe evaluation, CLI overrides, artifacts, and exit codes.
+- The current integration does not add Streamlit ML UI, automatic tuning,
+  multi-model comparison, portfolio backtesting, LightGBM, or XGBoost.
+- Targeted CLI/Pipeline tests completed with `121 passed, 2 skipped`.
+- Pipeline regression tests completed with `209 passed, 2 skipped`.
+- V3 ML plus integration tests completed with `643 passed, 2 skipped`.
+- Public imports, CLI help, example YAML, strict model-parameter parsing,
+  four-file syntax, default-disabled configuration, CLI import
+  no-side-effect, unsafe parser, model-call, sensitive-output, alternate
+  format, and documentation-claim checks completed successfully.
+- Full pytest completed with `1533 passed, 2 skipped, 11 warnings`, zero
+  failures. The two skips remain platform-conditional symlink cases. The 11
+  warnings remain the existing pandas date-format `UserWarning` category
+  from unchanged factor invalid-date tests.

@@ -2,6 +2,14 @@
 
 from src.pipeline.config import PipelineConfig
 from src.pipeline.experiment import ExperimentManager
+from src.pipeline.ml_cli import (
+    MLCLIConfigError,
+    MLCLIError,
+    exit_code_for_ml_error,
+    format_ml_human_summary,
+    merge_ml_cli_overrides,
+    parse_ml_model_params,
+)
 from src.pipeline.ml_config import (
     MLExperimentPipelineConfig,
     MLPipelineConfigError,
@@ -25,6 +33,8 @@ from src.pipeline.runner import run_pipeline
 
 __all__ = [
     "ExperimentManager",
+    "MLCLIConfigError",
+    "MLCLIError",
     "MLExperimentPipelineConfig",
     "MLExperimentPipelineExecutor",
     "MLExperimentPipelineResult",
@@ -35,6 +45,10 @@ __all__ = [
     "MLPipelineIntegrityError",
     "MLPipelinePanelError",
     "read_ml_modeling_panel",
+    "exit_code_for_ml_error",
+    "format_ml_human_summary",
+    "merge_ml_cli_overrides",
+    "parse_ml_model_params",
     "FactorResearchExecutionResult",
     "FactorResearchPipelineExecutor",
     "FactorResearchPipelineConfig",

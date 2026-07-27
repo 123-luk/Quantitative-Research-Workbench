@@ -1,0 +1,54 @@
+# The ML panel must already combine features, entry/exit audit columns, and
+# the forward label. The Pipeline does not generate labels or merge Factor
+# Research tables. Any unreserved auxiliary column may be inferred as a feature.
+data:
+  root: data
+  raw_dir: data/raw
+  processed_dir: data/processed
+  cache_dir: data/cache
+  output_dir: data/output
+  parquet_engine: auto
+  required_datasets:
+    - daily
+
+pipeline:
+  backtest_start: "2024-01-01"
+  backtest_end: "2024-12-31"
+  train_years: 1
+  max_lookback_months: 1
+  stock_pool: hs300
+  benchmark: 000300.SH
+  strategy_name: ml_experiment
+  rebalance_frequency: M
+  top_n: 20
+  transaction_cost: 0.001
+
+strategy:
+  transaction_cost: 0.001
+
+factors:
+  selected: []
+
+ml_experiment:
+  enabled: false
+  panel_path: data/processed/ml_modeling_panel.parquet
+  save_artifacts: false
+  artifact_root: ml_artifacts
+  experiment_id: null
+  parquet_compression: zstd
+  experiment:
+    dataset:
+      label_col: forward_return
+    walk_forward:
+      train_window_periods: 252
+      validation_periods: 20
+      window_type: rolling
+      retrain_frequency: 20
+      embargo_periods: 1
+    training:
+      model_name: ridge
+      model_params:
+        alpha: 1.0
+    evaluation:
+      minimum_cross_section_size: 3
+    permutation_importance: null
