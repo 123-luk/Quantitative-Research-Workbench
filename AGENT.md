@@ -2023,3 +2023,64 @@ V3-H completed scope:
 - Fixed interpreter:
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next planned stage: V3-I Pipeline/CLI integration and documentation.
+
+## 2026-07-27 V3-I1A ML Pipeline Integration
+
+V3-I1A completed scope:
+- Work continued in local-development mode on branch
+  `feature/ml-framework` from committed V3-H HEAD
+  `30396a2cc64502687a587c1730872545e1879256`. The V3-I0 read-only
+  Pipeline, CLI, and YAML configuration audit was completed before this
+  implementation.
+- Added the immutable `MLExperimentPipelineConfig`. The ML stage is disabled
+  by default, uses strict mapping fields, and round-trips nested
+  `MLExperimentConfig` through its public configuration API.
+- `PipelineConfig` now owns the optional top-level `ml_experiment` section.
+  Existing YAML without that section remains disabled, and existing
+  `factor_research` configuration stays independent.
+- Added a modeling-panel reader for one pre-merged pyarrow Parquet file. It
+  supports relative paths resolved against a stable project root and
+  absolute paths, rejects symlinks and non-Parquet inputs, checks the
+  required key/date/label columns and at least one candidate feature, and
+  preserves row order, column order, and dtypes.
+- CSV is not supported. The Pipeline does not generate or merge modeling
+  panels and does not fill, drop, sort, normalize, or standardize their
+  contents.
+- Added `MLExperimentPipelineExecutor`, which invokes the public
+  `MLExperimentRunner` API and optionally the public
+  `MLExperimentArtifactStore` API. It retains no panel, experiment result,
+  Registry, Adapter, model, or ArtifactStore state.
+- Artifact persistence remains disabled by default. When enabled, artifacts
+  are confined to a validated relative child of the current Pipeline
+  `run_dir`; existing experiment directories are not overwritten.
+- `run_pipeline` now runs the optional ML stage after the optional Factor
+  Research stage and uses the existing run directory. The two stages are
+  independently configured and are not implicitly coupled.
+- When ML is disabled, no panel is read, no model is trained, no ML artifact
+  directory is created, and the legacy summary key set remains unchanged.
+  The configuration snapshot still records the disabled ML configuration.
+- When ML succeeds, the Pipeline returns a compact ML summary with model,
+  fold and prediction counts, regression and IC summaries, importance
+  status, and artifact status. It does not return predictions, evaluation
+  tables, full model parameters, or an `MLExperimentResult`.
+- The CLI, example YAML, user documentation, ExperimentManager, `src/ml`,
+  and dependency declarations were not modified. CLI/example/documentation
+  integration remains assigned to V3-I1B.
+- Targeted V3-I1A tests completed with `63 passed, 2 skipped`.
+- Pipeline regression tests completed with `164 passed, 2 skipped`.
+- Complete V3 ML regression tests completed with `598 passed, 2 skipped`.
+- Public imports, default-disabled configuration, minimal enabled
+  configuration round-trip, seven-file syntax, prohibited algorithm,
+  persistence/external-integration, alternate-format, and private ML API
+  scans completed successfully.
+- Full pytest completed with `1488 passed, 2 skipped, 11 warnings`, zero
+  failures. The two skips are platform-conditional symlink cases. The 11
+  warnings remain existing pandas date-format `UserWarning` messages from
+  unchanged factor invalid-date tests; V3-I1A added no warning category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Known deferred maintenance issue: the HistGradientBoosting exception path
+  references an unimported `ModelError`, which can produce `NameError`.
+  This stage did not modify `src/ml/models/tree.py`.
+- Next planned stage: V3-I1B CLI, example YAML, documentation, and final
+  acceptance.
