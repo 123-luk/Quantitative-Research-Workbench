@@ -2159,3 +2159,36 @@ Maintenance fix completed:
 - Tree module import, two-file syntax, and all `ModelError` reference checks
   completed successfully.
 - Full pytest completed with `1534 passed, 2 skipped, 11 warnings`, zero
+
+## 2026-07-27 V4-A Modeling Panel Contracts
+
+V4-A completed scope:
+- Work is on local branch `feature/modeling-panel` from V4 baseline HEAD
+  `c79f6770a4ae0629d45aeda8dde98e7b5e4e233f`.
+- V4 development mode uses local commits for each stage and no push before V4
+  is complete. This stage did not create a commit or push.
+- The V4-A0 read-only review is complete, and V4-A Modeling Panel contracts
+  are complete.
+- Added the independent `src/modeling_panel` package with schema version
+  `1.0`, fixed keys `trade_date` / `ts_code`, and fixed audit columns for
+  entry/exit dates and prices.
+- `ModelingPanelConfig` defines `label_column`, mutually exclusive
+  `include_features` / `exclude_features`, `unmatched_policy`, strict boolean
+  rules for entry ordering and missing labels, and allows missing labels by
+  default.
+- `ModelingPanelUnmatchedAudit` stores only bounded, deterministic sampled
+  keys. `ModelingPanelAudit` stores validated aggregate statistics and never
+  stores complete unmatched tables.
+- `ModelingPanelResult` deep-copies its DataFrame at construction and on every
+  `panel` access. It does not retain original factor or return inputs.
+- This stage did not implement the Builder, Artifact persistence, Pipeline,
+  CLI, YAML, or ML integration.
+- Targeted contract tests completed with `94 passed`.
+- Related Factor Research, forward-return, ML dataset/runner, and contract
+  regressions completed with `296 passed, 2 warnings`.
+- Full pytest completed with `1628 passed, 2 skipped, 11 warnings`, zero
+  failures. The two skips remain existing platform-conditional symlink cases;
+  the warnings remain the existing pandas date-format `UserWarning` category.
+- Fixed interpreter:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next planned stage: V4-B Modeling Panel Builder.
