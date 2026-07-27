@@ -2449,3 +2449,71 @@ override，V4-E3 为 CLI + YAML + docs。
 - 固定 Python：
   `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`。
 - 下一阶段：V4-E3 CLI + YAML + docs。
+## 2026-07-27 V4-E3 CLI + YAML Example + Modeling Panel Docs
+
+阶段：V4-E3 CLI、YAML 示例与 Modeling Panel 用户文档。
+
+真实 CLI 与实现：
+- 真实统一入口为 `scripts/run_pipeline.py --config PATH`，使用 argparse、
+  PyYAML `safe_load` 和 `run_pipeline()`。未新增任何 Modeling Panel
+  stage-specific 参数；YAML 仍是 Modeling Panel 的单一配置来源。
+- 现有 `PipelineConfig.from_yaml()` 只支持旧 grouped YAML，未读取
+  `modeling_panel`。因此脚本增加最小 dual-schema loader：包含
+  `modeling_panel` 的完整 direct PipelineConfig YAML 经
+  `safe_load → PipelineConfig.from_dict()`；旧 grouped YAML 继续交给
+  `PipelineConfig.from_yaml()`，Factor Research/ML CLI 兼容测试保持通过。
+- CLI 不解析 Modeling Panel 嵌套字段，不读取 Parquet，不调用 Builder、
+  Artifact Store 或 ML core，不拼 Artifact path，也不扫描目录。CLI
+  Modeling Panel config/execution error 使用简洁单行 stderr 和非零退出码。
+- Compact JSON/human output 现在透传本次 Runner 的 `modeling_panel`
+  summary。既有 Factor Research 与 ML summary 结构保持。
+- 显式 ML CLI leaves 合并后重新通过 `PipelineConfig.from_dict()`，确保
+  Modeling Panel + ML 的单一 panel 来源规则仍由顶层 Config 统一验证。
+
+示例与文档：
+- 新增 `config/modeling_panel_pipeline.example.yaml`，使用真实 direct
+  PipelineConfig schema。默认 Factor Research disabled、Modeling Panel
+  enabled/files mode、ML disabled，required_datasets 为空；两条输入为项目
+  相对的本地 Parquet 占位路径，不触发网络。
+- 示例注释说明 factor_research source 依赖、files 独立性，以及 chained
+  ML 必须 `panel_path: null`、direct ML 必须显式 `.parquet` path。
+- 新增中文 `docs/05_modeling_panel_pipeline.md`，覆盖作用与非目标、数据流、
+  输入表、时间安全、unmatched policy、四文件 Artifact、SHA-256/
+  manifest-last/no-overwrite、真实 YAML、三种运行方式、路径语义、
+  PowerShell 命令、summary/audit/manifest/Validator、常见错误与 V3 ML
+  兼容。
+- README 增加最小 Modeling Panel 入口、Factor Research → Modeling
+  Panel → ML 数据链路、示例/文档链接、PowerShell 命令、四文件布局和
+  no-overwrite 提示；未宣称完全防泄漏或未实现能力。
+
+路径与命令：
+- `--config` 相对路径基于 CLI 调用时 cwd。
+- Pipeline 执行阶段的 files source 和相对 output_dir 基于项目根目录。
+- run_dir 为 `<output_dir>/runs/<run_id>/`；Modeling Panel 输出为
+  `<run_dir>/<artifact_subdir>/`。
+- 固定命令：
+  `& "E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" scripts/run_pipeline.py --config "config/modeling_panel_pipeline.example.yaml"`。
+
+验证结果：
+- Targeted CLI/YAML/docs：19 passed。
+- Pipeline config/chaining regression：79 passed。
+- Existing CLI regression（新增 + Factor Research + ML）：77 passed。
+- Example `safe_load + PipelineConfig.from_dict` 通过，Modeling Panel
+  enabled=True。
+- Public CLI `--help` exit 0；2 文件 syntax compile 通过。
+- YAML unsafe loader、CLI core-call、目录扫描、额外 stage 参数扫描均干净；
+  README/docs/example 引用扫描通过。
+- Related regression：187 passed, 4 skipped。
+- Full pytest：1853 passed, 4 skipped, 11 warnings，zero failures。
+- 4 skipped 均为 Windows 平台条件 symlink 用例；11 warnings 数量和类别
+  与 V4-E2 基线一致，均为既有 pandas 日期解析 `UserWarning`。
+
+范围与工作流：
+- 未修改 Runner、Pipeline Config/Executor、ML Config/Executor、Factor
+  Research、`src/modeling_panel`、`src/factors` 或 `src/ml`。
+- 未修改 `src/pipeline/ml_cli.py`，因为真实必要逻辑位于脚本本身。
+- 未安装、升级或卸载依赖；未执行远程 Git；未 add、commit、push 或 tag。
+- 测试在 monkeypatched Runner/tmp_path 边界内运行，仓库内无
+  Modeling Panel Artifact 或新 output/runs 残留。
+- 下一阶段：V4-F E2E / release readiness。
+- V4 完成前不 push。

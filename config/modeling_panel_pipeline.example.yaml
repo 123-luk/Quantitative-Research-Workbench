@@ -1,0 +1,57 @@
+# Complete direct PipelineConfig example for an offline files -> Modeling Panel run.
+# Replace the two input paths with local Parquet files before executing.
+backtest_start: "2024-01-01"
+backtest_end: "2024-12-31"
+train_years: 1
+max_lookback_months: 1
+stock_pool: hs300
+benchmark: 000300.SH
+strategy_name: modeling_panel_example
+selected_factors: []
+rebalance_frequency: M
+top_n: 20
+transaction_cost: 0.001
+data_root: data
+raw_data_dir: data/raw
+processed_data_dir: data/processed
+cache_dir: data/cache
+output_dir: data/output
+parquet_engine: auto
+required_datasets: []
+
+# files mode does not require Factor Research.
+# For factor_research mode, enable this stage and set the Modeling Panel source
+# mode to factor_research with both source paths null.
+factor_research:
+  enabled: false
+
+modeling_panel:
+  enabled: true
+  source:
+    mode: files
+    factor_panel_path: data/processed/modeling_factor_panel.parquet
+    forward_returns_path: data/processed/modeling_forward_returns.parquet
+  builder:
+    label_column: forward_return
+    include_features: null
+    exclude_features: []
+    unmatched_policy: audit_and_drop
+    require_entry_after_signal: true
+    allow_missing_labels: true
+  output:
+    save_artifact: true
+    artifact_subdir: modeling_panel
+    parquet_compression: zstd
+    verify_after_write: true
+
+# Chained ML mode: set enabled true, keep panel_path null, and provide a valid
+# experiment block. Direct ML mode instead disables modeling_panel and supplies
+# an explicit .parquet panel_path. Never configure both panel sources.
+ml_experiment:
+  enabled: false
+  panel_path: null
+  save_artifacts: false
+  artifact_root: ml_artifacts
+  experiment_id: null
+  parquet_compression: zstd
+  experiment: null

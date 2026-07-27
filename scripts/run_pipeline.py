@@ -11,6 +11,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Sequence
 
+import yaml
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -25,6 +27,10 @@ from src.pipeline.ml_cli import (  # noqa: E402
     parse_ml_model_params,
 )
 from src.pipeline.ml_config import MLPipelineError  # noqa: E402
+from src.pipeline.modeling_panel_config import (  # noqa: E402
+    ModelingPanelPipelineConfigError,
+    ModelingPanelPipelineError,
+)
 from src.pipeline.runner import run_pipeline  # noqa: E402
 
 
@@ -47,7 +53,7 @@ def parse_args(
     parser.add_argument(
         "--config",
         default=str(PROJECT_ROOT / "config" / "config.yaml"),
-        help="Path to the YAML config file.",
+        help="Path to YAML config; direct PipelineConfig YAML supports modeling_panel.",
     )
     parser.add_argument("--backtest-start", help="Backtest start date in YYYY-MM-DD.")
     parser.add_argument("--backtest-end", help="Backtest end date in YYYY-MM-DD.")
@@ -214,6 +220,24 @@ def build_ml_cli_overrides(
     }
 
 
+def load_pipeline_config(
+    config_path: Path,
+    overrides: dict[str, Any],
+) -> PipelineConfig:
+    """Load direct Modeling Panel YAML or preserve the legacy grouped schema."""
+    with config_path.open("r", encoding="utf-8") as file:
+        raw = yaml.safe_load(file)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Config must be a YAML mapping: {config_path}")
+    if "modeling_panel" not in raw:
+        return PipelineConfig.from_yaml(
+            config_path=config_path,
+            overrides=overrides,
+        )
+    values = dict(raw)
+    values.update(overrides)
+    return PipelineConfig.from_dict(values)
+
 def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, Any]:
     """Build a compact JSON-safe summary without full tables or manifests."""
     research = summary.get("factor_research")
@@ -256,6 +280,9 @@ def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, A
         "run_dir": summary.get("run_dir"),
         "factor_research": research_output,
     }
+    modeling_summary = summary.get("modeling_panel")
+    if isinstance(modeling_summary, dict):
+        output["modeling_panel"] = dict(modeling_summary)
     ml_summary = summary.get("ml_experiment")
     if isinstance(ml_summary, dict):
         output["ml_experiment"] = dict(ml_summary)
@@ -295,6 +322,17 @@ def print_human_summary(output: dict[str, Any]) -> None:
             "Manifest verification status: "
             + str(research.get("manifest_verification"))
         )
+    modeling = output.get("modeling_panel")
+    if isinstance(modeling, dict) and modeling.get("enabled") is True:
+        print("Modeling panel enabled: true")
+        print(f"Modeling panel path: {modeling.get('panel_path')}")
+        print(f"Modeling panel artifact: {modeling.get('artifact_dir')}")
+        print(
+            "Modeling panel features: "
+            + ", ".join(
+                str(name) for name in modeling.get("feature_names", ())
+            )
+        )
     for line in format_ml_human_summary(output.get("ml_experiment")):
         print(line)
 
@@ -323,9 +361,9 @@ def main(
 
     try:
         with _working_directory(PROJECT_ROOT):
-            config = PipelineConfig.from_yaml(
-                config_path=config_path,
-                overrides=build_overrides(args),
+            config = load_pipeline_config(
+                config_path,
+                build_overrides(args),
             )
             ml_overrides = build_ml_cli_overrides(args)
             if ml_overrides:
@@ -333,6 +371,7 @@ def main(
                     config.ml_experiment,
                     ml_overrides,
                 )
+                config = PipelineConfig.from_dict(config.to_dict())
             summary = run_pipeline(config)
             output = build_output(config, summary)
             if args.json:
@@ -345,6 +384,14 @@ def main(
                 )
             else:
                 print_human_summary(output)
+    except ModelingPanelPipelineConfigError as exc:
+        message = " ".join(str(exc).splitlines())
+        print(f"Modeling Panel config error: {message}", file=sys.stderr)
+        return 2
+    except ModelingPanelPipelineError as exc:
+        message = " ".join(str(exc).splitlines())
+        print(f"Modeling Panel pipeline error: {message}", file=sys.stderr)
+        return 4
     except (MLCLIError, MLPipelineError) as exc:
         message = " ".join(str(exc).splitlines())
         print(f"ML pipeline error: {message}", file=sys.stderr)

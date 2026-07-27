@@ -230,3 +230,37 @@ python scripts/run_pipeline.py --config config/ml_experiment.example.yaml --ml -
 
 See [ML Experiment Guide](docs/07_ml_experiment_guide.md) for the panel
 contract, configuration, CLI options, metrics, artifacts, and exit codes.
+
+## V4 Modeling Panel Pipeline
+
+Modeling Panel 将因子特征表和 forward returns 按安全的一对一时间契约合并，
+并发布可审计的 ML 输入 Artifact。当前数据链路为：
+
+```text
+Factor Research → Modeling Panel → ML Experiment
+```
+
+可复制配置：
+[config/modeling_panel_pipeline.example.yaml](config/modeling_panel_pipeline.example.yaml)。
+详细输入契约、三种 source/chain 方式和常见错误见
+[Modeling Panel Pipeline 使用指南](docs/05_modeling_panel_pipeline.md)。
+
+在项目根目录使用 PowerShell 运行：
+
+```powershell
+& "E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" `
+  scripts/run_pipeline.py `
+  --config "config/modeling_panel_pipeline.example.yaml"
+```
+
+默认 Artifact 位于 `<run_dir>/modeling_panel/`：
+
+| 文件 | 内容 |
+| --- | --- |
+| `modeling_panel.parquet` | 已验证的训练面板 |
+| `config.json` | Builder 配置快照 |
+| `audit.json` | 匹配、缺失值、时间和标签审计 |
+| `manifest.json` | Schema、dtype、大小与 SHA-256 |
+
+Artifact Store 不覆盖既有目录；重复目标会明确失败。该边界降低结构性泄漏
+风险，但不替代对 feature 生成时点和经济含义的人工审查。
