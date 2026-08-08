@@ -2537,3 +2537,18 @@ override，V4-E3 为 CLI + YAML + docs。
 - 本阶段未修改生产代码，未安装/升级/卸载依赖，未执行远程 Git，未 add、commit、push、tag、merge 或 rebase。
 - 发布准备记录：`docs/06_v0.5.0_release_readiness.md`。
 - 下一步：本地提交 V4-F；fresh fetch/remote divergence check；合并 `feature/modeling-panel → main`；合并后全量测试；annotated tag `v0.5.0`；一次性 push main 与 tag。
+
+## 2026-08-08 V5-A Signal / Holdings Contracts + Canonical Config Semantics
+
+- V5-A completed on local branch `feature/signal-holdings`; target release is `v0.6.0`.
+- Signal and Holdings are independent packages. Signal owns prediction-to-score and direction semantics; Holdings owns Top-N, insufficient-universe policy, and target holdings semantics.
+- Top-N belongs only to Holdings. `HoldingsPipelineConfig.top_n` is the canonical source, defaults to 20, accepts only built-in `int`, rejects bool/float/string/numpy integers, requires `>= 1`, and has no static maximum.
+- UI/YAML/backend must use the same Holdings config value. Builders and UI must not define a second N default.
+- V5 is long-only and supports only `weighting=equal_weight`; insufficient-universe values are `error` and `allow_partial`.
+- Signal source modes are `ml` and `files`. Files mode accepts only an explicit native ML Artifact directory that a later execution stage must validate with the existing ML Artifact validator. A bare `predictions.parquet`, `prediction_path`, or `manifest_path` is forbidden as OOS proof.
+- V5-A did not change `src/ml` core or the ML Artifact schema. Legacy root `top_n` and top-level `PipelineConfig` remain untouched until V5-E1 defines compatibility/conflict semantics.
+- Added canonical Signal columns `trade_date, ts_code, score, rank` and Holdings columns `trade_date, ts_code, target_weight, score, rank`; no Builder, ranking, Top-N, weighting execution, Artifact I/O, Runner, CLI, or UI implementation was added.
+- Syntax compile: 8 files passed without repo bytecode/cache. Targeted tests: 67 passed. Related config regression: 122 passed.
+- Full pytest: 1930 passed, 4 skipped, 11 warnings. The initial restricted-sandbox run had 21 existing HistGradientBoosting/joblib permission failures; the identical fixed-interpreter command passed with local process permissions. Skips and warnings match the V5-A0 baseline.
+- No remote Git, dependency change, stage, commit, push, fetch, pull, merge, or tag operation was performed.
+- Next stage: V5-B Signal Builder, prediction normalization, OOS guard, signal direction, and deterministic ranking.
