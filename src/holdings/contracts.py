@@ -20,6 +20,10 @@ class HoldingsContractError(ValueError):
     """Raised when a Holdings schema declaration violates the contract."""
 
 
+class HoldingsDataError(HoldingsContractError):
+    """Raised when canonical Signals cannot form valid Holdings."""
+
+
 def _column_tuple(columns: Iterable[object], field_name: str) -> tuple[str, ...]:
     if isinstance(columns, (str, bytes)):
         raise HoldingsContractError(

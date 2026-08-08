@@ -2585,3 +2585,23 @@ override，V4-E3 为 CLI + YAML + docs。
 - V5-C contains no Top-N, selection, Holdings, weighting, source discovery, Pipeline, Runner, CLI, UI, or backtest behavior. `src/ml`, `src/pipeline`, `src/holdings`, `app`, and `scripts` have zero diff; no Artifact schema outside Signal was changed.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency changes, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V5-D Holdings Builder + Artifact.
+
+## 2026-08-08 V5-D Holdings Builder + Holdings Artifact
+
+- V5-D completed on local branch `feature/signal-holdings`; start and final HEAD remain `215b7c26f5f2da46f91b04884e3becac10f76273`.
+- Added `HoldingsBuilder` with explicit required `top_n`, `insufficient_universe_policy`, and `weighting` arguments. The Builder has no business defaults; `HoldingsPipelineConfig` remains the unique canonical owner of the default `top_n=20`.
+- Runtime `top_n` validation exactly matches config semantics: built-in `int` only, bool/float/string/numpy integer rejected, value at least one, and no backend maximum. Tests prove `top_n=1`, `10`, and `20`, plus changing-N prefix, score, rank, and input invariants.
+- Selection uses only existing canonical Signal `rank <= top_n`; Holdings never recalculates rank or sorts by score. Signal score and rank are preserved unchanged.
+- `insufficient_universe_policy=error` fails the complete build with explicit trade date, requested N, and available count. `allow_partial` selects the entire smaller universe, retains requested N in config, and records deterministic per-date available/selected/partial audit metadata.
+- V5 weighting is exclusively `equal_weight`: every selected row receives `1.0 / K`, weights are finite and strictly positive, and each date sums to one with absolute tolerance `1e-12`. This is long-only with no leverage, shorting, or alternate weighting algorithm.
+- Canonical Holdings output is exactly `trade_date, ts_code, target_weight, score, rank`, ordered by trade date, rank, and code. Builder input must be strict canonical Signal order and is defensively copied.
+- Added Holdings Artifact schema `1.0` with exact files `holdings.parquet`, `config.json`, `audit.json`, and `manifest.json`. Config records effective top_n/policy/weighting; audit records input/output/date/per-date/partial/weight integrity; manifest records schema, rows/columns/dtypes, business config, direct Signal provenance, and deterministic payload file records.
+- Direct Signal provenance records Signal artifact directory, fixed `signals.parquet` path, Signal schema version, and Signal SHA-256. It can be constructed from the public Signal Artifact write result; Holdings validation remains self-contained if the source Artifact is later moved.
+- Holdings persistence uses byte size and SHA-256, manifest-last, same-parent `.tmp-*` staging, complete pre-publish validation, one atomic `os.replace`, strict no-overwrite, handled-failure cleanup, no backup, and no latest/mtime/sibling discovery.
+- Structured Validator covers exact directory/file safety, strict JSON, checksums/sizes, Parquet schema/dtypes/order, canonical keys, finite score, positive equal weights, per-date sum, count/top_n/policy rules, contiguous selected ranks, and config/audit/manifest/Parquet cross-file consistency.
+- Tamper and failure tests cover missing/extra/corrupt files, JSON/schema/config/provenance/audit disagreements, invalid weights/counts/ranks/order, Parquet/JSON/validation/rename failures, second-write preservation, and staging cleanup.
+- Targeted Holdings tests: `98 passed`. V5 A-D regression: `278 passed`. Modeling Panel/Signal/Holdings Artifact regression: `124 passed`.
+- Full pytest: `2141 passed, 4 skipped, 11 warnings in 171.13s`; this is +98 passed over V5-C. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- `src/signals`, `src/pipeline`, `src/ml`, `app`, and `scripts` have zero diff. No Runner, UI, CLI/YAML, legacy selection, backtest, dependency, or remote Git changes were made.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-E1 Pipeline Config + Executors.
