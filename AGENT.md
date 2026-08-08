@@ -2641,3 +2641,21 @@ override，V4-E3 为 CLI + YAML + docs。
 - No CLI/YAML/docs/UI, config, executor, src/ml, Signal core, Holdings core, dependency, or remote Git changes were made. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe.
 - Next stage: V5-E3 CLI/YAML/docs.
+
+## 2026-08-08 V5-E3 CLI, YAML, and Documentation Integration
+
+- V5-E3 completed on local branch feature/signal-holdings; start and final HEAD remain c5931e2af6dc8cec8ca79699c5eb69f849c21e4f.
+- The canonical V5 development command is python scripts/run_pipeline.py --config config/signal_holdings_pipeline.example.yaml. No Signal/Holdings-specific CLI flags were added; all V5 business settings come from the shared PipelineConfig YAML schema.
+- Read-only audit found that scripts/run_pipeline.py already has a legacy root --top-n override locked by the existing V3 CLI regression outside this stage's test whitelist. It was retained for backward compatibility, explicitly labeled as not configuring holdings.top_n, and tested to fail on a root/nested conflict rather than silently override V5 Holdings.
+- The existing dual-schema loader required no change. Direct YAML containing modeling_panel already routes through PipelineConfig.from_dict, while grouped YAML routes through PipelineConfig.from_yaml, which already preserves top-level signal and holdings blocks. Old direct and grouped examples remain valid with disabled V5 defaults.
+- Added config/signal_holdings_pipeline.example.yaml as a complete direct-schema files-to-Modeling-Panel-to-ML-to-Signal-to-Holdings example. It uses ML source mode, persists the native ML Artifact, selects holdings.top_n=10, and keeps the legacy root value equal only to satisfy the frozen conflict rule.
+- The example value 10 is user-selected; the canonical HoldingsPipelineConfig backend default remains 20. No second backend Top-N default was introduced.
+- Added docs/08_signal_holdings_pipeline.md because docs/07_ml_experiment_guide.md already existed. The guide documents stage order, Signal/Holdings responsibilities, ML/files source modes, bare predictions.parquet rejection, deterministic direction/ranking, per-date Top-N, insufficient-universe policies, equal_weight-only semantics, Artifact layouts, provenance, SHA-256, validation, atomic/no-overwrite publication, output inspection, compatibility, non-goals, and the V5-E4 UI bridge note.
+- README received only a compact V5 development entry with the canonical command, example/doc links, Top-N source-of-truth distinction, and an explicit non-release statement.
+- Canonical CLI compact JSON and human summaries now expose the existing frozen Signal/Holdings result summaries. The CLI does not read Artifacts, inspect Parquet, rebuild business config, scan latest paths, or duplicate Builder logic.
+- Added real loader tests for direct/grouped/current/old YAML, strict invalid config and root/nested conflict tests, same-value acceptance, example roundtrip/secrets checks, help/static scope checks, summary traceability, and documentation consistency.
+- A real tmp-path CLI-to-Runner integration uses files-mode native ML Artifact input and unmocked V5 core, validates both Artifacts, and confirms holdings.top_n in the run snapshot.
+- Targeted E3 tests: 10 passed. CLI regression: 74 passed. Config/Runner regression: 36 passed. V5 regression: 310 passed.
+- Full pytest: 2188 passed, 4 skipped, 11 warnings in 163.39s; this is +10 passed over V5-E2. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe. No UI, src, legacy script, dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-E4 Minimal UI Parameter Bridge.

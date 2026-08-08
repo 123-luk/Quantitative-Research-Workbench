@@ -65,7 +65,14 @@ def parse_args(
     )
     parser.add_argument("--strategy-name", help="Strategy name used in run metadata.")
     parser.add_argument("--stock-pool", help="Stock pool name used in run metadata.")
-    parser.add_argument("--top-n", type=int, help="Number of selected stocks.")
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        help=(
+            "Legacy root-workflow selection count; does not configure "
+            "holdings.top_n."
+        ),
+    )
     parser.add_argument("--benchmark", help="Benchmark index code.")
     parser.add_argument(
         "--transaction-cost",
@@ -286,6 +293,12 @@ def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, A
     ml_summary = summary.get("ml_experiment")
     if isinstance(ml_summary, dict):
         output["ml_experiment"] = dict(ml_summary)
+    signal_summary = summary.get("signal")
+    if isinstance(signal_summary, dict):
+        output["signal"] = dict(signal_summary)
+    holdings_summary = summary.get("holdings")
+    if isinstance(holdings_summary, dict):
+        output["holdings"] = dict(holdings_summary)
     return output
 
 
@@ -335,6 +348,25 @@ def print_human_summary(output: dict[str, Any]) -> None:
         )
     for line in format_ml_human_summary(output.get("ml_experiment")):
         print(line)
+    signal = output.get("signal")
+    if isinstance(signal, dict) and signal.get("enabled") is True:
+        print("Signal enabled: true")
+        print(f"Signal source mode: {signal.get('source_mode')}")
+        print(f"Signal artifact: {signal.get('artifact_dir')}")
+        print(f"Signal path: {signal.get('signal_path')}")
+        print(f"Signal prediction column: {signal.get('prediction_column')}")
+        print(f"Signal direction: {signal.get('signal_direction')}")
+    holdings = output.get("holdings")
+    if isinstance(holdings, dict) and holdings.get("enabled") is True:
+        print("Holdings enabled: true")
+        print(f"Holdings artifact: {holdings.get('artifact_dir')}")
+        print(f"Holdings path: {holdings.get('holdings_path')}")
+        print(f"Holdings requested top_n: {holdings.get('requested_top_n')}")
+        print(
+            "Holdings insufficient universe policy: "
+            f"{holdings.get('insufficient_universe_policy')}"
+        )
+        print(f"Holdings weighting: {holdings.get('weighting')}")
 
 
 @contextmanager
