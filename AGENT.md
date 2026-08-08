@@ -2659,3 +2659,22 @@ override，V4-E3 为 CLI + YAML + docs。
 - Full pytest: 2188 passed, 4 skipped, 11 warnings in 163.39s; this is +10 passed over V5-E2. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
 - Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe. No UI, src, legacy script, dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V5-E4 Minimal UI Parameter Bridge.
+
+## 2026-08-08 V5-E4 Minimal Streamlit UI Parameter Bridge
+
+- V5-E4 completed on local branch `feature/signal-holdings`; start and final HEAD remain `8652582c51b4a45aaa0a1b2332ba89fee43e401a`.
+- The Streamlit V5 surface now loads one explicit direct-schema canonical YAML into `PipelineConfig`, applies only the exposed Signal/Holdings selections to a detached mapping, validates through `PipelineConfig.from_dict`, and calls the in-process canonical `run_pipeline(config)` service path.
+- The V5 Top N widget default is read from `HoldingsPipelineConfig().top_n` and is therefore 20. It has only `min_value=1`: there is no V5 hardcoded default 10 or UI/backend maximum 100. Tests cover 1, 10, 20, 1000 and strict invalid types/values.
+- Display mappings are fixed and tested: high score to `descending`, low score to `ascending`, error to `error`, use-all-valid to `allow_partial`; V5 weighting is shown read-only and remains exclusively `equal_weight`.
+- Signal source mode is not exposed as a new ordinary-user control. The canonical base config remains authoritative (`ml` for the natural current-run chain, or explicit `files` via YAML/CLI); prediction column and Artifact internals remain hidden.
+- The bridge preserves and never mutates the base file or `PipelineConfig`. Because the frozen E1 schema requires enabled `holdings.top_n` to equal legacy root `top_n`, the bridge contains one explicit one-way compatibility mirror derived solely from the canonical nested value; UI input, effective summaries, execution, and result reporting read only `holdings.top_n`.
+- Before execution, Streamlit displays a summary derived from the effective validated config. After success it displays run ID/directory, Signal/Holdings Artifact paths, requested Top N, Holdings rows/dates, Signal direction, and weighting directly from the Runner summary without reading Parquet or recomputing results.
+- The previous `run_research_pipeline.py --top-n` subprocess UI remains available only in an explicitly labeled Legacy research/backtest expander. The V5 controls never call that path or construct `--top-n`.
+- No ranking, Top-N selection, sorting, target-weight calculation, Parquet I/O, Artifact validation, latest/mtime discovery, or ML logic was added to the UI/config/runner services.
+- A real service integration used one validated native ML Artifact in files mode for separate Top N 5 and 10 runs. It proves identical Signal score/rank data, exact Holdings per-date counts/prefixes, and matching effective config, Runner summary, config snapshot, and Holdings Artifact config values.
+- Targeted UI bridge/service tests: `23 passed`. Config/Runner/CLI/UI regression: `60 passed`. V5 A-E4 regression: `292 passed`.
+- Full pytest: `2211 passed, 4 skipped, 11 warnings in 119.47s`; this is +23 passed over the V5-E3 baseline. The restricted sandbox reproduced the existing HistGradientBoosting/joblib Windows named-pipe permission failures; the identical fixed-interpreter command passed under approved local process permissions without a workaround.
+- Streamlit/service/config bridge compile and import smoke passed. Static source-of-truth scanning confirms V5 has no legacy Top-N default/maximum/flag or business-logic duplication; legacy-only and existing dashboard-display matches are explicitly separate.
+- No `src/pipeline`, Signal/Holdings/ML core, scripts, config, docs, README, dependency, or remote Git changes were made. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next stage: V5-F E2E and v0.6.0 release readiness.
