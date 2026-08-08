@@ -6,6 +6,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+from src.pipeline.config import PipelineConfig
+from src.pipeline.runner import run_pipeline
+
+
+def run_canonical_pipeline(config: PipelineConfig) -> dict[str, object]:
+    """Run an already-validated canonical PipelineConfig in process."""
+    if not isinstance(config, PipelineConfig):
+        raise TypeError("config must be a PipelineConfig.")
+    return run_pipeline(config)
+
 
 def build_pipeline_command(
     project_root: Path,

@@ -37,6 +37,22 @@ from src.pipeline.ml_execution import (
     read_ml_modeling_panel,
 )
 from src.pipeline.research_config import FactorResearchPipelineConfig
+from src.pipeline.signal_config import (
+    PredictionSourceConfig,
+    SignalConfigError,
+    SignalPipelineConfig,
+)
+from src.pipeline.signal_execution import (
+    SignalPipelineExecutionError,
+    SignalPipelineExecutor,
+    SignalPipelineResult,
+)
+from src.pipeline.holdings_config import HoldingsConfigError, HoldingsPipelineConfig
+from src.pipeline.holdings_execution import (
+    HoldingsPipelineExecutionError,
+    HoldingsPipelineExecutor,
+    HoldingsPipelineResult,
+)
 from src.pipeline.research_execution import (
     FactorResearchExecutionResult,
     FactorResearchPublishedOutputs,
@@ -75,5 +91,16 @@ __all__ = [
     "FactorResearchPipelineExecutor",
     "FactorResearchPipelineConfig",
     "PipelineConfig",
+    "PredictionSourceConfig",
+    "SignalConfigError",
+    "SignalPipelineConfig",
+    "SignalPipelineExecutionError",
+    "SignalPipelineExecutor",
+    "SignalPipelineResult",
+    "HoldingsConfigError",
+    "HoldingsPipelineConfig",
+    "HoldingsPipelineExecutionError",
+    "HoldingsPipelineExecutor",
+    "HoldingsPipelineResult",
     "run_pipeline",
 ]

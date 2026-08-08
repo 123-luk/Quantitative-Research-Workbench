@@ -2537,3 +2537,166 @@ override，V4-E3 为 CLI + YAML + docs。
 - 本阶段未修改生产代码，未安装/升级/卸载依赖，未执行远程 Git，未 add、commit、push、tag、merge 或 rebase。
 - 发布准备记录：`docs/06_v0.5.0_release_readiness.md`。
 - 下一步：本地提交 V4-F；fresh fetch/remote divergence check；合并 `feature/modeling-panel → main`；合并后全量测试；annotated tag `v0.5.0`；一次性 push main 与 tag。
+
+## 2026-08-08 V5-A Signal / Holdings Contracts + Canonical Config Semantics
+
+- V5-A completed on local branch `feature/signal-holdings`; target release is `v0.6.0`.
+- Signal and Holdings are independent packages. Signal owns prediction-to-score and direction semantics; Holdings owns Top-N, insufficient-universe policy, and target holdings semantics.
+- Top-N belongs only to Holdings. `HoldingsPipelineConfig.top_n` is the canonical source, defaults to 20, accepts only built-in `int`, rejects bool/float/string/numpy integers, requires `>= 1`, and has no static maximum.
+- UI/YAML/backend must use the same Holdings config value. Builders and UI must not define a second N default.
+- V5 is long-only and supports only `weighting=equal_weight`; insufficient-universe values are `error` and `allow_partial`.
+- Signal source modes are `ml` and `files`. Files mode accepts only an explicit native ML Artifact directory that a later execution stage must validate with the existing ML Artifact validator. A bare `predictions.parquet`, `prediction_path`, or `manifest_path` is forbidden as OOS proof.
+- V5-A did not change `src/ml` core or the ML Artifact schema. Legacy root `top_n` and top-level `PipelineConfig` remain untouched until V5-E1 defines compatibility/conflict semantics.
+- Added canonical Signal columns `trade_date, ts_code, score, rank` and Holdings columns `trade_date, ts_code, target_weight, score, rank`; no Builder, ranking, Top-N, weighting execution, Artifact I/O, Runner, CLI, or UI implementation was added.
+- Syntax compile: 8 files passed without repo bytecode/cache. Targeted tests: 67 passed. Related config regression: 122 passed.
+- Full pytest: 1930 passed, 4 skipped, 11 warnings. The initial restricted-sandbox run had 21 existing HistGradientBoosting/joblib permission failures; the identical fixed-interpreter command passed with local process permissions. Skips and warnings match the V5-A0 baseline.
+- No remote Git, dependency change, stage, commit, push, fetch, pull, merge, or tag operation was performed.
+- Next stage: V5-B Signal Builder, prediction normalization, OOS guard, signal direction, and deterministic ranking.
+
+## 2026-08-08 V5-B Prediction Source Adapter + Signal Builder
+
+- V5-B completed on local branch `feature/signal-holdings`; start and final HEAD remain `dcd336a1647632eb10101ab8aa8e90eb88fd80c3`.
+- Added an explicit native ML Artifact source adapter. It accepts only a caller-supplied Artifact directory, delegates validation to the existing `MLExperimentArtifactStore.validate()`, reads the fixed native `predictions.parquet`, and provides immutable provenance including resolved paths, schema/experiment/model identifiers, and the validated prediction SHA-256.
+- No bare Parquet input, latest-run discovery, directory fallback, mtime selection, recursive source discovery, schema override, or alternate prediction filename is supported.
+- Added `SignalBuilder` with required explicit `prediction_column` and `signal_direction`. It validates and defensively copies inputs, canonicalizes day-level timezone-naive `trade_date` and stripped string `ts_code`, rejects duplicate canonical keys and invalid/non-finite scores, and emits exactly `trade_date, ts_code, score, rank`.
+- Ranking is deterministic per trade date: score descending for `desc` or ascending for `asc`, followed by `ts_code` ascending as the explicit tie-break; ranks are contiguous `int64` values starting at one. Stable mergesort is used and input row order is irrelevant.
+- Prediction-only columns are excluded from output. Protected source/selection/portfolio columns are rejected when chosen as the score source. V5-B does not implement Top-N, selected flags, Holdings, weighting, Artifact persistence, Runner, CLI, or UI behavior.
+- Added focused source and builder tests covering genuine native ML Artifact creation/validation, checksum and manifest tampering, no-fallback behavior, sibling-decoy isolation, provenance and DataFrame defensive ownership, direction semantics, ties, shuffles, date isolation, alternate score columns, normalization, duplicate keys, invalid values, leakage guards, and no selection API.
+- Targeted V5-A/V5-B tests: `123 passed`. ML Artifact regression: `116 passed, 2 skipped`. Full pytest: `1986 passed, 4 skipped, 11 warnings in 139.73s`; warnings are the existing pandas invalid-date parsing warnings.
+- The restricted sandbox reproduced the existing Windows HistGradientBoosting/joblib named-pipe permission limitation; the identical fixed-interpreter ML regression and full-suite commands passed with approved local process permissions. No code or environment workaround was introduced.
+- `src/ml` and protected pipeline files have zero diff. No dependency changes, remote Git operations, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next stage: V5-C Signal Artifact.
+
+## 2026-08-08 V5-C Signal Artifact Persistence + Validator
+
+- V5-C completed on local branch `feature/signal-holdings`; start and final HEAD remain `ab5dbe65393b25eca527a1f3da14e69c59ea3cd0`.
+- Added Signal Artifact schema `1.0` with the exact fixed layout `signals.parquet`, `config.json`, `audit.json`, and `manifest.json`. No extra final entries are accepted.
+- `signals.parquet` persists exactly `trade_date, ts_code, score, rank` in canonical deterministic order. The Store strictly validates already-built Signal data and does not sort, coerce, drop, deduplicate, or otherwise repair invalid input.
+- `config.json` contains only the effective `prediction_column` and `signal_direction`. `audit.json` records row/date summaries, finite-score/duplicate-key/rank integrity, deterministic warnings, and detached native ML source provenance. `manifest.json` records Artifact/Signal schema identities, config identity, provenance, rows, columns/dtypes, and deterministic payload file records.
+- Source provenance preserves the native ML artifact directory, fixed predictions path, source Artifact schema version, experiment ID, model name, and predictions SHA-256. Signal validation is self-contained and does not require the source ML Artifact to remain present.
+- Payload integrity uses exact byte size and SHA-256 for Signal Parquet, config, and audit. The manifest is written last in a same-parent `.tmp-*` staging directory, staging is fully validated before one `os.replace` directory publication, and handled failures clean only the current staging directory.
+- No-overwrite is strict: an existing target or a target appearing before publication raises a dedicated exists error, is never deleted or merged, and a second write leaves the first Artifact byte-for-byte unchanged.
+- Added a structured independent Validator/report covering directory/symlink/exact-file safety, strict JSON, schema and unknown-field policy, checksums/sizes, Parquet readability/schema/dtypes/content/order, finite scores, unique keys, positive contiguous per-date ranks, direction/tie-break semantics, and config/audit/manifest/Parquet cross-file consistency.
+- Corruption tests cover missing/extra files, checksum/size tamper, malformed JSON, wrong schema, config/prediction/provenance/row-count disagreement, reordered/extra/forbidden columns, duplicates, NaN/inf, invalid ranks, wrong row order, and source removal after publication.
+- Failure-injection tests cover Parquet/config/audit/manifest writes, pre-publish validation, rename failure, manifest-last ordering, one-time atomic publish, staging cleanup, and preservation of existing user directories.
+- Signal Artifact targeted tests: `57 passed`. V5 Signal regression: `180 passed`. Modeling Panel/ML/Signal Artifact pattern regression: `136 passed`.
+- Full pytest: `2043 passed, 4 skipped, 11 warnings in 161.74s`; this is +57 passed over the V5-B baseline. Skips and pandas invalid-date warnings are unchanged.
+- V5-C contains no Top-N, selection, Holdings, weighting, source discovery, Pipeline, Runner, CLI, UI, or backtest behavior. `src/ml`, `src/pipeline`, `src/holdings`, `app`, and `scripts` have zero diff; no Artifact schema outside Signal was changed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency changes, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-D Holdings Builder + Artifact.
+
+## 2026-08-08 V5-D Holdings Builder + Holdings Artifact
+
+- V5-D completed on local branch `feature/signal-holdings`; start and final HEAD remain `215b7c26f5f2da46f91b04884e3becac10f76273`.
+- Added `HoldingsBuilder` with explicit required `top_n`, `insufficient_universe_policy`, and `weighting` arguments. The Builder has no business defaults; `HoldingsPipelineConfig` remains the unique canonical owner of the default `top_n=20`.
+- Runtime `top_n` validation exactly matches config semantics: built-in `int` only, bool/float/string/numpy integer rejected, value at least one, and no backend maximum. Tests prove `top_n=1`, `10`, and `20`, plus changing-N prefix, score, rank, and input invariants.
+- Selection uses only existing canonical Signal `rank <= top_n`; Holdings never recalculates rank or sorts by score. Signal score and rank are preserved unchanged.
+- `insufficient_universe_policy=error` fails the complete build with explicit trade date, requested N, and available count. `allow_partial` selects the entire smaller universe, retains requested N in config, and records deterministic per-date available/selected/partial audit metadata.
+- V5 weighting is exclusively `equal_weight`: every selected row receives `1.0 / K`, weights are finite and strictly positive, and each date sums to one with absolute tolerance `1e-12`. This is long-only with no leverage, shorting, or alternate weighting algorithm.
+- Canonical Holdings output is exactly `trade_date, ts_code, target_weight, score, rank`, ordered by trade date, rank, and code. Builder input must be strict canonical Signal order and is defensively copied.
+- Added Holdings Artifact schema `1.0` with exact files `holdings.parquet`, `config.json`, `audit.json`, and `manifest.json`. Config records effective top_n/policy/weighting; audit records input/output/date/per-date/partial/weight integrity; manifest records schema, rows/columns/dtypes, business config, direct Signal provenance, and deterministic payload file records.
+- Direct Signal provenance records Signal artifact directory, fixed `signals.parquet` path, Signal schema version, and Signal SHA-256. It can be constructed from the public Signal Artifact write result; Holdings validation remains self-contained if the source Artifact is later moved.
+- Holdings persistence uses byte size and SHA-256, manifest-last, same-parent `.tmp-*` staging, complete pre-publish validation, one atomic `os.replace`, strict no-overwrite, handled-failure cleanup, no backup, and no latest/mtime/sibling discovery.
+- Structured Validator covers exact directory/file safety, strict JSON, checksums/sizes, Parquet schema/dtypes/order, canonical keys, finite score, positive equal weights, per-date sum, count/top_n/policy rules, contiguous selected ranks, and config/audit/manifest/Parquet cross-file consistency.
+- Tamper and failure tests cover missing/extra/corrupt files, JSON/schema/config/provenance/audit disagreements, invalid weights/counts/ranks/order, Parquet/JSON/validation/rename failures, second-write preservation, and staging cleanup.
+- Targeted Holdings tests: `98 passed`. V5 A-D regression: `278 passed`. Modeling Panel/Signal/Holdings Artifact regression: `124 passed`.
+- Full pytest: `2141 passed, 4 skipped, 11 warnings in 171.13s`; this is +98 passed over V5-C. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- `src/signals`, `src/pipeline`, `src/ml`, `app`, and `scripts` have zero diff. No Runner, UI, CLI/YAML, legacy selection, backtest, dependency, or remote Git changes were made.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-E1 Pipeline Config + Executors.
+
+## 2026-08-08 V5-E1 Pipeline Config Integration + Executors
+
+- V5-E1 completed on local branch feature/signal-holdings; start and final HEAD remain 4f153c1911ce964e01adbbd220dc54ec9dfa5fa0.
+- Top-level PipelineConfig now owns nested signal and holdings configs. Both default disabled, old direct/grouped YAML configs remain valid, strict unknown-field behavior and input immutability remain intact, and snapshots include deterministic JSON-safe effective nested configs.
+- Legacy root top_n remains the old workflow value; holdings.top_n is the V5 canonical value. Disabled Holdings does not consume or alter root top_n. When Holdings is enabled, unequal root/nested values are rejected and equal values are accepted; the nested value alone is passed to V5 execution. This conservative rule avoids guessing whether a dataclass default was explicitly supplied.
+- Signal files mode needs only its explicit native ML Artifact directory. Signal ml mode requires ml_experiment.enabled=True at config time and an enabled runtime MLExperimentPipelineResult with artifacts_saved=True and an explicit artifact_dir; it never reads a configured source directory or guesses from run_dir.
+- Holdings config requires Signal enabled and never auto-enables upstream stages. Runtime Holdings accepts only one explicit enabled SignalPipelineResult, revalidates its exact Signal Artifact, and reads only fixed signals.parquet.
+- Added frozen, DataFrame-free, JSON-safe SignalPipelineResult and HoldingsPipelineResult, plus independent executors with disabled short-circuit behavior and stage-specific chained errors.
+- SignalPipelineExecutor reuses PredictionSourceAdapter, passes prediction_column and signal_direction unchanged to SignalBuilder, and writes the same-run Signal Artifact at <run_dir>/<signal.artifact_subdir>.
+- HoldingsPipelineExecutor passes top_n, insufficient-universe policy, and weighting unchanged to HoldingsBuilder, preserves Signal score/rank and verified SHA provenance, and writes the same-run Holdings Artifact at <run_dir>/<holdings.artifact_subdir>.
+- Real integration covers native ML Artifact to Signal executor/result to Holdings executor/Artifact. Changing N from 5 to 10 preserves the same source Signal SHA and score/rank while changing selected counts, equal weights, and recorded Artifact config.
+- No latest/mtime/glob/directory discovery, hidden fallback, config mutation, Runner chaining, UI, ML core/schema, Signal core, or Holdings core changes were introduced.
+- Targeted executor tests: 15 passed. Pipeline config regression: 136 passed. V5 regression: 293 passed.
+- Full pytest: 2170 passed, 4 skipped, 11 warnings in 174.97s; this is +29 passed over V5-D. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe. No dependency changes, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-E2 Runner chaining.
+
+## 2026-08-08 V5-E2 Runner Chaining: ML to Signal to Holdings
+
+- V5-E2 completed on local branch feature/signal-holdings; start and final HEAD remain de0e76b0b2d3da94f3d6118318c6ca2b29b4e32d.
+- The canonical run_pipeline order is now data readiness, Factor Research, Modeling Panel, ML Experiment, Signal, Holdings, then existing config snapshot/run info/metrics finalization.
+- ML-to-Signal uses only the current run's exact MLExperimentPipelineResult. Signal ml mode receives that object; files mode explicitly receives None and leaves source validation/path handling to SignalPipelineExecutor.
+- Signal-to-Holdings uses only the current run's exact SignalPipelineResult. Holdings never receives ML state and Runner never infers a Signal Artifact from run_dir.
+- Runner now fails explicitly if an enabled upstream executor returns None for a required V5 handoff. Normal executor failures remain fail-fast with their original exception chains.
+- Enabled Signal and Holdings summaries use each frozen result's JSON-safe as_dict output. Disabled V5 stages remain omitted, preserving the existing summary schema. The successful config snapshot remains sourced solely from PipelineConfig.to_dict and preserves nested holdings.top_n.
+- Runner is orchestration-only: it performs no Parquet reads/writes, DataFrame retention, prediction mapping, ranking, Top-N selection, weight calculation, checksum work, latest/mtime/glob discovery, or business defaulting.
+- Real Runner E2E uses a validated native ML Artifact with unmocked V5 adapter/builders/stores/executors. Separate N=5 and N=10 runs produce isolated Signal/Holdings Artifacts, exact summaries/snapshots/configs and weights, while preserving the same Signal score/rank prefix.
+- Signal no-overwrite failure preserves the pre-existing target and blocks Holdings/final success metadata. Real insufficient-universe Holdings failure preserves the valid published Signal Artifact and blocks Holdings/final success metadata.
+- Existing V3 ML-only and V4 Factor Research/Modeling Panel/ML summary and stage behavior remain unchanged when V5 stages are disabled; configs are not mutated and stages are never auto-enabled.
+- Runner chaining targeted tests: 17 passed. Pipeline execution regression: 71 passed, 2 skipped. Config regression: 57 passed. V5 regression: 310 passed.
+- Full pytest: 2178 passed, 4 skipped, 11 warnings in 164.64s; this is +8 passed over V5-E1. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- A restricted-sandbox pipeline regression reproduced the known HistGradientBoosting/joblib Windows named-pipe permission failure; the identical fixed-interpreter command passed under approved local process permissions. No workaround was added.
+- No CLI/YAML/docs/UI, config, executor, src/ml, Signal core, Holdings core, dependency, or remote Git changes were made. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe.
+- Next stage: V5-E3 CLI/YAML/docs.
+
+## 2026-08-08 V5-E3 CLI, YAML, and Documentation Integration
+
+- V5-E3 completed on local branch feature/signal-holdings; start and final HEAD remain c5931e2af6dc8cec8ca79699c5eb69f849c21e4f.
+- The canonical V5 development command is python scripts/run_pipeline.py --config config/signal_holdings_pipeline.example.yaml. No Signal/Holdings-specific CLI flags were added; all V5 business settings come from the shared PipelineConfig YAML schema.
+- Read-only audit found that scripts/run_pipeline.py already has a legacy root --top-n override locked by the existing V3 CLI regression outside this stage's test whitelist. It was retained for backward compatibility, explicitly labeled as not configuring holdings.top_n, and tested to fail on a root/nested conflict rather than silently override V5 Holdings.
+- The existing dual-schema loader required no change. Direct YAML containing modeling_panel already routes through PipelineConfig.from_dict, while grouped YAML routes through PipelineConfig.from_yaml, which already preserves top-level signal and holdings blocks. Old direct and grouped examples remain valid with disabled V5 defaults.
+- Added config/signal_holdings_pipeline.example.yaml as a complete direct-schema files-to-Modeling-Panel-to-ML-to-Signal-to-Holdings example. It uses ML source mode, persists the native ML Artifact, selects holdings.top_n=10, and keeps the legacy root value equal only to satisfy the frozen conflict rule.
+- The example value 10 is user-selected; the canonical HoldingsPipelineConfig backend default remains 20. No second backend Top-N default was introduced.
+- Added docs/08_signal_holdings_pipeline.md because docs/07_ml_experiment_guide.md already existed. The guide documents stage order, Signal/Holdings responsibilities, ML/files source modes, bare predictions.parquet rejection, deterministic direction/ranking, per-date Top-N, insufficient-universe policies, equal_weight-only semantics, Artifact layouts, provenance, SHA-256, validation, atomic/no-overwrite publication, output inspection, compatibility, non-goals, and the V5-E4 UI bridge note.
+- README received only a compact V5 development entry with the canonical command, example/doc links, Top-N source-of-truth distinction, and an explicit non-release statement.
+- Canonical CLI compact JSON and human summaries now expose the existing frozen Signal/Holdings result summaries. The CLI does not read Artifacts, inspect Parquet, rebuild business config, scan latest paths, or duplicate Builder logic.
+- Added real loader tests for direct/grouped/current/old YAML, strict invalid config and root/nested conflict tests, same-value acceptance, example roundtrip/secrets checks, help/static scope checks, summary traceability, and documentation consistency.
+- A real tmp-path CLI-to-Runner integration uses files-mode native ML Artifact input and unmocked V5 core, validates both Artifacts, and confirms holdings.top_n in the run snapshot.
+- Targeted E3 tests: 10 passed. CLI regression: 74 passed. Config/Runner regression: 36 passed. V5 regression: 310 passed.
+- Full pytest: 2188 passed, 4 skipped, 11 warnings in 163.39s; this is +10 passed over V5-E2. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe. No UI, src, legacy script, dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-E4 Minimal UI Parameter Bridge.
+
+## 2026-08-08 V5-E4 Minimal Streamlit UI Parameter Bridge
+
+- V5-E4 completed on local branch `feature/signal-holdings`; start and final HEAD remain `8652582c51b4a45aaa0a1b2332ba89fee43e401a`.
+- The Streamlit V5 surface now loads one explicit direct-schema canonical YAML into `PipelineConfig`, applies only the exposed Signal/Holdings selections to a detached mapping, validates through `PipelineConfig.from_dict`, and calls the in-process canonical `run_pipeline(config)` service path.
+- The V5 Top N widget default is read from `HoldingsPipelineConfig().top_n` and is therefore 20. It has only `min_value=1`: there is no V5 hardcoded default 10 or UI/backend maximum 100. Tests cover 1, 10, 20, 1000 and strict invalid types/values.
+- Display mappings are fixed and tested: high score to `descending`, low score to `ascending`, error to `error`, use-all-valid to `allow_partial`; V5 weighting is shown read-only and remains exclusively `equal_weight`.
+- Signal source mode is not exposed as a new ordinary-user control. The canonical base config remains authoritative (`ml` for the natural current-run chain, or explicit `files` via YAML/CLI); prediction column and Artifact internals remain hidden.
+- The bridge preserves and never mutates the base file or `PipelineConfig`. Because the frozen E1 schema requires enabled `holdings.top_n` to equal legacy root `top_n`, the bridge contains one explicit one-way compatibility mirror derived solely from the canonical nested value; UI input, effective summaries, execution, and result reporting read only `holdings.top_n`.
+- Before execution, Streamlit displays a summary derived from the effective validated config. After success it displays run ID/directory, Signal/Holdings Artifact paths, requested Top N, Holdings rows/dates, Signal direction, and weighting directly from the Runner summary without reading Parquet or recomputing results.
+- The previous `run_research_pipeline.py --top-n` subprocess UI remains available only in an explicitly labeled Legacy research/backtest expander. The V5 controls never call that path or construct `--top-n`.
+- No ranking, Top-N selection, sorting, target-weight calculation, Parquet I/O, Artifact validation, latest/mtime discovery, or ML logic was added to the UI/config/runner services.
+- A real service integration used one validated native ML Artifact in files mode for separate Top N 5 and 10 runs. It proves identical Signal score/rank data, exact Holdings per-date counts/prefixes, and matching effective config, Runner summary, config snapshot, and Holdings Artifact config values.
+- Targeted UI bridge/service tests: `23 passed`. Config/Runner/CLI/UI regression: `60 passed`. V5 A-E4 regression: `292 passed`.
+- Full pytest: `2211 passed, 4 skipped, 11 warnings in 119.47s`; this is +23 passed over the V5-E3 baseline. The restricted sandbox reproduced the existing HistGradientBoosting/joblib Windows named-pipe permission failures; the identical fixed-interpreter command passed under approved local process permissions without a workaround.
+- Streamlit/service/config bridge compile and import smoke passed. Static source-of-truth scanning confirms V5 has no legacy Top-N default/maximum/flag or business-logic duplication; legacy-only and existing dashboard-display matches are explicitly separate.
+- No `src/pipeline`, Signal/Holdings/ML core, scripts, config, docs, README, dependency, or remote Git changes were made. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next stage: V5-F E2E and v0.6.0 release readiness.
+
+## 2026-08-08 V5-F End-to-End Verification + v0.6.0 Release Readiness
+
+- V5-F completed on local branch `feature/signal-holdings`; start and final HEAD remain `295e7364a21c269dfef82e9290022d1f6affd527`.
+- Added release-only verification and documentation; no production code, config, CLI, UI, core schema, dependency, or README changes were made.
+- Real offline E2E covers Modeling Panel files -> real Ridge ML training -> validated native ML Artifact -> Signal -> Holdings through canonical `run_pipeline`, with current-run Result handoffs, valid Artifacts, summaries, snapshots, and DataFrame-free Runner output.
+- Real files-mode E2E runs with ML disabled and one explicit validated native ML Artifact. A newer sibling decoy and a bare `predictions.parquet` cannot affect or replace the configured source; no latest/mtime/glob/fallback discovery occurs.
+- Same-source isolated runs at `holdings.top_n` 5, 10, and 20 produce identical Signal score/rank payloads. Holdings counts are exactly 5/10/20 per normal date, weights are 1/5, 1/10, and 1/20, and Top5/Top10/Top20 preserve strict prefix score/rank semantics.
+- Top-N is traced without drift through effective PipelineConfig, nested config snapshot, Runner summary, Holdings `config.json`, `audit.json`, `manifest.json`, and actual per-date holdings counts. UI bridge -> canonical service -> Runner -> Artifact is verified at N=10 with no legacy subprocess or CLI flag.
+- Mixed-universe E2E proves `error` preserves the valid Signal Artifact and publishes no Holdings/success snapshot, while `allow_partial` retains requested N, selects actual K, assigns 1/K, records partial dates, and produces a valid Artifact.
+- Failure E2E proves Signal and Holdings no-overwrite preserve existing targets, Signal failure blocks Holdings, Holdings failure preserves Signal, tampered native ML blocks Signal, and tampered Signal blocks Holdings.
+- Repeated isolated runs produce identical Signal and Holdings business payloads after excluding allowed runtime paths/timestamps. Chained lineage is verified as Holdings -> exact Signal path/SHA/schema -> exact ML path/prediction SHA/schema/experiment/model identity.
+- Direction/tie/shuffle verification covers descending and ascending, `ts_code` ASC tie-break, contiguous per-date ranks, and forbidden label/audit fields absent from Signal output. The release audit confirms walk-forward OOS native predictions are the only accepted source proof.
+- Backward compatibility matrix covers V5 disabled, Signal-only, full V5, files mode with ML disabled, invalid ML-source without ML, invalid Holdings without Signal, old direct YAML, and old grouped YAML. Existing V3/V4 behavior remains green.
+- The legacy root `top_n` one-way compatibility mirror is explicitly documented as debt: nested `holdings.top_n` is the sole V5 truth, root never overrides nested, conflicts fail, and Runner/Executor/Builder/Artifact/summary read nested. Removal is deferred to a deliberate backward-compatibility migration.
+- Added `docs/09_v0.6.0_release_readiness.md`. The repository has no canonical package version file; release version is expressed by Git tag. Audit describe is `v0.5.0-8-g295e736`; local `v0.5.0` exists and `v0.6.0` does not. This stage does not claim a release, merge, push, or tag.
+- Targeted V5-F E2E: `12 passed`. V5 complete regression: `360 passed`. Artifact regression: `201 passed`. Pipeline regression: `137 passed, 4 skipped` under normal local process permissions.
+- Full pytest: `2223 passed, 4 skipped, 11 warnings in 166.18s`; this is +12 passed over V5-E4 with unchanged skips/warnings and no new xfail. The restricted sandbox reproduced the existing 21 HistGradientBoosting/joblib named-pipe permission failures; identical commands passed with approved normal local permissions and no workaround.
+- Compile/import, CLI `--help`, formal example loader, static source-of-truth/discovery scans, protected-diff checks, and repo Artifact/staging residual checks passed.
+- Release blocker count: 0. Readiness recommendation: `GO for feature branch push + GitHub PR + CI/review toward v0.6.0`.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next step: separate PR / CI / review / merge / post-merge full pytest / annotated `v0.6.0` release workflow.

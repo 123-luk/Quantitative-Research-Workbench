@@ -264,3 +264,19 @@ Factor Research → Modeling Panel → ML Experiment
 
 Artifact Store 不覆盖既有目录；重复目标会明确失败。该边界降低结构性泄漏
 风险，但不替代对 feature 生成时点和经济含义的人工审查。
+
+## V5 Signal and Holdings development pipeline
+
+The canonical development path extends the Pipeline through ML, Signal, and
+Holdings while keeping business settings in the shared YAML schema:
+
+    python scripts/run_pipeline.py --config config/signal_holdings_pipeline.example.yaml
+
+The example chooses holdings.top_n: 10; this is a user-selected example value,
+while the backend canonical default remains 20. The retained legacy root top_n
+and legacy research/scoring CLI do not define V5 Holdings behavior.
+
+See the [Signal and Holdings Pipeline Guide](docs/08_signal_holdings_pipeline.md)
+for source modes, direction and ranking, Top-N and insufficient-universe
+semantics, equal weighting, Artifact layouts, provenance, and output inspection.
+This is a V5 development capability, not a final v0.6.0 release announcement.

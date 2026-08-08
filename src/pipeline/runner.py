@@ -20,6 +20,14 @@ from src.pipeline.research_execution import (
     FactorResearchExecutionResult,
     FactorResearchPipelineExecutor,
 )
+from src.pipeline.signal_execution import (
+    SignalPipelineExecutionError,
+    SignalPipelineExecutor,
+)
+from src.pipeline.holdings_execution import (
+    HoldingsPipelineExecutionError,
+    HoldingsPipelineExecutor,
+)
 
 
 def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
@@ -92,6 +100,7 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
         )
         summary["modeling_panel"] = modeling_panel_result.as_dict()
 
+    ml_result = None
     if config.ml_experiment.enabled:
         if config.modeling_panel.enabled:
             if (
@@ -113,7 +122,38 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
                 config.ml_experiment
             )
             ml_result = ml_executor.execute(run_dir)
+        if (
+            config.signal.enabled
+            and config.signal.source.mode == "ml"
+            and ml_result is None
+        ):
+            raise SignalPipelineExecutionError(
+                "enabled ML stage returned no result for Signal handoff."
+            )
         summary["ml_experiment"] = ml_result.to_dict()
+
+    signal_result = None
+    if config.signal.enabled:
+        signal_executor = SignalPipelineExecutor(config.signal)
+        signal_result = signal_executor.execute(
+            run_dir,
+            ml_result=(
+                ml_result if config.signal.source.mode == "ml" else None
+            ),
+        )
+        if config.holdings.enabled and signal_result is None:
+            raise HoldingsPipelineExecutionError(
+                "enabled Signal stage returned no result for Holdings handoff."
+            )
+        summary["signal"] = signal_result.as_dict()
+
+    if config.holdings.enabled:
+        holdings_executor = HoldingsPipelineExecutor(config.holdings)
+        holdings_result = holdings_executor.execute(
+            run_dir,
+            signal_result=signal_result,
+        )
+        summary["holdings"] = holdings_result.as_dict()
 
     experiment_manager.save_config_snapshot(run_dir, config)
     experiment_manager.save_run_info(

@@ -26,9 +26,21 @@ from app.services.backtest_report_service import prepare_backtest_report_data  #
 from app.services.factor_report_service import prepare_factor_report_data  # noqa: E402
 from app.services.portfolio_report_service import prepare_portfolio_report_data  # noqa: E402
 from app.services.stock_chart_service import prepare_single_stock_chart_data  # noqa: E402
+from app.services.pipeline_config_service import (  # noqa: E402
+    EQUAL_WEIGHT_LABEL,
+    ERROR_IF_INSUFFICIENT,
+    HIGH_SCORE_FIRST,
+    LOW_SCORE_FIRST,
+    USE_ALL_VALID,
+    build_effective_pipeline_config,
+    build_selection_summary,
+    get_default_holdings_top_n,
+    load_canonical_base_config,
+)
 from app.services.pipeline_runner_service import (  # noqa: E402
     build_pipeline_command,
     command_to_display,
+    run_canonical_pipeline,
     run_research_pipeline_from_app,
 )
 from app.services.stock_price_service import prepare_single_stock_price_data  # noqa: E402
@@ -137,7 +149,90 @@ def render_dashboard_page(data: dict[str, pd.DataFrame], figure_paths: dict[str,
 
 
 def render_pipeline_page(project_root: Path) -> None:
-    """Render controls for running the historical research pipeline."""
+    """Render canonical V5 controls plus the explicitly separate legacy path."""
+    st.title("Signal / Holdings Pipeline")
+    st.warning("本页运行 canonical ML → Signal → Holdings 流水线；结果仅供量化研究参考。")
+    st.caption("基础配置须使用 direct PipelineConfig YAML；files source 继续由 YAML/CLI 支持。")
+
+    config_path_text = st.text_input(
+        "Pipeline 配置文件",
+        value="",
+        placeholder="输入 direct canonical PipelineConfig YAML 路径",
+    )
+    col_left, col_right = st.columns(2)
+    with col_left:
+        top_n = st.number_input(
+            "Top N 股票数量",
+            min_value=1,
+            value=get_default_holdings_top_n(),
+            step=1,
+        )
+        direction_label = st.selectbox(
+            "Signal 排序方向",
+            [HIGH_SCORE_FIRST, LOW_SCORE_FIRST],
+        )
+    with col_right:
+        insufficient_label = st.selectbox(
+            "股票不足 N 只时",
+            [ERROR_IF_INSUFFICIENT, USE_ALL_VALID],
+        )
+        st.text_input("权重方式", value=EQUAL_WEIGHT_LABEL, disabled=True)
+
+    effective_config = None
+    if config_path_text.strip():
+        try:
+            config_path = Path(config_path_text.strip()).expanduser()
+            if not config_path.is_absolute():
+                config_path = project_root / config_path
+            base_config = load_canonical_base_config(config_path)
+            effective_config = build_effective_pipeline_config(
+                base_config,
+                top_n=top_n,
+                signal_direction_label=direction_label,
+                insufficient_policy_label=insufficient_label,
+            )
+            st.subheader("本次选股设置")
+            st.json(build_selection_summary(effective_config))
+        except Exception as exc:
+            st.error(f"Pipeline 配置无效：{exc}")
+    else:
+        st.info("请输入一份 direct canonical PipelineConfig YAML 后运行。示例文件仅供复制和调整。")
+
+    if st.button(
+        "运行 Signal / Holdings Pipeline",
+        disabled=effective_config is None,
+    ):
+        try:
+            with st.spinner("Running canonical ML → Signal → Holdings pipeline..."):
+                result = run_canonical_pipeline(effective_config)
+        except Exception as exc:
+            st.error(f"Canonical pipeline failed: {exc}")
+        else:
+            signal = result.get("signal", {})
+            holdings = result.get("holdings", {})
+            run_dir = str(result.get("run_dir", ""))
+            st.success("Canonical Signal / Holdings pipeline completed.")
+            st.subheader("运行结果")
+            st.json(
+                {
+                    "run_id": Path(run_dir).name if run_dir else None,
+                    "run directory": run_dir or None,
+                    "Signal artifact": signal.get("artifact_dir"),
+                    "Holdings artifact": holdings.get("artifact_dir"),
+                    "Top N": holdings.get("requested_top_n"),
+                    "Holdings rows": holdings.get("rows"),
+                    "Holdings dates": holdings.get("trade_date_count"),
+                    "Signal direction": signal.get("signal_direction"),
+                    "weighting": holdings.get("weighting"),
+                }
+            )
+
+    st.divider()
+    with st.expander("Legacy research / backtest pipeline"):
+        render_legacy_pipeline_controls(project_root)
+
+def render_legacy_pipeline_controls(project_root: Path) -> None:
+    """Render the retained legacy subprocess research controls."""
     st.title("运行研究流水线 / Run Research Pipeline")
     st.warning("流水线生成的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。")
     st.info(
