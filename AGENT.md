@@ -2552,3 +2552,18 @@ override，V4-E3 为 CLI + YAML + docs。
 - Full pytest: 1930 passed, 4 skipped, 11 warnings. The initial restricted-sandbox run had 21 existing HistGradientBoosting/joblib permission failures; the identical fixed-interpreter command passed with local process permissions. Skips and warnings match the V5-A0 baseline.
 - No remote Git, dependency change, stage, commit, push, fetch, pull, merge, or tag operation was performed.
 - Next stage: V5-B Signal Builder, prediction normalization, OOS guard, signal direction, and deterministic ranking.
+
+## 2026-08-08 V5-B Prediction Source Adapter + Signal Builder
+
+- V5-B completed on local branch `feature/signal-holdings`; start and final HEAD remain `dcd336a1647632eb10101ab8aa8e90eb88fd80c3`.
+- Added an explicit native ML Artifact source adapter. It accepts only a caller-supplied Artifact directory, delegates validation to the existing `MLExperimentArtifactStore.validate()`, reads the fixed native `predictions.parquet`, and provides immutable provenance including resolved paths, schema/experiment/model identifiers, and the validated prediction SHA-256.
+- No bare Parquet input, latest-run discovery, directory fallback, mtime selection, recursive source discovery, schema override, or alternate prediction filename is supported.
+- Added `SignalBuilder` with required explicit `prediction_column` and `signal_direction`. It validates and defensively copies inputs, canonicalizes day-level timezone-naive `trade_date` and stripped string `ts_code`, rejects duplicate canonical keys and invalid/non-finite scores, and emits exactly `trade_date, ts_code, score, rank`.
+- Ranking is deterministic per trade date: score descending for `desc` or ascending for `asc`, followed by `ts_code` ascending as the explicit tie-break; ranks are contiguous `int64` values starting at one. Stable mergesort is used and input row order is irrelevant.
+- Prediction-only columns are excluded from output. Protected source/selection/portfolio columns are rejected when chosen as the score source. V5-B does not implement Top-N, selected flags, Holdings, weighting, Artifact persistence, Runner, CLI, or UI behavior.
+- Added focused source and builder tests covering genuine native ML Artifact creation/validation, checksum and manifest tampering, no-fallback behavior, sibling-decoy isolation, provenance and DataFrame defensive ownership, direction semantics, ties, shuffles, date isolation, alternate score columns, normalization, duplicate keys, invalid values, leakage guards, and no selection API.
+- Targeted V5-A/V5-B tests: `123 passed`. ML Artifact regression: `116 passed, 2 skipped`. Full pytest: `1986 passed, 4 skipped, 11 warnings in 139.73s`; warnings are the existing pandas invalid-date parsing warnings.
+- The restricted sandbox reproduced the existing Windows HistGradientBoosting/joblib named-pipe permission limitation; the identical fixed-interpreter ML regression and full-suite commands passed with approved local process permissions. No code or environment workaround was introduced.
+- `src/ml` and protected pipeline files have zero diff. No dependency changes, remote Git operations, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Next stage: V5-C Signal Artifact.

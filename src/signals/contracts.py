@@ -11,10 +11,29 @@ SIGNAL_OUTPUT_COLUMNS = (*SIGNAL_KEY_COLUMNS, "score", "rank")
 SIGNAL_FORBIDDEN_OUTPUT_COLUMNS = frozenset(
     {"target", "y_true", "fold_id", "top_n", "selected"}
 )
+SIGNAL_PROTECTED_SCORE_SOURCE_COLUMNS = frozenset(
+    {
+        *SIGNAL_KEY_COLUMNS,
+        "target",
+        "y_true",
+        "fold_id",
+        "entry_trade_date",
+        "exit_trade_date",
+        "rank",
+        "top_n",
+        "selected",
+        "target_weight",
+        "weight",
+    }
+)
 
 
 class SignalContractError(ValueError):
     """Raised when a Signal schema declaration violates the contract."""
+
+
+class SignalDataError(SignalContractError):
+    """Raised when in-memory prediction data cannot form canonical Signals."""
 
 
 def _column_tuple(columns: Iterable[object], field_name: str) -> tuple[str, ...]:
