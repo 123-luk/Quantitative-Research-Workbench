@@ -15,6 +15,8 @@ import yaml
 from src.pipeline.modeling_panel_config import ModelingPanelPipelineConfig
 from src.pipeline.research_config import FactorResearchPipelineConfig
 from src.pipeline.ml_config import MLExperimentPipelineConfig
+from src.pipeline.signal_config import SignalPipelineConfig
+from src.pipeline.holdings_config import HoldingsPipelineConfig
 
 
 @dataclass
@@ -49,6 +51,8 @@ class PipelineConfig:
     ml_experiment: MLExperimentPipelineConfig = field(
         default_factory=MLExperimentPipelineConfig
     )
+    signal: SignalPipelineConfig = field(default_factory=SignalPipelineConfig)
+    holdings: HoldingsPipelineConfig = field(default_factory=HoldingsPipelineConfig)
 
     def __post_init__(self) -> None:
         """Normalize dates and validate the backtest range."""
@@ -68,6 +72,8 @@ class PipelineConfig:
         self.ml_experiment = MLExperimentPipelineConfig.from_dict(
             self.ml_experiment
         )
+        self.signal = SignalPipelineConfig.from_dict(self.signal)
+        self.holdings = HoldingsPipelineConfig.from_dict(self.holdings)
         self._validate_stage_dependencies()
         if parse_date(self.backtest_start) > parse_date(self.backtest_end):
             raise ValueError("backtest_start must be earlier than or equal to backtest_end.")
@@ -83,21 +89,32 @@ class PipelineConfig:
                 "modeling_panel source mode 'factor_research' requires "
                 "factor_research.enabled=True"
             )
-        if not self.ml_experiment.enabled:
-            return
-        configured_panel = self.ml_experiment.panel_path is not None
-        generated_panel = self.modeling_panel.enabled
-        if configured_panel and generated_panel:
-            raise ValueError(
-                "ML panel source conflict: configure either ml_experiment.panel_path "
-                "or an enabled modeling_panel stage, not both"
-            )
-        if not configured_panel and not generated_panel:
-            raise ValueError(
-                "ML requires exactly one panel source: ml_experiment.panel_path "
-                "or an enabled modeling_panel stage"
-            )
+        if self.ml_experiment.enabled:
+            configured_panel = self.ml_experiment.panel_path is not None
+            generated_panel = self.modeling_panel.enabled
+            if configured_panel and generated_panel:
+                raise ValueError(
+                    "ML panel source conflict: configure either ml_experiment.panel_path "
+                    "or an enabled modeling_panel stage, not both"
+                )
+            if not configured_panel and not generated_panel:
+                raise ValueError(
+                    "ML requires exactly one panel source: ml_experiment.panel_path "
+                    "or an enabled modeling_panel stage"
+                )
+        if self.signal.enabled and self.signal.source.mode == "ml":
+            if not self.ml_experiment.enabled:
+                raise ValueError(
+                    "signal source mode 'ml' requires ml_experiment.enabled=True"
+                )
 
+        if self.holdings.enabled and not self.signal.enabled:
+            raise ValueError("holdings.enabled=True requires signal.enabled=True")
+        if self.holdings.enabled and self.top_n != self.holdings.top_n:
+            raise ValueError(
+                "legacy root top_n conflicts with enabled holdings.top_n; "
+                "use the same value or disable Holdings"
+            )
     @classmethod
     def from_yaml(
         cls,
@@ -147,6 +164,8 @@ class PipelineConfig:
             ),
             "factor_research": merged.get("factor_research", {}),
             "ml_experiment": merged.get("ml_experiment"),
+            "signal": merged.get("signal"),
+            "holdings": merged.get("holdings"),
         }
         direct_overrides = {
             key: value for key, value in (overrides or {}).items() if key in values
@@ -174,6 +193,8 @@ class PipelineConfig:
         values["ml_experiment"] = MLExperimentPipelineConfig.from_dict(
             values.get("ml_experiment")
         )
+        values["signal"] = SignalPipelineConfig.from_dict(values.get("signal"))
+        values["holdings"] = HoldingsPipelineConfig.from_dict(values.get("holdings"))
         return cls(**values)
 
     @property
@@ -194,11 +215,13 @@ class PipelineConfig:
         result = {
             name: deepcopy(getattr(self, name))
             for name in self.__dataclass_fields__
-            if name not in {"factor_research", "modeling_panel", "ml_experiment"}
+            if name not in {"factor_research", "modeling_panel", "ml_experiment", "signal", "holdings"}
         }
         result["factor_research"] = self.factor_research.to_dict()
         result["modeling_panel"] = self.modeling_panel.as_dict()
         result["ml_experiment"] = self.ml_experiment.to_dict()
+        result["signal"] = self.signal.to_dict()
+        result["holdings"] = self.holdings.to_dict()
         result["required_start_date"] = self.required_start_date
         result["required_end_date"] = self.required_end_date
         return result

@@ -2605,3 +2605,20 @@ override，V4-E3 为 CLI + YAML + docs。
 - `src/signals`, `src/pipeline`, `src/ml`, `app`, and `scripts` have zero diff. No Runner, UI, CLI/YAML, legacy selection, backtest, dependency, or remote Git changes were made.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V5-E1 Pipeline Config + Executors.
+
+## 2026-08-08 V5-E1 Pipeline Config Integration + Executors
+
+- V5-E1 completed on local branch feature/signal-holdings; start and final HEAD remain 4f153c1911ce964e01adbbd220dc54ec9dfa5fa0.
+- Top-level PipelineConfig now owns nested signal and holdings configs. Both default disabled, old direct/grouped YAML configs remain valid, strict unknown-field behavior and input immutability remain intact, and snapshots include deterministic JSON-safe effective nested configs.
+- Legacy root top_n remains the old workflow value; holdings.top_n is the V5 canonical value. Disabled Holdings does not consume or alter root top_n. When Holdings is enabled, unequal root/nested values are rejected and equal values are accepted; the nested value alone is passed to V5 execution. This conservative rule avoids guessing whether a dataclass default was explicitly supplied.
+- Signal files mode needs only its explicit native ML Artifact directory. Signal ml mode requires ml_experiment.enabled=True at config time and an enabled runtime MLExperimentPipelineResult with artifacts_saved=True and an explicit artifact_dir; it never reads a configured source directory or guesses from run_dir.
+- Holdings config requires Signal enabled and never auto-enables upstream stages. Runtime Holdings accepts only one explicit enabled SignalPipelineResult, revalidates its exact Signal Artifact, and reads only fixed signals.parquet.
+- Added frozen, DataFrame-free, JSON-safe SignalPipelineResult and HoldingsPipelineResult, plus independent executors with disabled short-circuit behavior and stage-specific chained errors.
+- SignalPipelineExecutor reuses PredictionSourceAdapter, passes prediction_column and signal_direction unchanged to SignalBuilder, and writes the same-run Signal Artifact at <run_dir>/<signal.artifact_subdir>.
+- HoldingsPipelineExecutor passes top_n, insufficient-universe policy, and weighting unchanged to HoldingsBuilder, preserves Signal score/rank and verified SHA provenance, and writes the same-run Holdings Artifact at <run_dir>/<holdings.artifact_subdir>.
+- Real integration covers native ML Artifact to Signal executor/result to Holdings executor/Artifact. Changing N from 5 to 10 preserves the same source Signal SHA and score/rank while changing selected counts, equal weights, and recorded Artifact config.
+- No latest/mtime/glob/directory discovery, hidden fallback, config mutation, Runner chaining, UI, ML core/schema, Signal core, or Holdings core changes were introduced.
+- Targeted executor tests: 15 passed. Pipeline config regression: 136 passed. V5 regression: 293 passed.
+- Full pytest: 2170 passed, 4 skipped, 11 warnings in 174.97s; this is +29 passed over V5-D. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe. No dependency changes, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-E2 Runner chaining.
