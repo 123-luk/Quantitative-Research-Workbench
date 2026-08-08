@@ -2567,3 +2567,21 @@ override，V4-E3 为 CLI + YAML + docs。
 - `src/ml` and protected pipeline files have zero diff. No dependency changes, remote Git operations, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next stage: V5-C Signal Artifact.
+
+## 2026-08-08 V5-C Signal Artifact Persistence + Validator
+
+- V5-C completed on local branch `feature/signal-holdings`; start and final HEAD remain `ab5dbe65393b25eca527a1f3da14e69c59ea3cd0`.
+- Added Signal Artifact schema `1.0` with the exact fixed layout `signals.parquet`, `config.json`, `audit.json`, and `manifest.json`. No extra final entries are accepted.
+- `signals.parquet` persists exactly `trade_date, ts_code, score, rank` in canonical deterministic order. The Store strictly validates already-built Signal data and does not sort, coerce, drop, deduplicate, or otherwise repair invalid input.
+- `config.json` contains only the effective `prediction_column` and `signal_direction`. `audit.json` records row/date summaries, finite-score/duplicate-key/rank integrity, deterministic warnings, and detached native ML source provenance. `manifest.json` records Artifact/Signal schema identities, config identity, provenance, rows, columns/dtypes, and deterministic payload file records.
+- Source provenance preserves the native ML artifact directory, fixed predictions path, source Artifact schema version, experiment ID, model name, and predictions SHA-256. Signal validation is self-contained and does not require the source ML Artifact to remain present.
+- Payload integrity uses exact byte size and SHA-256 for Signal Parquet, config, and audit. The manifest is written last in a same-parent `.tmp-*` staging directory, staging is fully validated before one `os.replace` directory publication, and handled failures clean only the current staging directory.
+- No-overwrite is strict: an existing target or a target appearing before publication raises a dedicated exists error, is never deleted or merged, and a second write leaves the first Artifact byte-for-byte unchanged.
+- Added a structured independent Validator/report covering directory/symlink/exact-file safety, strict JSON, schema and unknown-field policy, checksums/sizes, Parquet readability/schema/dtypes/content/order, finite scores, unique keys, positive contiguous per-date ranks, direction/tie-break semantics, and config/audit/manifest/Parquet cross-file consistency.
+- Corruption tests cover missing/extra files, checksum/size tamper, malformed JSON, wrong schema, config/prediction/provenance/row-count disagreement, reordered/extra/forbidden columns, duplicates, NaN/inf, invalid ranks, wrong row order, and source removal after publication.
+- Failure-injection tests cover Parquet/config/audit/manifest writes, pre-publish validation, rename failure, manifest-last ordering, one-time atomic publish, staging cleanup, and preservation of existing user directories.
+- Signal Artifact targeted tests: `57 passed`. V5 Signal regression: `180 passed`. Modeling Panel/ML/Signal Artifact pattern regression: `136 passed`.
+- Full pytest: `2043 passed, 4 skipped, 11 warnings in 161.74s`; this is +57 passed over the V5-B baseline. Skips and pandas invalid-date warnings are unchanged.
+- V5-C contains no Top-N, selection, Holdings, weighting, source discovery, Pipeline, Runner, CLI, UI, or backtest behavior. `src/ml`, `src/pipeline`, `src/holdings`, `app`, and `scripts` have zero diff; no Artifact schema outside Signal was changed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency changes, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V5-D Holdings Builder + Artifact.
