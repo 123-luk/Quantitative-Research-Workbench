@@ -2622,3 +2622,22 @@ override，V4-E3 为 CLI + YAML + docs。
 - Full pytest: 2170 passed, 4 skipped, 11 warnings in 174.97s; this is +29 passed over V5-D. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
 - Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe. No dependency changes, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V5-E2 Runner chaining.
+
+## 2026-08-08 V5-E2 Runner Chaining: ML to Signal to Holdings
+
+- V5-E2 completed on local branch feature/signal-holdings; start and final HEAD remain de0e76b0b2d3da94f3d6118318c6ca2b29b4e32d.
+- The canonical run_pipeline order is now data readiness, Factor Research, Modeling Panel, ML Experiment, Signal, Holdings, then existing config snapshot/run info/metrics finalization.
+- ML-to-Signal uses only the current run's exact MLExperimentPipelineResult. Signal ml mode receives that object; files mode explicitly receives None and leaves source validation/path handling to SignalPipelineExecutor.
+- Signal-to-Holdings uses only the current run's exact SignalPipelineResult. Holdings never receives ML state and Runner never infers a Signal Artifact from run_dir.
+- Runner now fails explicitly if an enabled upstream executor returns None for a required V5 handoff. Normal executor failures remain fail-fast with their original exception chains.
+- Enabled Signal and Holdings summaries use each frozen result's JSON-safe as_dict output. Disabled V5 stages remain omitted, preserving the existing summary schema. The successful config snapshot remains sourced solely from PipelineConfig.to_dict and preserves nested holdings.top_n.
+- Runner is orchestration-only: it performs no Parquet reads/writes, DataFrame retention, prediction mapping, ranking, Top-N selection, weight calculation, checksum work, latest/mtime/glob discovery, or business defaulting.
+- Real Runner E2E uses a validated native ML Artifact with unmocked V5 adapter/builders/stores/executors. Separate N=5 and N=10 runs produce isolated Signal/Holdings Artifacts, exact summaries/snapshots/configs and weights, while preserving the same Signal score/rank prefix.
+- Signal no-overwrite failure preserves the pre-existing target and blocks Holdings/final success metadata. Real insufficient-universe Holdings failure preserves the valid published Signal Artifact and blocks Holdings/final success metadata.
+- Existing V3 ML-only and V4 Factor Research/Modeling Panel/ML summary and stage behavior remain unchanged when V5 stages are disabled; configs are not mutated and stages are never auto-enabled.
+- Runner chaining targeted tests: 17 passed. Pipeline execution regression: 71 passed, 2 skipped. Config regression: 57 passed. V5 regression: 310 passed.
+- Full pytest: 2178 passed, 4 skipped, 11 warnings in 164.64s; this is +8 passed over V5-E1. Existing Windows symlink skips and pandas invalid-date warnings are unchanged.
+- A restricted-sandbox pipeline regression reproduced the known HistGradientBoosting/joblib Windows named-pipe permission failure; the identical fixed-interpreter command passed under approved local process permissions. No workaround was added.
+- No CLI/YAML/docs/UI, config, executor, src/ml, Signal core, Holdings core, dependency, or remote Git changes were made. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Fixed Python: E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe.
+- Next stage: V5-E3 CLI/YAML/docs.
