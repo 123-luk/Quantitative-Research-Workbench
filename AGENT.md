@@ -2678,3 +2678,25 @@ override，V4-E3 为 CLI + YAML + docs。
 - No `src/pipeline`, Signal/Holdings/ML core, scripts, config, docs, README, dependency, or remote Git changes were made. No stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
 - Next stage: V5-F E2E and v0.6.0 release readiness.
+
+## 2026-08-08 V5-F End-to-End Verification + v0.6.0 Release Readiness
+
+- V5-F completed on local branch `feature/signal-holdings`; start and final HEAD remain `295e7364a21c269dfef82e9290022d1f6affd527`.
+- Added release-only verification and documentation; no production code, config, CLI, UI, core schema, dependency, or README changes were made.
+- Real offline E2E covers Modeling Panel files -> real Ridge ML training -> validated native ML Artifact -> Signal -> Holdings through canonical `run_pipeline`, with current-run Result handoffs, valid Artifacts, summaries, snapshots, and DataFrame-free Runner output.
+- Real files-mode E2E runs with ML disabled and one explicit validated native ML Artifact. A newer sibling decoy and a bare `predictions.parquet` cannot affect or replace the configured source; no latest/mtime/glob/fallback discovery occurs.
+- Same-source isolated runs at `holdings.top_n` 5, 10, and 20 produce identical Signal score/rank payloads. Holdings counts are exactly 5/10/20 per normal date, weights are 1/5, 1/10, and 1/20, and Top5/Top10/Top20 preserve strict prefix score/rank semantics.
+- Top-N is traced without drift through effective PipelineConfig, nested config snapshot, Runner summary, Holdings `config.json`, `audit.json`, `manifest.json`, and actual per-date holdings counts. UI bridge -> canonical service -> Runner -> Artifact is verified at N=10 with no legacy subprocess or CLI flag.
+- Mixed-universe E2E proves `error` preserves the valid Signal Artifact and publishes no Holdings/success snapshot, while `allow_partial` retains requested N, selects actual K, assigns 1/K, records partial dates, and produces a valid Artifact.
+- Failure E2E proves Signal and Holdings no-overwrite preserve existing targets, Signal failure blocks Holdings, Holdings failure preserves Signal, tampered native ML blocks Signal, and tampered Signal blocks Holdings.
+- Repeated isolated runs produce identical Signal and Holdings business payloads after excluding allowed runtime paths/timestamps. Chained lineage is verified as Holdings -> exact Signal path/SHA/schema -> exact ML path/prediction SHA/schema/experiment/model identity.
+- Direction/tie/shuffle verification covers descending and ascending, `ts_code` ASC tie-break, contiguous per-date ranks, and forbidden label/audit fields absent from Signal output. The release audit confirms walk-forward OOS native predictions are the only accepted source proof.
+- Backward compatibility matrix covers V5 disabled, Signal-only, full V5, files mode with ML disabled, invalid ML-source without ML, invalid Holdings without Signal, old direct YAML, and old grouped YAML. Existing V3/V4 behavior remains green.
+- The legacy root `top_n` one-way compatibility mirror is explicitly documented as debt: nested `holdings.top_n` is the sole V5 truth, root never overrides nested, conflicts fail, and Runner/Executor/Builder/Artifact/summary read nested. Removal is deferred to a deliberate backward-compatibility migration.
+- Added `docs/09_v0.6.0_release_readiness.md`. The repository has no canonical package version file; release version is expressed by Git tag. Audit describe is `v0.5.0-8-g295e736`; local `v0.5.0` exists and `v0.6.0` does not. This stage does not claim a release, merge, push, or tag.
+- Targeted V5-F E2E: `12 passed`. V5 complete regression: `360 passed`. Artifact regression: `201 passed`. Pipeline regression: `137 passed, 4 skipped` under normal local process permissions.
+- Full pytest: `2223 passed, 4 skipped, 11 warnings in 166.18s`; this is +12 passed over V5-E4 with unchanged skips/warnings and no new xfail. The restricted sandbox reproduced the existing 21 HistGradientBoosting/joblib named-pipe permission failures; identical commands passed with approved normal local permissions and no workaround.
+- Compile/import, CLI `--help`, formal example loader, static source-of-truth/discovery scans, protected-diff checks, and repo Artifact/staging residual checks passed.
+- Release blocker count: 0. Readiness recommendation: `GO for feature branch push + GitHub PR + CI/review toward v0.6.0`.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next step: separate PR / CI / review / merge / post-merge full pytest / annotated `v0.6.0` release workflow.
