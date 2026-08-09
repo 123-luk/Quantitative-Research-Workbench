@@ -17,6 +17,7 @@ from src.pipeline.research_config import FactorResearchPipelineConfig
 from src.pipeline.ml_config import MLExperimentPipelineConfig
 from src.pipeline.signal_config import SignalPipelineConfig
 from src.pipeline.holdings_config import HoldingsPipelineConfig
+from src.pipeline.research_backtest_config import ResearchBacktestPipelineConfig
 
 
 @dataclass
@@ -53,6 +54,9 @@ class PipelineConfig:
     )
     signal: SignalPipelineConfig = field(default_factory=SignalPipelineConfig)
     holdings: HoldingsPipelineConfig = field(default_factory=HoldingsPipelineConfig)
+    research_backtest: ResearchBacktestPipelineConfig = field(
+        default_factory=ResearchBacktestPipelineConfig
+    )
 
     def __post_init__(self) -> None:
         """Normalize dates and validate the backtest range."""
@@ -74,6 +78,9 @@ class PipelineConfig:
         )
         self.signal = SignalPipelineConfig.from_dict(self.signal)
         self.holdings = HoldingsPipelineConfig.from_dict(self.holdings)
+        self.research_backtest = ResearchBacktestPipelineConfig.from_dict(
+            self.research_backtest
+        )
         self._validate_stage_dependencies()
         if parse_date(self.backtest_start) > parse_date(self.backtest_end):
             raise ValueError("backtest_start must be earlier than or equal to backtest_end.")
@@ -114,6 +121,14 @@ class PipelineConfig:
             raise ValueError(
                 "legacy root top_n conflicts with enabled holdings.top_n; "
                 "use the same value or disable Holdings"
+            )
+        if (
+            self.research_backtest.enabled
+            and self.research_backtest.source.mode == "pipeline"
+            and not self.holdings.enabled
+        ):
+            raise ValueError(
+                "research_backtest pipeline source requires holdings.enabled=True"
             )
     @classmethod
     def from_yaml(
@@ -166,6 +181,7 @@ class PipelineConfig:
             "ml_experiment": merged.get("ml_experiment"),
             "signal": merged.get("signal"),
             "holdings": merged.get("holdings"),
+            "research_backtest": merged.get("research_backtest"),
         }
         direct_overrides = {
             key: value for key, value in (overrides or {}).items() if key in values
@@ -195,6 +211,9 @@ class PipelineConfig:
         )
         values["signal"] = SignalPipelineConfig.from_dict(values.get("signal"))
         values["holdings"] = HoldingsPipelineConfig.from_dict(values.get("holdings"))
+        values["research_backtest"] = ResearchBacktestPipelineConfig.from_dict(
+            values.get("research_backtest")
+        )
         return cls(**values)
 
     @property
@@ -215,13 +234,22 @@ class PipelineConfig:
         result = {
             name: deepcopy(getattr(self, name))
             for name in self.__dataclass_fields__
-            if name not in {"factor_research", "modeling_panel", "ml_experiment", "signal", "holdings"}
+            if name
+            not in {
+                "factor_research",
+                "modeling_panel",
+                "ml_experiment",
+                "signal",
+                "holdings",
+                "research_backtest",
+            }
         }
         result["factor_research"] = self.factor_research.to_dict()
         result["modeling_panel"] = self.modeling_panel.as_dict()
         result["ml_experiment"] = self.ml_experiment.to_dict()
         result["signal"] = self.signal.to_dict()
         result["holdings"] = self.holdings.to_dict()
+        result["research_backtest"] = self.research_backtest.to_dict()
         result["required_start_date"] = self.required_start_date
         result["required_end_date"] = self.required_end_date
         return result

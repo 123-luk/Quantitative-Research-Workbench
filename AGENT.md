@@ -2991,3 +2991,57 @@ override，V4-E3 为 CLI + YAML + docs。
   dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, reset,
   cherry-pick, or tag operation was performed.
 - Next stage: V6-G1 Backtest Source Adapter + Executor.
+
+## 2026-08-09 V6-G Full Backend Integration
+
+- V6-G completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `45668830950e746fa208a6aa3792c5837d08d71e`, the committed V6-F
+  Research Backtest Artifact revision based on `v0.6.0`.
+- G1 added an explicit native Holdings source adapter with strict `pipeline`
+  and `files` modes. Pipeline mode requires the exact current-run
+  `HoldingsPipelineResult`; files mode requires one explicit native Holdings
+  Artifact directory. Both revalidate the Artifact and fixed payload without
+  bare parquet, latest/mtime/glob scanning, fallback, or input mutation.
+- G1 added a standalone `ResearchBacktestPipelineExecutor` with an injected
+  existing market-data client, explicit runtime `end_date`, and explicit final
+  `artifact_dir`. It chains the frozen B1/B2/B3/C/D/E/F components without
+  reimplementing calendars, return/suspension policy, portfolio calculations,
+  analytics, or Artifact persistence.
+- The executor requests only the union of Holdings security codes, uses bounded
+  calendar/return/status data, rejects any Holdings event effective after the
+  evaluation end, and returns a frozen, detached, JSON-safe summary without
+  DataFrames.
+- G2 integrated `research_backtest` into top-level `PipelineConfig`, disabled by
+  default. The only canonical evaluation-end owner remains `backtest_end` via
+  `required_end_date`; no second end-date truth was added. Pipeline source
+  requires explicitly enabled Holdings, while files source is independent and
+  never receives a current Holdings result.
+- Runner order is now Data, Factor Research, Modeling Panel, ML, Signal,
+  Holdings, Research Backtest, then metadata. Runner owns
+  `<run_dir>/<artifact_subdir>`, injects the existing `TushareClient`, passes the
+  exact current Holdings result only in pipeline mode, and omits disabled V6
+  business output from the summary.
+- G3 added `config/research_backtest_pipeline.example.yaml`, the unchanged
+  generic `python scripts/run_pipeline.py --config ...` entry point, compact
+  CLI output, `docs/10_research_backtest_pipeline.md`, and a minimal README
+  link. No V6-specific CLI flags or hidden benchmark/cost/risk-free defaults
+  were added.
+- Architecture remains frequency-agnostic and preserves the boundary that V5
+  performs ranking/Top-N/weight construction while V6 only evaluates exact
+  Holdings targets. There is no live execution, broker/order simulation,
+  discovery fallback, or legacy-backtest change.
+- Synthetic integration covers real Runner-to-Executor pipeline/files paths,
+  validated final Artifacts and lineage, Top-N 5/10 preservation, and
+  monthly-like, weekly-like, and consecutive daily-like Holdings events.
+- G1 targeted tests: `19 passed`; G1 gate: `545 passed, 2 skipped`. G2 gate:
+  `134 passed`. G3 gate: `52 passed`. Final V6-G focused regression:
+  `719 passed, 2 skipped`.
+- Full pytest under approved normal local process permissions:
+  `2736 passed, 4 skipped, 11 warnings in 139.29s`; this is +44 passed over V6-F
+  with unchanged skips/warnings and no new xfail.
+- Protected-diff, discovery/formula/frequency/execution static scans, in-memory
+  compile/import smoke, line-length/trailing-whitespace checks, and
+  `git diff --check` passed.
+- No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase,
+  reset, cherry-pick, or tag operation was performed.
+- Next stage: V6-H Streamlit Research Dashboard.

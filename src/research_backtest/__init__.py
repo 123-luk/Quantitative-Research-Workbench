@@ -120,6 +120,11 @@ from src.research_backtest.artifacts import (
     ResearchBacktestArtifactValidationResult,
     ResearchBacktestArtifactWriteError,
 )
+from src.research_backtest.sources import (
+    ResearchBacktestHoldingsSourceAdapter,
+    ResearchBacktestHoldingsSourceError,
+    ResearchBacktestHoldingsSourceResult,
+)
 
 __all__ = [
     "AVAILABLE",
@@ -224,6 +229,9 @@ __all__ = [
     "ResearchBacktestArtifactValidationError",
     "ResearchBacktestArtifactValidationResult",
     "ResearchBacktestArtifactWriteError",
+    "ResearchBacktestHoldingsSourceAdapter",
+    "ResearchBacktestHoldingsSourceError",
+    "ResearchBacktestHoldingsSourceResult",
 ]
 
 # Importing the implementation above makes Python attach the submodule itself to
@@ -233,3 +241,4 @@ globals().pop("rebalance", None)
 globals().pop("portfolio", None)
 globals().pop("analytics", None)
 globals().pop("artifacts", None)
+globals().pop("sources", None)

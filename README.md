@@ -280,3 +280,18 @@ See the [Signal and Holdings Pipeline Guide](docs/08_signal_holdings_pipeline.md
 for source modes, direction and ranking, Top-N and insufficient-universe
 semantics, equal weighting, Artifact layouts, provenance, and output inspection.
 This is a V5 development capability, not a final v0.6.0 release announcement.
+
+## V6 Research Backtest backend
+
+The v0.7 development path now chains the canonical Pipeline through the native
+Research Backtest backend:
+
+    python scripts/run_pipeline.py --config config/research_backtest_pipeline.example.yaml
+
+The backend consumes exact validated Holdings targets, remains
+frequency-agnostic, and publishes a seven-file Research Backtest Artifact with
+direct Holdings lineage. It is a historical research evaluator, not a live
+execution system. See the
+[Research Backtest Pipeline Guide](docs/10_research_backtest_pipeline.md) for
+source modes, timing, return and suspension rules, cost/NAV semantics, metrics,
+Artifact validation, and non-goals.

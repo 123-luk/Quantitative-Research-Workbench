@@ -64,6 +64,11 @@ from src.pipeline.research_backtest_config import (
     ReturnAlignmentConfig,
     TransactionCostConfig,
 )
+from src.pipeline.research_backtest_executor import (
+    ResearchBacktestPipelineExecutionError,
+    ResearchBacktestPipelineExecutor,
+    ResearchBacktestPipelineResult,
+)
 from src.pipeline.research_execution import (
     FactorResearchExecutionResult,
     FactorResearchPublishedOutputs,
@@ -122,5 +127,8 @@ __all__ = [
     "ResearchBacktestPipelineConfig",
     "ReturnAlignmentConfig",
     "TransactionCostConfig",
+    "ResearchBacktestPipelineExecutionError",
+    "ResearchBacktestPipelineExecutor",
+    "ResearchBacktestPipelineResult",
     "run_pipeline",
 ]
