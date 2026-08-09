@@ -113,6 +113,46 @@ class TushareClient:
             fields=fields,
         )
 
+    def get_daily(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch raw security daily market data from TuShare Pro."""
+        fields = (
+            "ts_code,trade_date,open,high,low,close,pre_close,change,"
+            "pct_chg,vol,amount"
+        )
+        return self.pro.daily(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+        )
+
+    def get_index_daily(
+        self,
+        ts_code: str,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch raw benchmark/index daily market data from TuShare Pro."""
+        fields = (
+            "ts_code,trade_date,open,high,low,close,pre_close,change,"
+            "pct_chg,vol,amount"
+        )
+        return self.pro.index_daily(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+        )
+
     def get_daily_basic(
         self,
         ts_code: str | None = None,

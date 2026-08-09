@@ -2747,3 +2747,21 @@ override，V4-E3 为 CLI + YAML + docs。
 - Compile/import smoke, frequency/fallback scans, strict-alignment scans, protected-diff checks, and source-frame immutability checks passed.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V6-B2 Security + Benchmark Adjusted Return Adapter.
+
+## 2026-08-09 V6-B2 Security + Benchmark Daily Return Adapter
+
+- V6-B2 completed on local branch `feature/research-backtest`; start and final HEAD remain `6752b688a12b0204caa2253a260d1a3db26b5403`, the committed V6-B1 calendar revision based on `v0.6.0`.
+- Added minimal raw `TushareClient.get_daily` and `get_index_daily` wrappers following the existing client style. They delegate the explicit code/date scope and standard raw fields directly to `pro.daily` / `pro.index_daily`, perform no normalization or business logic, expose no hidden benchmark default, and preserve provider exceptions.
+- Security canonical daily return is formally `tushare.daily.pct_chg / 100`; benchmark canonical daily return is `tushare.index_daily.pct_chg / 100`. Both outputs are decimal returns and identify the existing `adjusted_close_to_close` research convention without constructing a price series.
+- Added exact canonical schemas `trade_date, ts_code, return` for securities and `trade_date, benchmark_code, return` for a single explicit benchmark. Dates are naive normalized `pandas.Timestamp` values, keys are unique, return values are finite real numerics, and output order is deterministic.
+- Security loading calls the injected client once per explicit unique code to keep the raw scope auditable. The resulting date/security panel is intentionally sparse: an explicit code may have no rows, but the adapter never creates Cartesian rows or silently substitutes observations. An entirely empty requested scope, unexpected code, out-of-range date, duplicate key, malformed value, or non-finite return fails closed.
+- Benchmark code is mandatory and raw `ts_code`, when present, must match it exactly. Mixed series, duplicate dates, empty data, malformed values, non-finite returns, and dates outside the explicit scope fail closed. B1 `validate_strict_common_calendar` remains the sole strategy/benchmark date compatibility gate.
+- No raw-close ratio or `pct_change`, qfq/hfq mode, adj-factor price reconstruction, zero fill, forward fill, backward fill, nearest match, silent intersection, NAV, metrics, execution-price behavior, or rebalance-frequency behavior was added.
+- Audit found no existing `daily`, `index_daily`, `suspend_d`, adj-factor, or delist provider wrapper. `daily_basic.close` remains valuation/liquidity data and is not used. Existing stock basic fetches only currently listed securities and exposes `list_date`; that is insufficient to distinguish suspension, pre-listing, post-delist, provider gaps, and universe mismatch.
+- V6-B3 remains required to define security availability evidence and explicit suspension/listing/delist/missing-return policy. B2 deliberately does not infer that a missing daily row is a suspension or assign any economic return to it.
+- Targeted B2/provider tests: `73 passed`. B1+B2 regression: `128 passed`. Provider/data regression: `12 passed`. V6-A regression: `117 passed`. V5 contracts/config compatibility: `72 passed`.
+- Full pytest under approved normal local process permissions: `2472 passed, 4 skipped, 11 warnings in 124.78s`; this is +73 passed over V6-B1 with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, return-source/static safety scans, source-frame immutability checks, protected-diff checks, and `git diff --check` passed.
+- V6-A contracts/config, B1 calendar/alignment, legacy `src/backtest/**`, `PipelineConfig`, Runner, CLI, YAML, UI, and dependencies remain unchanged.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-B3 Security Availability / Suspension / Missing-Return Policy.
