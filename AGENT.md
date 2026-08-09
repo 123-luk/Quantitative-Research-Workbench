@@ -3045,3 +3045,49 @@ override，V4-E3 为 CLI + YAML + docs。
 - No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase,
   reset, cherry-pick, or tag operation was performed.
 - Next stage: V6-H Streamlit Research Dashboard.
+
+## 2026-08-09 V6-H Streamlit Research Backtest Dashboard
+
+- V6-H completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `fd477b7d6d99816e885e5632a638fd4372d2c8a3`, the committed V6-G full
+  backend integration revision based on `v0.6.0`.
+- Added a minimal Research Backtest section to the existing Streamlit pipeline
+  page. The enable default comes from canonical config; ordinary UI source is
+  fixed to current-run `pipeline` Holdings and does not expose files mode.
+- Holdings remains the sole owner of Top-N, ranking, direction, insufficient
+  universe policy, and equal-weight construction. V6-H adds no Backtest Top-N,
+  ranking, or weight logic.
+- The UI exposes explicit research assumptions for transaction cost bps,
+  benchmark code, and decimal annual risk-free rate. Schedule, next-trading-day
+  effectiveness, adjusted-close return convention, half-L1 turnover,
+  252-day annualization, and base NAV 1.0 remain canonical invariants rather
+  than selectors.
+- No Backtest frequency control or second end-date control was added;
+  `PipelineConfig.backtest_end` remains the only evaluation-end owner.
+- `run_pipeline` remains the single execution path through
+  `run_canonical_pipeline`; there is no direct Executor call, second Backtest
+  run, network path, fallback, or backend auto-enable change in the UI.
+- Dashboard cards use metrics unchanged from the `PipelineResult` summary and
+  format missing/non-finite values as `N/A`. The UI does not recompute metrics.
+- NAV display reads gross, net, and benchmark NAV values only from the exact
+  current result Artifact after `ResearchBacktestArtifactStore.validate`.
+  Canonical fixed filenames are reused; strict date equality is required and
+  there is no latest/mtime/glob discovery, fill, interpolation, normalization,
+  NAV reconstruction, or Artifact mutation. `artifacts.py` was unchanged.
+- Research details show the exact Artifact path, benchmark, dates, counts,
+  Holdings Top-N, cost bps, schedule, effective rule, and return convention.
+- Disabled behavior and the separately named legacy research/backtest expander
+  are preserved. No live trading, broker, order/fill, execution simulator, or
+  dependency was introduced.
+- UI targeted tests: `47 passed`. Cross-layer UI/Pipeline/Executor/Artifact
+  gate: `251 passed`. Complete V6 Research Backtest regression: `556 passed`.
+- Streamlit AppTest smoke passed for initial, disabled, and enabled page builds
+  with no exception, duplicate widget key, or session-state error.
+- Full pytest under approved normal local process permissions:
+  `2760 passed, 4 skipped, 11 warnings in 227.87s`; this is +24 passed over
+  V6-G with unchanged skips/warnings and no new xfail.
+- Formula/discovery/frequency/execution scans, protected-diff checks, in-memory
+  compile/import smoke, new-line-length check, and `git diff --check` passed.
+- No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase,
+  reset, cherry-pick, or tag operation was performed.
+- Next stage: V6-I E2E + v0.7.0 Release Readiness.

@@ -14,8 +14,10 @@ from app.services.pipeline_config_service import (
     LOW_SCORE_FIRST,
     USE_ALL_VALID,
     build_effective_pipeline_config,
+    build_research_backtest_ui_config,
     build_selection_summary,
     get_default_holdings_top_n,
+    get_default_research_backtest_enabled,
     load_canonical_base_config,
 )
 from src.ml import (
@@ -96,6 +98,65 @@ def test_ui_default_is_the_backend_default() -> None:
     effective = build_effective_pipeline_config(_base())
     assert effective.holdings.top_n == 20
     assert effective.top_n == 20
+
+
+def test_research_backtest_disabled_default_has_no_business_assumptions() -> None:
+    assert get_default_research_backtest_enabled() is False
+    research = build_research_backtest_ui_config(enabled=False)
+    assert research.enabled is False
+    assert research.transaction_cost is None
+    assert research.benchmark is None
+    assert research.performance is None
+
+
+@pytest.mark.parametrize("cost_bps", [0.0, 10.0, 2.5])
+@pytest.mark.parametrize("risk_free", [0.0, 0.02, -0.005])
+def test_research_backtest_enabled_maps_canonical_invariants(
+    cost_bps: float, risk_free: float
+) -> None:
+    effective = build_effective_pipeline_config(
+        _base(),
+        top_n=5,
+        research_backtest_enabled=True,
+        research_backtest_cost_bps=cost_bps,
+        research_backtest_benchmark="000905.SH",
+        annual_risk_free_rate=risk_free,
+    )
+    research = effective.research_backtest
+    assert research.enabled
+    assert research.source.mode == "pipeline"
+    assert research.source.artifact_dir is None
+    assert research.schedule.mode == "holdings_dates"
+    assert research.return_alignment.effective_rule == "next_trading_day"
+    assert research.return_alignment.return_convention == "adjusted_close_to_close"
+    assert research.portfolio.initial_nav == 1.0
+    assert research.portfolio.turnover_definition == "half_l1_pre_to_target"
+    assert research.transaction_cost is not None
+    assert research.transaction_cost.cost_bps == cost_bps
+    assert research.transaction_cost.rate_basis == "one_way_traded_notional"
+    assert research.benchmark is not None
+    assert research.benchmark.benchmark_code == "000905.SH"
+    assert research.benchmark.alignment_policy == "strict_common_calendar"
+    assert research.performance is not None
+    assert research.performance.annual_risk_free_rate == risk_free
+    assert research.performance.annualization_days == 252
+    assert research.artifact_subdir == "research_backtest"
+    assert effective.backtest_end == _base().backtest_end
+    assert effective.holdings.top_n == 5
+    assert "top_n" not in research.to_dict()
+    assert effective.signal.enabled and effective.holdings.enabled
+    assert PipelineConfig.from_dict(effective.to_dict()) == effective
+
+
+def test_top_n_changes_only_holdings_not_research_backtest() -> None:
+    configs = [
+        build_effective_pipeline_config(
+            _base(), top_n=top_n, research_backtest_enabled=True
+        )
+        for top_n in (5, 10)
+    ]
+    assert [config.holdings.top_n for config in configs] == [5, 10]
+    assert configs[0].research_backtest == configs[1].research_backtest
 
 
 @pytest.mark.parametrize("top_n", [1, 10, 20, 1000])
@@ -202,3 +263,18 @@ def test_streamlit_v5_surface_is_separate_from_legacy_top_n() -> None:
     assert '"--top-n"' not in canonical
     for forbidden in ("sort_values(", "nlargest(", "nsmallest(", "1.0 /"):
         assert forbidden not in canonical
+
+
+def test_streamlit_v6_surface_has_no_second_owner_or_unsupported_controls() -> None:
+    source = STREAMLIT_APP.read_text(encoding="utf-8")
+    canonical = source.split("def render_legacy_pipeline_controls", 1)[0]
+    assert '"Enable Research Backtest"' in canonical
+    assert '"Transaction cost (bps)"' in canonical
+    assert '"Benchmark code"' in canonical
+    assert '"Annual risk-free rate"' in canonical
+    assert "Research Portfolio NAV" in canonical
+    assert "Research Backtest End Date" not in canonical
+    assert "Backtest frequency" not in canonical
+    assert "source dropdown" not in canonical.lower()
+    assert "ResearchBacktestPipelineExecutor" not in canonical
+    assert "cumprod(" not in canonical

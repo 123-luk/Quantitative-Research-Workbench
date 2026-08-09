@@ -9,6 +9,16 @@ import yaml
 
 from src.pipeline.config import PipelineConfig
 from src.pipeline.holdings_config import HoldingsPipelineConfig
+from src.pipeline.research_backtest_config import (
+    BacktestScheduleConfig,
+    BacktestSourceConfig,
+    BenchmarkConfig,
+    PerformanceConfig,
+    PortfolioAccountingConfig,
+    ResearchBacktestPipelineConfig,
+    ReturnAlignmentConfig,
+    TransactionCostConfig,
+)
 
 
 HIGH_SCORE_FIRST: Final = "分数越高越优"
@@ -16,6 +26,9 @@ LOW_SCORE_FIRST: Final = "分数越低越优"
 ERROR_IF_INSUFFICIENT: Final = "报错"
 USE_ALL_VALID: Final = "使用全部有效股票"
 EQUAL_WEIGHT_LABEL: Final = "等权"
+SUGGESTED_RESEARCH_BACKTEST_COST_BPS: Final = 10.0
+SUGGESTED_RESEARCH_BACKTEST_BENCHMARK: Final = "000300.SH"
+SUGGESTED_ANNUAL_RISK_FREE_RATE: Final = 0.0
 
 SIGNAL_DIRECTION_BY_LABEL: Final = {
     HIGH_SCORE_FIRST: "descending",
@@ -30,6 +43,35 @@ INSUFFICIENT_POLICY_BY_LABEL: Final = {
 def get_default_holdings_top_n() -> int:
     """Return the canonical backend default used by the V5 UI widget."""
     return HoldingsPipelineConfig().top_n
+
+
+def get_default_research_backtest_enabled() -> bool:
+    """Return the canonical backend default for the V6 enable control."""
+    return ResearchBacktestPipelineConfig().enabled
+
+
+def build_research_backtest_ui_config(
+    *,
+    enabled: bool,
+    cost_bps: float = SUGGESTED_RESEARCH_BACKTEST_COST_BPS,
+    benchmark_code: str = SUGGESTED_RESEARCH_BACKTEST_BENCHMARK,
+    annual_risk_free_rate: float = SUGGESTED_ANNUAL_RISK_FREE_RATE,
+) -> ResearchBacktestPipelineConfig:
+    """Map the narrow ordinary-UI surface onto canonical V6 config classes."""
+    if not enabled:
+        return ResearchBacktestPipelineConfig()
+    return ResearchBacktestPipelineConfig(
+        enabled=True,
+        source=BacktestSourceConfig(),
+        schedule=BacktestScheduleConfig(),
+        return_alignment=ReturnAlignmentConfig(),
+        portfolio=PortfolioAccountingConfig(),
+        transaction_cost=TransactionCostConfig(cost_bps=cost_bps),
+        benchmark=BenchmarkConfig(benchmark_code=benchmark_code),
+        performance=PerformanceConfig(
+            annual_risk_free_rate=annual_risk_free_rate
+        ),
+    )
 
 
 def load_canonical_base_config(config_path: str | Path) -> PipelineConfig:
@@ -48,6 +90,10 @@ def build_effective_pipeline_config(
     top_n: int | None = None,
     signal_direction_label: str = HIGH_SCORE_FIRST,
     insufficient_policy_label: str = ERROR_IF_INSUFFICIENT,
+    research_backtest_enabled: bool = False,
+    research_backtest_cost_bps: float = SUGGESTED_RESEARCH_BACKTEST_COST_BPS,
+    research_backtest_benchmark: str = SUGGESTED_RESEARCH_BACKTEST_BENCHMARK,
+    annual_risk_free_rate: float = SUGGESTED_ANNUAL_RISK_FREE_RATE,
 ) -> PipelineConfig:
     """Apply the small V5 UI surface to a detached canonical config."""
     if not isinstance(base_config, PipelineConfig):
@@ -87,6 +133,12 @@ def build_effective_pipeline_config(
     )
     values["signal"] = signal
     values["holdings"] = holdings
+    values["research_backtest"] = build_research_backtest_ui_config(
+        enabled=research_backtest_enabled,
+        cost_bps=research_backtest_cost_bps,
+        benchmark_code=research_backtest_benchmark,
+        annual_risk_free_rate=annual_risk_free_rate,
+    ).to_dict()
 
     # PipelineConfig currently requires the legacy root field to equal enabled
     # holdings.top_n. This is a one-way compatibility mirror: UI input and V5
