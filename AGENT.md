@@ -2783,3 +2783,53 @@ override，V4-E3 为 CLI + YAML + docs。
 - Compile/import smoke, static zero-resolution/source scans, input immutability checks, protected-diff checks, line-length checks, and `git diff --check` passed.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V6-C Rebalance Accounting.
+
+## 2026-08-09 V6-C Rebalance Accounting / Weight Drift / Turnover
+
+- V6-C completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `39cebe2c7a574cea690617df5c2519e21aabfcce`, the committed V6-B3
+  availability revision based on `v0.6.0`.
+- Added a frequency-agnostic `RebalanceAccountingEngine` and defensive
+  `RebalanceAccountingResult`. Each V5 Holdings date T maps through B1
+  `TradingCalendar.next_trading_day(T)` to one strictly later open effective
+  boundary; multiple Holdings dates mapping to the same boundary fail closed.
+- Frozen post-close research convention: the first effective boundary has a
+  100% cash pre-state and ignores that date's security return. A target set at
+  effective-date close starts consuming close-to-close returns on the next open
+  date. The old portfolio then drifts through every open date up to and including
+  the next effective date before the next close-boundary rebalance.
+- V5 canonical Holdings schema validation is reused without modifying Holdings.
+  Runtime checks enforce unique date/code keys, finite non-negative target
+  weights, and per-date sums of one under the existing tight tolerance.
+- Daily drift uses `v_i' = w_i * (1 + r_i)`, zero-return cash, and complete-value
+  normalization. A return of exactly -1 is allowed when the portfolio survives;
+  a return below -1 or non-positive total portfolio value fails closed.
+- Canonical B2 observed returns and B3 `resolve_security_return` are reused.
+  Proven full-day suspension can resolve a missing positive-weight return to
+  zero; unknown/lifecycle-incompatible missing returns fail closed. Numeric-zero
+  securities do not require daily return/status rows.
+- Target cash is zero for v0.7 fully invested Holdings. Turnover is complete
+  half-L1 from drifted pre-rebalance weights to target weights, including the
+  cash leg. The first fully invested turnover is 1.0; no previous-target
+  shortcut, overlap proxy, clipping, or pseudo-CASH security is used.
+- Canonical rebalances contain the union of pre-held and target securities,
+  including exiting and entering names, with repeated event-level cash and
+  turnover audit fields and deterministic effective-date/code ordering.
+- No transaction cost, portfolio return, NAV, benchmark, metric, execution
+  simulator, Artifact, legacy backtest, or `PipelineConfig` integration was
+  added. V6-A, B1, B2, B3, V5 Holdings, data, signals, ML, app, scripts, config,
+  docs, README, and dependencies remain unchanged.
+- Targeted V6-C tests: `42 passed`. B3+C regression: `86 passed`.
+  B1+B2+B3+C regression: `214 passed`. V6-A regression: `117 passed`.
+  V5 Holdings compatibility: `184 passed`.
+- Full pytest under approved normal local process permissions:
+  `2563 passed, 4 skipped, 11 warnings in 181.85s`; this is +42 passed over V6-B3
+  with unchanged skips/warnings and no new xfail.
+- Static frequency/execution/cost-NAV scans, protected-diff checks, in-memory
+  compile/import smoke, deterministic input immutability tests, line-length
+  check, and `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
+  operation was performed.
+- Next stage: V6-D Portfolio Return / Transaction Cost / NAV.

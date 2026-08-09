@@ -70,6 +70,17 @@ from src.research_backtest.returns import (
     build_benchmark_daily_returns,
     build_security_daily_returns,
 )
+from src.research_backtest.rebalance import (
+    REBALANCE_OUTPUT_COLUMNS,
+    WEIGHT_TOLERANCE,
+    RebalanceAccountingEngine,
+    RebalanceAccountingError,
+    RebalanceAccountingResult,
+    RebalanceInputError,
+    RebalanceInvariantError,
+    RebalanceScheduleError,
+    WeightDriftError,
+)
 
 __all__ = [
     "AVAILABLE",
@@ -87,7 +98,14 @@ __all__ = [
     "RESEARCH_BACKTEST_SCHEDULE_MODES",
     "RESEARCH_BACKTEST_SOURCE_MODES",
     "RESEARCH_BACKTEST_TURNOVER_DEFINITIONS",
+    "REBALANCE_OUTPUT_COLUMNS",
     "ResearchBacktestContractError",
+    "RebalanceAccountingEngine",
+    "RebalanceAccountingError",
+    "RebalanceAccountingResult",
+    "RebalanceInputError",
+    "RebalanceInvariantError",
+    "RebalanceScheduleError",
     "RAW_RETURN_FIELD",
     "RETURN_CONVENTION",
     "RETURN_UNIT",
@@ -99,6 +117,8 @@ __all__ = [
     "SECURITY_SUSPENSION_COLUMNS",
     "SUSPENDED",
     "UNKNOWN_MISSING",
+    "WEIGHT_TOLERANCE",
+    "WeightDriftError",
     "BenchmarkReturnDataError",
     "MarketReturnError",
     "MarketReturnProviderError",
@@ -133,3 +153,8 @@ __all__ = [
     "validate_turnover_definition",
     "validate_strict_common_calendar",
 ]
+
+# Importing the implementation above makes Python attach the submodule itself to
+# this package.  The V6-A public contract deliberately reserves ``rebalance`` as
+# an absent operation name; only the explicit engine/result symbols are public.
+globals().pop("rebalance", None)
