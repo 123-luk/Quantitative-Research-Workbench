@@ -2765,3 +2765,21 @@ override，V4-E3 为 CLI + YAML + docs。
 - V6-A contracts/config, B1 calendar/alignment, legacy `src/backtest/**`, `PipelineConfig`, Runner, CLI, YAML, UI, and dependencies remain unchanged.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V6-B3 Security Availability / Suspension / Missing-Return Policy.
+
+## 2026-08-09 V6-B3 Security Availability / Suspension / Missing-Return Policy
+
+- V6-B3 completed on local branch `feature/research-backtest`; start and final HEAD remain `fdab965f7b86f6520262fcbdc8bd9c528991dbb1`, the committed V6-B2 daily-return adapter revision based on `v0.6.0`.
+- Extended the existing raw TuShare wrapper minimally and backward-compatibly: `get_stock_basic(list_status="L")` still defaults to listed stocks but now accepts explicit L/D/P requests and includes `list_status`, `list_date`, and `delist_date`; `get_suspend_d` delegates explicit code/date/type scope and returns only `ts_code,trade_date,suspend_timing,suspend_type` raw events.
+- Added canonical lifecycle reconciliation and daily suspension/resumption normalization. Distinct L/D/P rows for one code may merge only when lifecycle facts are compatible; duplicate same-status rows, conflicting dates, a delisted row without delist date, impossible date order, duplicate daily suspension keys, malformed events, and scope leakage fail closed.
+- Added exact status schema `trade_date, ts_code, status` with immutable vocabulary AVAILABLE, SUSPENDED, PRE_LISTING, DELIST_DATE, POST_DELIST, and UNKNOWN_MISSING. Status construction is bounded to explicit codes and evaluation dates and reuses B1 `TradingCalendar` to reject closed-day return evaluation.
+- Lifecycle boundaries are explicit: before list date is PRE_LISTING; list date enters the active range; the provider's delist date is preserved as DELIST_DATE rather than guessed to be an ordinary active or post-delist day; strictly later dates are POST_DELIST.
+- AVAILABLE requires an active lifecycle date plus an observed canonical B2 return. SUSPENDED requires a same-date TuShare S event with no intraday `suspend_timing` segment and a missing return. A resume event, a dated intraday suspension segment, or no event cannot prove a full-day suspension and therefore leaves an active missing return UNKNOWN_MISSING.
+- Added `resolve_security_return`: finite observed returns pass unchanged only for compatible AVAILABLE/DELIST_DATE status; only proven SUSPENDED missing returns resolve to 0.0. That zero is a daily research holding-valuation convention, not evidence of tradability, execution, buying, selling, or rebalance feasibility.
+- PRE_LISTING, DELIST_DATE, POST_DELIST, AVAILABLE-with-missing, and UNKNOWN_MISSING all fail closed with date/code/status identity. A return plus proven full-day suspension, lifecycle data outside its valid range, or other return/status contradiction also fails closed.
+- No generic zero fill, forward/backward fill, row dropping, endless suspension forward propagation, schedule generation, frequency behavior, execution/order/fill simulation, filesystem discovery, benchmark behavior, or `PipelineConfig` integration was added.
+- B2 return panels and B1 calendar/benchmark alignment remain unchanged. V6-A contracts/config, legacy `src/backtest/**`, Runner, CLI, YAML, UI, and dependencies remain unchanged.
+- Targeted B3/provider tests: `53 passed`. B2+B3 regression: `113 passed`. B1+B2+B3 regression: `172 passed`. V6-A regression: `117 passed`. V5 contracts/config compatibility: `72 passed`.
+- Full pytest under approved normal local process permissions: `2521 passed, 4 skipped, 11 warnings in 166.95s`; this is +49 passed over V6-B2 with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, static zero-resolution/source scans, input immutability checks, protected-diff checks, line-length checks, and `git diff --check` passed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-C Rebalance Accounting.
