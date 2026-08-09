@@ -101,6 +101,25 @@ from src.research_backtest.analytics import (
     PerformanceAnalyticsResult,
     PerformanceMetricError,
 )
+from src.research_backtest.artifacts import (
+    BENCHMARK_FILENAME,
+    DAILY_PORTFOLIO_FILENAME,
+    METRICS_FILENAME,
+    REBALANCES_FILENAME,
+    RESEARCH_BACKTEST_ARTIFACT_FILENAMES,
+    RESEARCH_BACKTEST_ARTIFACT_SCHEMA_VERSION,
+    RESEARCH_BACKTEST_ARTIFACT_TYPE,
+    RESEARCH_BACKTEST_AUDIT_FILENAME,
+    RESEARCH_BACKTEST_CONFIG_FILENAME,
+    RESEARCH_BACKTEST_MANIFEST_FILENAME,
+    ResearchBacktestArtifactError,
+    ResearchBacktestArtifactExistsError,
+    ResearchBacktestArtifactResult,
+    ResearchBacktestArtifactStore,
+    ResearchBacktestArtifactValidationError,
+    ResearchBacktestArtifactValidationResult,
+    ResearchBacktestArtifactWriteError,
+)
 
 __all__ = [
     "AVAILABLE",
@@ -188,6 +207,23 @@ __all__ = [
     "validate_source_mode",
     "validate_turnover_definition",
     "validate_strict_common_calendar",
+    "BENCHMARK_FILENAME",
+    "DAILY_PORTFOLIO_FILENAME",
+    "METRICS_FILENAME",
+    "REBALANCES_FILENAME",
+    "RESEARCH_BACKTEST_ARTIFACT_FILENAMES",
+    "RESEARCH_BACKTEST_ARTIFACT_SCHEMA_VERSION",
+    "RESEARCH_BACKTEST_ARTIFACT_TYPE",
+    "RESEARCH_BACKTEST_AUDIT_FILENAME",
+    "RESEARCH_BACKTEST_CONFIG_FILENAME",
+    "RESEARCH_BACKTEST_MANIFEST_FILENAME",
+    "ResearchBacktestArtifactError",
+    "ResearchBacktestArtifactExistsError",
+    "ResearchBacktestArtifactResult",
+    "ResearchBacktestArtifactStore",
+    "ResearchBacktestArtifactValidationError",
+    "ResearchBacktestArtifactValidationResult",
+    "ResearchBacktestArtifactWriteError",
 ]
 
 # Importing the implementation above makes Python attach the submodule itself to
@@ -196,3 +232,4 @@ __all__ = [
 globals().pop("rebalance", None)
 globals().pop("portfolio", None)
 globals().pop("analytics", None)
+globals().pop("artifacts", None)

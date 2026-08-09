@@ -2940,3 +2940,54 @@ override，V4-E3 为 CLI + YAML + docs。
   dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
   operation was performed.
 - Next stage: V6-F Research Backtest Artifact.
+
+## 2026-08-09 V6-F Research Backtest Artifact
+
+- V6-F completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `51f8586fce198e55d0887dd1ec18cd3d2cec695e`, the committed V6-E
+  performance analytics revision based on `v0.6.0`.
+- Added native Research Backtest Artifact schema `1.0` with the exact seven-file
+  layout: `rebalances.parquet`, `daily_portfolio.parquet`,
+  `benchmark.parquet`, `metrics.json`, `config.json`, `audit.json`, and
+  `manifest.json`.
+- Persisted the unchanged canonical V6-C, V6-D, and V6-E outputs. The Artifact
+  layer validates schemas, invariants, and a limited final-NAV/total-return
+  consistency check; it does not reimplement turnover, NAV, cost, return, or
+  performance-metric calculations.
+- `config.json` is the complete detached JSON-safe
+  `ResearchBacktestPipelineConfig.to_dict()` snapshot. Publication requires an
+  enabled, complete research-backtest config with transaction-cost, benchmark,
+  and performance assumptions.
+- `audit.json` records identity, coverage and counts, research assumptions,
+  source/return semantics, timing conventions, and direct provenance for one
+  explicit native Holdings Artifact.
+- Publication requires an explicit Holdings Artifact directory, reuses
+  `HoldingsArtifactStore.validate`, records exact manifest/data paths and
+  SHA-256 values plus rows/date count, and verifies that V6-C target states
+  match the validated Holdings data. Bare parquet, missing/tampered upstream
+  artifacts, and mismatched provenance fail closed.
+- The manifest records SHA-256 and byte size for the six payloads and excludes
+  itself. It is written last in a private staging directory, the complete
+  staging Artifact is validated, and publication uses one atomic directory
+  replace. Existing empty, valid, or corrupt targets are never overwritten.
+- The validator checks the exact file set, regular-file safety, manifest/schema
+  identity, size/hash integrity, strict JSON, complete config and audit,
+  canonical parquet schemas/invariants, upstream lineage, and C/D/E cross-file
+  consistency. Payload, metadata, JSON, schema, semantic, and upstream tampering
+  all fail closed.
+- There is no latest/mtime/glob discovery, network access, Pipeline integration,
+  execution simulator, provider orchestration, or legacy-backtest change.
+- Targeted V6-F tests: `49 passed`. V6 Artifact regression: `171 passed`.
+  Existing Artifact regression: `236 passed`. V6-A through V6-F focused
+  regression: `460 passed`. V5 compatibility: `175 passed`.
+- Full pytest under approved normal local process permissions:
+  `2692 passed, 4 skipped, 11 warnings in 146.63s`; this is +49 passed over V6-E
+  with unchanged skips/warnings and no new xfail.
+- Static discovery/execution/analytics-formula/return-reconstruction scans,
+  protected-diff checks, in-memory compile/import smoke, line-length check, and
+  `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, reset,
+  cherry-pick, or tag operation was performed.
+- Next stage: V6-G1 Backtest Source Adapter + Executor.
