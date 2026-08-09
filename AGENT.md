@@ -2887,3 +2887,56 @@ override，V4-E3 为 CLI + YAML + docs。
   dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
   operation was performed.
 - Next stage: V6-E Benchmark + Performance Analytics.
+
+## 2026-08-09 V6-E Benchmark Alignment + Performance Analytics
+
+- V6-E completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `0d8e2c1eefdcd1cb33860a74fc80ab0906aecc69`, the committed V6-D
+  portfolio return/NAV revision based on `v0.6.0`.
+- Added `PerformanceAnalyticsEngine` and defensive `PerformanceAnalyticsResult`
+  with canonical benchmark daily accounting and deterministic JSON-safe metrics.
+- Reused B1 `validate_strict_common_calendar` after an explicit deterministic
+  crop to the unchanged D evaluation window. Missing, duplicate, mixed-code, or
+  in-window extra benchmark observations fail closed without intersection or
+  filling.
+- Benchmark identity comes only from explicit `BenchmarkConfig.benchmark_code`.
+  The first evaluation return is forced to zero at the first strategy effective
+  close, so its raw provider return does not enter benchmark NAV; canonical B2
+  returns begin contributing on the next strategy observation.
+- Benchmark NAV begins at D `initial_nav` and compounds positive finite daily
+  factors. It has no transaction cost. A later return of -1 or any return below
+  -1 fails closed when it would make the accounting factor non-positive.
+- Net strategy performance is primary for volatility, Sharpe, maximum drawdown,
+  tracking error, and information ratio. Gross total and annualized returns are
+  retained as explicit cost-before views.
+- Annualization uses all D daily observations, including the first effective
+  date, and configurable `PerformanceConfig.annualization_days`. Volatility and
+  active-return deviation use sample standard deviation (`ddof=1`). There is no
+  fixed 12-period or rebalance-frequency assumption.
+- The annual risk-free scalar is converted by simple division by annualization
+  days and used only in Sharpe. Insufficient-observation volatility/ratios and
+  zero-denominator ratios are represented by `None`; zero tracking error remains
+  the valid numeric value `0.0`.
+- Net maximum drawdown includes D `initial_nav` as the initial high-water mark,
+  so first-build transaction cost is captured. Cumulative and annualized excess
+  are frozen as strategy-minus-benchmark return differences; TE/IR use daily net
+  active returns.
+- Added turnover, traded-notional, and transaction-cost summaries plus
+  `transaction_cost_return_drag = gross_total_return - net_total_return`; this
+  cumulative drag remains distinct from the arithmetic sum of event cost rates.
+- No D, B1, B2, B3, C, contracts/config, legacy backtest, Artifact persistence,
+  pipeline integration, runner, CLI/YAML/UI, or execution behavior was changed.
+- Targeted V6-E tests: `40 passed`. D+E regression: `80 passed`.
+  B1+B2+B3+C+D+E regression: `294 passed`. V6-A regression: `117 passed`.
+  V5 Holdings compatibility: `184 passed`.
+- Full pytest under approved normal local process permissions:
+  `2643 passed, 4 skipped, 11 warnings in 165.71s`; this is +40 passed over V6-D
+  with unchanged skips/warnings and no new xfail.
+- Static frequency/alignment-discovery/execution/Artifact scans, protected-diff
+  checks, in-memory compile/import smoke, deterministic immutability and JSON
+  safety tests, line-length check, and `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
+  operation was performed.
+- Next stage: V6-F Research Backtest Artifact.

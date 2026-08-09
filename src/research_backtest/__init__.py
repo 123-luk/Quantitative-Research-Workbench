@@ -91,11 +91,22 @@ from src.research_backtest.portfolio import (
     PortfolioTransactionCostError,
     PortfolioValueError,
 )
+from src.research_backtest.analytics import (
+    BENCHMARK_DAILY_COLUMNS,
+    PERFORMANCE_METRIC_KEYS,
+    BenchmarkSeriesError,
+    PerformanceAnalyticsEngine,
+    PerformanceAnalyticsError,
+    PerformanceAnalyticsInputError,
+    PerformanceAnalyticsResult,
+    PerformanceMetricError,
+)
 
 __all__ = [
     "AVAILABLE",
     "BenchmarkCalendarAlignmentError",
     "BenchmarkCalendarError",
+    "BENCHMARK_DAILY_COLUMNS",
     "BENCHMARK_DAILY_RETURN_COLUMNS",
     "BENCHMARK_RETURN_SOURCE_NAME",
     "DELIST_DATE",
@@ -108,6 +119,12 @@ __all__ = [
     "PortfolioDailyInputError",
     "PortfolioTransactionCostError",
     "PortfolioValueError",
+    "PERFORMANCE_METRIC_KEYS",
+    "PerformanceAnalyticsEngine",
+    "PerformanceAnalyticsError",
+    "PerformanceAnalyticsInputError",
+    "PerformanceAnalyticsResult",
+    "PerformanceMetricError",
     "PRE_LISTING",
     "RESEARCH_BACKTEST_BENCHMARK_ALIGNMENT_POLICIES",
     "RESEARCH_BACKTEST_COST_RATE_BASES",
@@ -138,6 +155,7 @@ __all__ = [
     "WEIGHT_TOLERANCE",
     "WeightDriftError",
     "BenchmarkReturnDataError",
+    "BenchmarkSeriesError",
     "MarketReturnError",
     "MarketReturnProviderError",
     "MissingSecurityReturnError",
@@ -177,3 +195,4 @@ __all__ = [
 # an absent operation name; only the explicit engine/result symbols are public.
 globals().pop("rebalance", None)
 globals().pop("portfolio", None)
+globals().pop("analytics", None)
