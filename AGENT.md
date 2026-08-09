@@ -2730,3 +2730,20 @@ override，V4-E3 为 CLI + YAML + docs。
 - The restricted Windows sandbox reproduced the existing 21 HistGradientBoosting/joblib named-pipe permission failures; the identical fixed-interpreter full suite passed under normal local process permissions without a workaround.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next stage: V6-B1 Trading Calendar + Benchmark Calendar Adapter; the exact adjusted-return source remains reserved for V6-B2.
+
+## 2026-08-09 V6-B1 Trading Calendar + Benchmark Calendar Adapter
+
+- V6-B1 completed on local branch `feature/research-backtest`; start and final HEAD remain `68f2459cb760411f6a1b46eebf05a10248863970`, the committed V6-A contracts/config revision based on `v0.6.0`.
+- Added an immutable canonical `TradingCalendar` with explicit inclusive natural-date coverage, sorted unique naive-midnight `pandas.Timestamp` open dates, fail-closed provider-row validation, `is_trading_day`, and strictly-greater `next_trading_day`.
+- Added `TushareTradingCalendarAdapter` with dependency injection around the existing `TushareClient.get_trade_cal(start_date, end_date)`. It passes normalized `YYYYMMDD` boundaries, performs no network work in tests, and leaves the existing provider wrapper unchanged; that wrapper continues to use `exchange=""` and requests `exchange,cal_date,is_open,pretrade_date`.
+- Provider responses must contain `cal_date` and integer `is_open`, cover every natural date in the requested inclusive window, contain no duplicate dates, and contain at least one open date. Raw order is canonicalized because the existing wrapper does not guarantee provider sorting; closed rows are retained for coverage proof but excluded from canonical open dates.
+- `next_trading_day(T)` always returns the first known open date strictly greater than T, whether T is open, a weekend, or a holiday. Unknown boundaries and insufficient future coverage raise dedicated coverage errors. There is no natural-day, pandas BDay, month-end, or other fallback.
+- Holdings dates remain the sole rebalance-schedule owner. The calendar primitive is frequency-agnostic and handles monthly-like, weekly-like, daily-like, and multiple same-month Holdings dates without reading a frequency field or generating a schedule.
+- Added pure `validate_strict_common_calendar(strategy_dates, benchmark_dates)`. It validates non-empty unique naive dates, canonicalizes input order, and requires exact date-set equality within an already selected evaluation window.
+- Benchmark mismatches fail closed with deterministic `missing_in_benchmark` and `extra_in_benchmark` timestamp tuples and counts. No silent intersection, unmatched-date dropping, forward fill, backward fill, nearest-date match, or outer alignment is performed.
+- No benchmark price/return fetch, benchmark NAV, hidden benchmark code, security adjusted return, qfq/hfq/adj-factor choice, Holdings adapter, Backtest engine/accounting, Artifact, `PipelineConfig`, Runner, CLI, YAML, UI, or live-execution behavior was added. V6-A contracts/config, legacy `src/backtest/**`, and the existing TuShare client remain unchanged.
+- Targeted B1 tests: `59 passed`. V6-A+B1 regression: `176 passed`. Provider/data regression: `45 passed`. V5 contracts/config compatibility: `72 passed`.
+- Full pytest under approved normal local process permissions: `2399 passed, 4 skipped, 11 warnings in 164.48s`; this is +59 passed over V6-A with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, frequency/fallback scans, strict-alignment scans, protected-diff checks, and source-frame immutability checks passed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-B2 Security + Benchmark Adjusted Return Adapter.
