@@ -295,3 +295,9 @@ execution system. See the
 [Research Backtest Pipeline Guide](docs/10_research_backtest_pipeline.md) for
 source modes, timing, return and suspension rules, cost/NAV semantics, metrics,
 Artifact validation, and non-goals.
+
+Local v0.7.0 release-candidate scope, frozen semantics, compatibility, and
+manual release steps are recorded in the
+[v0.7.0 Release Readiness checklist](docs/11_v0.7.0_release_readiness.md).
+This local readiness record does not claim a merged PR, passing remote CI, or a
+published `v0.7.0` tag.

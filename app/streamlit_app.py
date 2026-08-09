@@ -1025,7 +1025,7 @@ def main() -> None:
         "Navigation",
         ["首页 Dashboard", "运行研究流水线", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
     )
-    st.sidebar.markdown("当前版本：V6-A Portfolio Dashboard")
+    st.sidebar.markdown("当前能力：V6 Research Backtest Dashboard")
     st.sidebar.markdown("数据来源：TuShare + local CSV")
     st.sidebar.info("如数据为空，请先运行 scripts/run_research_pipeline.py")
 

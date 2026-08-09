@@ -9,6 +9,9 @@ import pandas as pd
 import pytest
 
 import src.pipeline.runner as runner_module
+from app.services.research_backtest_ui_service import (
+    load_research_backtest_dashboard,
+)
 from src.holdings import (
     HoldingsArtifactConfig,
     HoldingsArtifactStore,
@@ -92,6 +95,50 @@ def _holdings(
     return written, pipeline_result
 
 
+def _rotating_holdings(tmp_path: Path):
+    signals = pd.DataFrame(
+        [
+            {
+                "trade_date": pd.Timestamp("2024-01-02"),
+                "ts_code": "A.SZ",
+                "score": 2.0,
+                "rank": 1,
+            },
+            {
+                "trade_date": pd.Timestamp("2024-01-04"),
+                "ts_code": "B.SZ",
+                "score": 2.0,
+                "rank": 1,
+            },
+        ]
+    )
+    signals["trade_date"] = signals["trade_date"].astype("datetime64[ns]")
+    signals["ts_code"] = signals["ts_code"].astype("string")
+    signals["rank"] = signals["rank"].astype(np.int64)
+    built = HoldingsBuilder().build(
+        signals,
+        top_n=1,
+        insufficient_universe_policy="error",
+        weighting="equal_weight",
+    )
+    signal_dir = tmp_path / "rotating-signal"
+    signal_dir.mkdir()
+    signal_path = signal_dir / "signals.parquet"
+    signal_path.write_bytes(b"source")
+    provenance = SignalArtifactProvenance(
+        signal_dir,
+        signal_path,
+        "1.0",
+        hashlib.sha256(signal_path.read_bytes()).hexdigest(),
+    )
+    written = HoldingsArtifactStore().write(
+        built,
+        provenance,
+        HoldingsArtifactConfig(tmp_path / "rotating-holdings"),
+    )
+    return written
+
+
 class _Provider:
     def __init__(
         self,
@@ -100,11 +147,15 @@ class _Provider:
         missing_security: tuple[str, str] | None = None,
         suspended: tuple[str, str] | None = None,
         missing_benchmark_date: str | None = None,
+        security_pct_chg: dict[tuple[str, str], float] | None = None,
+        benchmark_pct_chg: dict[str, float] | None = None,
     ) -> None:
         self.codes = codes
         self.missing_security = missing_security
         self.suspended = suspended
         self.missing_benchmark_date = missing_benchmark_date
+        self.security_pct_chg = security_pct_chg or {}
+        self.benchmark_pct_chg = benchmark_pct_chg or {}
         self.daily_codes: list[str] = []
         self.benchmark_codes: list[str] = []
 
@@ -147,7 +198,7 @@ class _Provider:
                 {
                     "trade_date": item.strftime("%Y%m%d"),
                     "ts_code": ts_code,
-                    "pct_chg": 0.0,
+                    "pct_chg": self.security_pct_chg.get(identity, 0.0),
                 }
             )
         return pd.DataFrame(rows, columns=["trade_date", "ts_code", "pct_chg"])
@@ -165,7 +216,9 @@ class _Provider:
             {
                 "trade_date": item.strftime("%Y%m%d"),
                 "ts_code": ts_code,
-                "pct_chg": 0.0,
+                "pct_chg": self.benchmark_pct_chg.get(
+                    item.strftime("%Y-%m-%d"), 0.0
+                ),
             }
             for item in self._dates(start_date, end_date)
             if item.strftime("%Y-%m-%d") != self.missing_benchmark_date
@@ -210,11 +263,13 @@ class _Provider:
         )
 
 
-def _config(source: BacktestSourceConfig) -> ResearchBacktestPipelineConfig:
+def _config(
+    source: BacktestSourceConfig, *, cost_bps: float = 10.0
+) -> ResearchBacktestPipelineConfig:
     return ResearchBacktestPipelineConfig(
         enabled=True,
         source=source,
-        transaction_cost=TransactionCostConfig(cost_bps=10.0),
+        transaction_cost=TransactionCostConfig(cost_bps=cost_bps),
         benchmark=BenchmarkConfig(benchmark_code="TEST.IDX"),
         performance=PerformanceConfig(annual_risk_free_rate=0.0),
     )
@@ -343,6 +398,118 @@ def test_unexplained_missing_return_fails_closed(tmp_path: Path) -> None:
         ).execute(artifact_dir=tmp_path / "backtest", end_date="2024-01-08")
 
 
+@pytest.mark.parametrize(
+    ("list_date", "delist_date", "missing"),
+    [
+        ("20240105", None, None),
+        ("20200101", "20240103", ("2024-01-04", "A.SZ")),
+    ],
+    ids=("pre-listing", "post-delist"),
+)
+def test_lifecycle_inconsistency_fails_closed_end_to_end(
+    tmp_path: Path,
+    list_date: str,
+    delist_date: str | None,
+    missing: tuple[str, str] | None,
+) -> None:
+    holdings, _ = _holdings(tmp_path, codes=("A.SZ",))
+
+    class LifecycleProvider(_Provider):
+        def get_stock_basic(self, list_status: str = "L") -> pd.DataFrame:
+            expected = "D" if delist_date is not None else "L"
+            if list_status != expected:
+                return pd.DataFrame(
+                    columns=["ts_code", "list_status", "list_date", "delist_date"]
+                )
+            return pd.DataFrame(
+                {
+                    "ts_code": ["A.SZ"],
+                    "list_status": [expected],
+                    "list_date": [list_date],
+                    "delist_date": [delist_date],
+                }
+            )
+
+    provider = LifecycleProvider(codes=("A.SZ",), missing_security=missing)
+    with pytest.raises(ResearchBacktestPipelineExecutionError):
+        ResearchBacktestPipelineExecutor(
+            _config(
+                BacktestSourceConfig(
+                    mode="files", artifact_dir=holdings.artifact_dir
+                )
+            ),
+            provider,
+        ).execute(artifact_dir=tmp_path / "backtest", end_date="2024-01-08")
+
+
+def test_timing_cost_benchmark_and_determinism_end_to_end(tmp_path: Path) -> None:
+    holdings = _rotating_holdings(tmp_path)
+    security_returns = {
+        ("2024-01-03", "A.SZ"): 50.0,
+        ("2024-01-04", "A.SZ"): 10.0,
+        ("2024-01-05", "A.SZ"): 10.0,
+        ("2024-01-05", "B.SZ"): 100.0,
+        ("2024-01-08", "B.SZ"): 20.0,
+    }
+    benchmark_returns = {"2024-01-03": 75.0}
+
+    def execute(name: str, cost_bps: float):
+        provider = _Provider(
+            security_pct_chg=security_returns,
+            benchmark_pct_chg=benchmark_returns,
+        )
+        return ResearchBacktestPipelineExecutor(
+            _config(
+                BacktestSourceConfig(
+                    mode="files", artifact_dir=holdings.artifact_dir
+                ),
+                cost_bps=cost_bps,
+            ),
+            provider,
+        ).execute(artifact_dir=tmp_path / name, end_date="2024-01-08")
+
+    first = execute("backtest-first", 10.0)
+    repeated = execute("backtest-repeated", 10.0)
+    zero_cost = execute("backtest-zero", 0.0)
+    daily = pd.read_parquet(first.artifact_dir / "daily_portfolio.parquet").set_index(
+        "trade_date"
+    )
+    benchmark = pd.read_parquet(first.artifact_dir / "benchmark.parquet").set_index(
+        "trade_date"
+    )
+    assert daily.loc[pd.Timestamp("2024-01-03"), "gross_return"] == 0.0
+    assert daily.loc[pd.Timestamp("2024-01-04"), "gross_return"] == pytest.approx(
+        0.10
+    )
+    later = daily.loc[pd.Timestamp("2024-01-05")]
+    assert later["gross_return"] == pytest.approx(0.10)
+    assert later["turnover"] == pytest.approx(1.0)
+    assert later["traded_notional"] == pytest.approx(2.0)
+    assert later["transaction_cost"] == pytest.approx(0.002)
+    assert later["net_return"] == pytest.approx((1.1 * 0.998) - 1.0)
+    assert daily.loc[pd.Timestamp("2024-01-08"), "gross_return"] == pytest.approx(
+        0.20
+    )
+    initial = daily.loc[pd.Timestamp("2024-01-03")]
+    assert initial["traded_notional"] == pytest.approx(1.0)
+    assert initial["transaction_cost"] == pytest.approx(0.001)
+    assert benchmark.loc[pd.Timestamp("2024-01-03"), "benchmark_return"] == 0.0
+
+    zero_daily = pd.read_parquet(
+        zero_cost.artifact_dir / "daily_portfolio.parquet"
+    )
+    assert np.allclose(zero_daily["gross_nav"], zero_daily["net_nav"])
+    for filename in (
+        "rebalances.parquet",
+        "daily_portfolio.parquet",
+        "benchmark.parquet",
+    ):
+        left = pd.read_parquet(first.artifact_dir / filename)
+        right = pd.read_parquet(repeated.artifact_dir / filename)
+        pd.testing.assert_frame_equal(left, right)
+    assert first.metrics == repeated.metrics
+
+
 def test_no_overwrite_propagates_as_execution_failure(tmp_path: Path) -> None:
     holdings, _ = _holdings(tmp_path)
     executor = ResearchBacktestPipelineExecutor(
@@ -439,14 +606,51 @@ def test_runner_pipeline_source_uses_real_executor_path(
     assert Path(audit["upstream_holdings"]["holdings_artifact_dir"]) == (
         holdings.artifact_dir
     )
+    payload = load_research_backtest_dashboard(
+        summary["research_backtest"]  # type: ignore[arg-type]
+    )
+    assert payload.artifact_dir == artifact_dir
+    assert payload.metrics == summary["research_backtest"]["metrics"]  # type: ignore[index]
+    assert tuple(payload.nav.columns) == (
+        "trade_date",
+        "gross_nav",
+        "net_nav",
+        "benchmark_nav",
+    )
 
 
 def test_runner_files_source_uses_real_executor_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    holdings, _ = _holdings(tmp_path)
+    holdings, _ = _holdings(tmp_path, name="explicit")
+    current, current_result = _holdings(
+        tmp_path, name="current", codes=("X.SZ", "Y.SZ")
+    )
+
+    class SignalResult:
+        def as_dict(self) -> dict[str, object]:
+            return {"enabled": True}
+
+    class SignalExecutor:
+        def __init__(self, config: object) -> None:
+            pass
+
+        def execute(self, run_dir: object, **kwargs: object) -> SignalResult:
+            return SignalResult()
+
+    class HoldingsExecutor:
+        def __init__(self, config: object) -> None:
+            pass
+
+        def execute(
+            self, run_dir: object, **kwargs: object
+        ) -> HoldingsPipelineResult:
+            return current_result
+
     monkeypatch.setattr(runner_module, "DataManager", _ReadyDataManager)
     monkeypatch.setattr(runner_module, "TushareClient", _Provider)
+    monkeypatch.setattr(runner_module, "SignalPipelineExecutor", SignalExecutor)
+    monkeypatch.setattr(runner_module, "HoldingsPipelineExecutor", HoldingsExecutor)
     summary = run_pipeline(
         _pipeline_config(
             tmp_path,
@@ -455,11 +659,15 @@ def test_runner_files_source_uses_real_executor_path(
                     mode="files", artifact_dir=holdings.artifact_dir
                 )
             ),
-            upstream=False,
+            upstream=True,
         )
     )
     artifact_dir = Path(summary["research_backtest"]["artifact_dir"])  # type: ignore[index]
     assert ResearchBacktestArtifactStore().validate(artifact_dir).is_valid
+    audit = json.loads((artifact_dir / "audit.json").read_text(encoding="utf-8"))
+    lineage = Path(audit["upstream_holdings"]["holdings_artifact_dir"])
+    assert lineage == holdings.artifact_dir
+    assert lineage != current.artifact_dir
 
 
 @pytest.mark.parametrize("top_n", [5, 10])

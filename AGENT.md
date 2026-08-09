@@ -3091,3 +3091,72 @@ override，V4-E3 为 CLI + YAML + docs。
 - No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase,
   reset, cherry-pick, or tag operation was performed.
 - Next stage: V6-I E2E + v0.7.0 Release Readiness.
+
+## 2026-08-09 V6-I E2E and v0.7.0 Local Release Readiness
+
+- V6-I completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `d980790f7d43cb11d0cffda860222d32ea641453`, the committed V6-H
+  Streamlit Research Backtest Dashboard revision based on exact release commit
+  `3920971443d12c71d4847de6d41e0c8d67336c88` (`v0.6.0`).
+- Release target is `v0.7.0`. The frozen product position is Research Portfolio
+  Backtest & Evaluation, not live trading, a broker/order simulator, OMS/EMS,
+  or an execution-quality engine. V6 A through V6 H are complete.
+- Version audit confirmed that Git tag is the repository's sole release-version
+  truth. There is no package/version metadata to update. Added
+  `docs/11_v0.7.0_release_readiness.md` using the existing numbered local
+  readiness convention and linked it from README without claiming remote CI,
+  merge, tag, or publication state.
+- Config E2E confirms the canonical example YAML roundtrip, pipeline source,
+  enabled Holdings, Top-N 10, unique `backtest_end`, exact 10 bps cost,
+  `000300.SH`, RF 0.0, 252 days, and all frozen schedule/alignment invariants.
+- Real pipeline-source Runner handoff uses the exact current Holdings Result,
+  real source adapter, Executor, C/D/E/F, valid seven-file schema-1.0 Artifact,
+  JSON-safe summary, and exact validated Artifact consumption by the Streamlit
+  dashboard loader.
+- Real files-source Runner coverage now also creates a different current-run
+  Holdings Result and proves that lineage and evaluation use only the explicit
+  configured native Holdings Artifact, with no fallback.
+- Top-N 5/10 preservation, exact targets/lineage, no V6 re-ranking, and absence
+  of a Research Backtest Top-N remain covered. Monthly-like, weekly-like, and
+  consecutive daily-like Holdings dates all use the unchanged executor/core.
+- Integrated timing E2E proves first-effective-day strategy return zero,
+  next-open target exposure, later-effective-day return ownership by the old
+  portfolio, delayed new-target contribution, and first benchmark return zero.
+- Integrated cost E2E proves zero-cost gross/net NAV equality, initial 10 bps
+  build cost 0.001 from notional 1, and full A-to-B cost 0.002 from notional 2
+  despite half-L1 turnover 1. Multiplicative net-return semantics are preserved.
+- Proven full-day suspension succeeds with zero research return; unexplained
+  missing, pre-listing, unresolved post-delist, and missing benchmark dates all
+  fail closed through the real executor path.
+- Artifact exact files/schema, hashes/sizes, cross-file consistency, lineage,
+  upstream and payload tamper, extra-file rejection, no-overwrite, manifest-last
+  atomicity, and failure cleanup remain green. Repeated synthetic executions
+  produce identical rebalances, daily portfolio, benchmark, metrics, counts,
+  and dates apart from allowed runtime metadata/paths.
+- Canonical CLI example parsing, JSON/human summary, no stage-specific business
+  flags, disabled old-config behavior, Streamlit config/run/Artifact/NAV/metric
+  boundaries, public API exports, failure propagation, and V5 ML/Signal/Holdings
+  plus legacy backtest compatibility all passed.
+- Fixed the sole release-consistency production issue: the Streamlit sidebar's
+  stale `V6-A Portfolio Dashboard` label now accurately says
+  `V6 Research Backtest Dashboard`. No calculation, contract, pipeline, source,
+  Artifact, or UI-control behavior changed.
+- Secret scan found only documented placeholders/environment-variable names;
+  production code/config contains no credential or personal absolute runtime
+  path. Existing absolute interpreter paths are development commands in older
+  README/docs/AGENT records. Dependency diffs are empty; ignored `.env`, cache,
+  local data/reports, and bytecode remain untracked.
+- Modified release/E2E/CLI/UI gate: `41 passed`. Final focused regression across
+  55 files: `1872 passed, 4 skipped in 126.06s`.
+- Full pytest under approved normal local process permissions:
+  `2766 passed, 4 skipped, 11 warnings in 234.50s`; this is +6 passed over V6-H
+  with unchanged skips/warnings and no new xfail.
+- Static discovery/frequency/formula/execution scans, V6 delta/hygiene audit,
+  public API audit, compile/import smoke, protected-diff review, line-length and
+  `git diff --check` gates passed.
+- Local status: **LOCAL RELEASE READY**. No dependency, remote Git, stage,
+  commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag operation
+  was performed.
+- Next manual procedure: (1) commit V6-I; (2) push feature branch; (3) open a
+  GitHub PR; (4) review and wait for CI; (5) merge main; (6) verify exact main;
+  (7) create annotated `v0.7.0` tag; (8) push and verify the tag.

@@ -50,6 +50,10 @@ The core is frequency-agnostic. Ordered `Holdings.trade_date` values own the
 rebalance schedule; there is no monthly/weekly/daily backtest enum. Monthly-like,
 weekly-like, consecutive, or irregular Holdings events use the same engine.
 
+Canonical configuration identifiers are `holdings_dates`,
+`next_trading_day`, `adjusted_close_to_close`,
+`one_way_traded_notional`, and `strict_common_calendar`.
+
 For Holdings date T, the target becomes effective at the next trading-day
 post-close boundary. The old portfolio consumes that effective day's
 close-to-close return. The new target begins consuming returns on the following

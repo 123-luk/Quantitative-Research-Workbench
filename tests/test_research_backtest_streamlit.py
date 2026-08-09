@@ -21,6 +21,9 @@ def _pipeline_page() -> AppTest:
 
 def test_research_backtest_disabled_surface_preserves_legacy_controls() -> None:
     app = _pipeline_page()
+    source = STREAMLIT_APP.read_text(encoding="utf-8")
+    assert "当前能力：V6 Research Backtest Dashboard" in source
+    assert "当前版本：V6-A Portfolio Dashboard" not in source
     labels = [widget.label for widget in app.checkbox]
     assert labels == ["Enable Research Backtest", "skip_fetch", "skip_plot"]
     assert not next(
