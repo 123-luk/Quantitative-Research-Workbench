@@ -33,10 +33,17 @@ class TushareClient:
         ts.set_token(token)
         self.pro: Any = ts.pro_api()
 
-    def get_stock_basic(self) -> pd.DataFrame:
-        """Fetch listed stock basic information from TuShare Pro."""
-        fields = "ts_code,symbol,name,area,industry,market,list_date"
-        return self.pro.stock_basic(exchange="", list_status="L", fields=fields)
+    def get_stock_basic(self, list_status: str = "L") -> pd.DataFrame:
+        """Fetch stock lifecycle basics for one explicit listing status."""
+        fields = (
+            "ts_code,symbol,name,area,industry,market,list_status,"
+            "list_date,delist_date"
+        )
+        return self.pro.stock_basic(
+            exchange="",
+            list_status=list_status,
+            fields=fields,
+        )
 
     def get_trade_cal(self, start_date: str, end_date: str) -> pd.DataFrame:
         """Fetch the exchange trading calendar for a date range.
@@ -110,6 +117,65 @@ class TushareClient:
             ts_code=ts_code,
             start_date=start_date,
             end_date=end_date,
+            fields=fields,
+        )
+
+    def get_daily(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch raw security daily market data from TuShare Pro."""
+        fields = (
+            "ts_code,trade_date,open,high,low,close,pre_close,change,"
+            "pct_chg,vol,amount"
+        )
+        return self.pro.daily(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+        )
+
+    def get_index_daily(
+        self,
+        ts_code: str,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch raw benchmark/index daily market data from TuShare Pro."""
+        fields = (
+            "ts_code,trade_date,open,high,low,close,pre_close,change,"
+            "pct_chg,vol,amount"
+        )
+        return self.pro.index_daily(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+        )
+
+    def get_suspend_d(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        suspend_type: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch raw daily suspension/resumption records from TuShare Pro."""
+        fields = "ts_code,trade_date,suspend_timing,suspend_type"
+        return self.pro.suspend_d(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            suspend_type=suspend_type,
             fields=fields,
         )
 

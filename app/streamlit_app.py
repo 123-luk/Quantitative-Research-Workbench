@@ -35,7 +35,11 @@ from app.services.pipeline_config_service import (  # noqa: E402
     build_effective_pipeline_config,
     build_selection_summary,
     get_default_holdings_top_n,
+    get_default_research_backtest_enabled,
     load_canonical_base_config,
+    SUGGESTED_ANNUAL_RISK_FREE_RATE,
+    SUGGESTED_RESEARCH_BACKTEST_BENCHMARK,
+    SUGGESTED_RESEARCH_BACKTEST_COST_BPS,
 )
 from app.services.pipeline_runner_service import (  # noqa: E402
     build_pipeline_command,
@@ -58,6 +62,14 @@ from app.services.stock_report_service import (  # noqa: E402
     build_factor_exposure_comment,
     build_stock_research_summary,
 )
+from app.services.research_backtest_ui_service import (  # noqa: E402
+    PERCENT_METRICS,
+    ResearchBacktestDashboardError,
+    build_research_backtest_details,
+    format_research_backtest_metric,
+    load_research_backtest_dashboard,
+)
+from src.pipeline.config import PipelineConfig  # noqa: E402
 
 
 RISK_NOTICE = "本应用展示的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。"
@@ -178,6 +190,47 @@ def render_pipeline_page(project_root: Path) -> None:
         )
         st.text_input("权重方式", value=EQUAL_WEIGHT_LABEL, disabled=True)
 
+    st.subheader("Research Backtest")
+    enable_research_backtest = st.checkbox(
+        "Enable Research Backtest",
+        value=get_default_research_backtest_enabled(),
+        help="Historical portfolio evaluation through the canonical pipeline.",
+    )
+    cost_bps = SUGGESTED_RESEARCH_BACKTEST_COST_BPS
+    benchmark_code = SUGGESTED_RESEARCH_BACKTEST_BENCHMARK
+    annual_risk_free_rate = SUGGESTED_ANNUAL_RISK_FREE_RATE
+    if enable_research_backtest:
+        backtest_left, backtest_right = st.columns(2)
+        with backtest_left:
+            cost_bps = float(
+                st.number_input(
+                    "Transaction cost (bps)",
+                    min_value=0.0,
+                    value=SUGGESTED_RESEARCH_BACKTEST_COST_BPS,
+                    step=0.1,
+                    help="One-way traded security notional fee assumption.",
+                )
+            )
+            benchmark_code = st.text_input(
+                "Benchmark code", value=SUGGESTED_RESEARCH_BACKTEST_BENCHMARK
+            )
+        with backtest_right:
+            annual_risk_free_rate = float(
+                st.number_input(
+                    "Annual risk-free rate",
+                    value=SUGGESTED_ANNUAL_RISK_FREE_RATE,
+                    step=0.001,
+                    format="%.4f",
+                    help="Annual decimal scalar; for example, 0.02 means 2%.",
+                )
+            )
+            st.caption("Annualization: 252 trading days · Base NAV: 1.0")
+        st.caption(
+            "Source: current-run Holdings · Schedule: Holdings dates · "
+            "Effective: next trading day · Return: adjusted close-to-close · "
+            "Turnover: half-L1 pre-to-target"
+        )
+
     effective_config = None
     if config_path_text.strip():
         try:
@@ -190,6 +243,10 @@ def render_pipeline_page(project_root: Path) -> None:
                 top_n=top_n,
                 signal_direction_label=direction_label,
                 insufficient_policy_label=insufficient_label,
+                research_backtest_enabled=enable_research_backtest,
+                research_backtest_cost_bps=cost_bps,
+                research_backtest_benchmark=benchmark_code,
+                annual_risk_free_rate=annual_risk_free_rate,
             )
             st.subheader("本次选股设置")
             st.json(build_selection_summary(effective_config))
@@ -226,10 +283,74 @@ def render_pipeline_page(project_root: Path) -> None:
                     "weighting": holdings.get("weighting"),
                 }
             )
+            research_backtest = result.get("research_backtest")
+            if effective_config.research_backtest.enabled:
+                if not isinstance(research_backtest, dict):
+                    st.error("Research Backtest result is missing from the pipeline summary.")
+                else:
+                    render_research_backtest_dashboard(
+                        research_backtest, effective_config
+                    )
 
     st.divider()
     with st.expander("Legacy research / backtest pipeline"):
         render_legacy_pipeline_controls(project_root)
+
+
+def render_research_backtest_dashboard(
+    result: dict[str, object], config: PipelineConfig
+) -> None:
+    """Render exact V6 summary metrics and validated Artifact NAV values."""
+    try:
+        payload = load_research_backtest_dashboard(result)
+    except ResearchBacktestDashboardError as exc:
+        st.error(str(exc))
+        return
+
+    st.subheader("Historical Research Performance")
+    metric_rows = [
+        (
+            ("Net Total Return", "net_total_return"),
+            ("Net Annualized Return", "net_annualized_return"),
+            ("Net Sharpe Ratio", "net_sharpe_ratio"),
+            ("Net Max Drawdown", "net_max_drawdown"),
+        ),
+        (
+            ("Benchmark Total Return", "benchmark_total_return"),
+            ("Excess Total Return", "excess_total_return"),
+            ("Tracking Error", "tracking_error"),
+            ("Information Ratio", "information_ratio"),
+        ),
+        (
+            ("Rebalance Count", "rebalance_count"),
+            ("Average Turnover", "average_turnover"),
+            ("Total Transaction Cost", "total_transaction_cost"),
+            ("Transaction Cost Return Drag", "transaction_cost_return_drag"),
+        ),
+    ]
+    for row in metric_rows:
+        columns = st.columns(4)
+        for column, (label, key) in zip(columns, row):
+            value = (
+                result.get("rebalance_count")
+                if key == "rebalance_count"
+                else payload.metrics.get(key)
+            )
+            column.metric(
+                label,
+                format_research_backtest_metric(
+                    value,
+                    percent=key in PERCENT_METRICS,
+                    decimals=0 if key == "rebalance_count" else 2,
+                ),
+            )
+
+    st.subheader("Research Portfolio NAV")
+    st.line_chart(payload.nav.set_index("trade_date"))
+    with st.expander("Research Backtest Details"):
+        st.json(build_research_backtest_details(result, config))
+        st.markdown("**All backend metrics**")
+        st.json(payload.metrics)
 
 def render_legacy_pipeline_controls(project_root: Path) -> None:
     """Render the retained legacy subprocess research controls."""
@@ -904,7 +1025,7 @@ def main() -> None:
         "Navigation",
         ["首页 Dashboard", "运行研究流水线", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
     )
-    st.sidebar.markdown("当前版本：V6-A Portfolio Dashboard")
+    st.sidebar.markdown("当前能力：V6 Research Backtest Dashboard")
     st.sidebar.markdown("数据来源：TuShare + local CSV")
     st.sidebar.info("如数据为空，请先运行 scripts/run_research_pipeline.py")
 

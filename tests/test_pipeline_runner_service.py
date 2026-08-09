@@ -147,6 +147,35 @@ def test_service_propagates_execution_errors(
         service.run_canonical_pipeline({})  # type: ignore[arg-type]
 
 
+def test_enabled_research_backtest_reaches_canonical_runner_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = build_effective_pipeline_config(
+        _base(tmp_path / "output", tmp_path / "native"),
+        top_n=10,
+        research_backtest_enabled=True,
+        research_backtest_cost_bps=2.5,
+        research_backtest_benchmark="000905.SH",
+        annual_risk_free_rate=-0.005,
+    )
+    seen: list[PipelineConfig] = []
+
+    def fake_run(received: PipelineConfig) -> dict[str, object]:
+        seen.append(received)
+        return {
+            "research_backtest": {
+                "enabled": True,
+                "artifact_dir": "exact-artifact",
+                "metrics": {},
+            }
+        }
+
+    monkeypatch.setattr(service, "run_pipeline", fake_run)
+    result = service.run_canonical_pipeline(config)
+    assert seen == [config]
+    assert result["research_backtest"]["artifact_dir"] == "exact-artifact"  # type: ignore[index]
+
+
 def test_canonical_service_has_no_legacy_or_business_logic() -> None:
     canonical = inspect.getsource(service.run_canonical_pipeline)
     assert "run_pipeline(config)" in canonical

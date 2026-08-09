@@ -2700,3 +2700,463 @@ override，V4-E3 为 CLI + YAML + docs。
 - Release blocker count: 0. Readiness recommendation: `GO for feature branch push + GitHub PR + CI/review toward v0.6.0`.
 - Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
 - Next step: separate PR / CI / review / merge / post-merge full pytest / annotated `v0.6.0` release workflow.
+
+## 2026-08-09 V6-A0 Research Backtest Frequency / Date / Return Alignment Audit
+
+- V6 started from exact release `v0.6.0` (`3920971443d12c71d4847de6d41e0c8d67336c88`) on local branch `feature/research-backtest`; V6 is positioned as Research Portfolio Backtest & Evaluation, not live execution or a broker simulator.
+- The legacy CSV factor/scoring/backtest path is explicitly monthly. The canonical v0.6.0 Factor Research -> Modeling Panel -> ML -> Signal -> Holdings path is observation-date driven: its validators allow multiple `trade_date` values in one month and do not require month-end. Root `rebalance_frequency=M` is legacy/config metadata and does not own current Signal/Holdings behavior.
+- The future Backtest Core should be frequency-agnostic. Ordered native Holdings dates own the rebalance event schedule; monthly/weekly/daily/custom upstream producers should share the same calendar/effective-date/daily-return engine without a Backtest frequency enum controlling behavior.
+- `prediction.trade_date` is copied unchanged to Signal and Holdings. It is the prediction/as-of and target-portfolio formation label, not a proven execution date. No current Signal/Holdings date conversion establishes that same-day close is safely tradable.
+- Current forward-return labels default to raw `close`, next unified price-panel market date entry, and 20 market-period holding. ML walk-forward uses only labels whose maximum `exit_trade_date` precedes the validation/prediction cutoff, but ML label entry/exit dates must not be reused automatically as Backtest effective dates.
+- Current formal provider support is incomplete for V6 daily NAV: the project has monthly OHLC/pre_close/pct_chg, daily_basic close, a provider trade-calendar call, generic Parquet storage, and configured/cache names for daily/adj_factor. It has no formal stock-daily fetch API, adjusted-return API, index-daily price/return API, next-trading-date adapter, or verified suspension-status policy. Raw close returns can be distorted by corporate actions.
+- Recommended architecture is Holdings `trade_date` -> next trading day effective -> adjusted close-to-close daily returns, subject to V6-B verification of a point-in-time-safe adjusted-return source and calendar adapter. Open-based alignment is not justified by current project data. Benchmark code should be explicit; `000300.SH` may remain only an example/UI default, not a hidden Backtest Core default.
+- Legacy metric formulas/drawdown plumbing may be adapted, but legacy target-to-target turnover, monthly `return_next` PnL, 12-period annualization, CSV/UI coupling, and missing benchmark/calendar/price-adjustment behavior must be rewritten or ignored. V6 turnover should use `0.5 * sum(abs(target_weight - pre_rebalance_weight))` after return drift; transaction cost should remain a configurable proportional research-friction assumption.
+- No production, test, config, documentation, runner, CLI, UI, Artifact, or pipeline code was changed. Next stage remains pending architecture decisions, especially adjusted daily return, trading calendar, missing/suspension handling, and benchmark source/alignment.
+
+## 2026-08-09 V6-A Research Backtest Contracts and Standalone Config
+
+- V6-A completed on local branch `feature/research-backtest`; start and final HEAD remain `ccfc801a6fa40bd08c1d15dd1eecc4c27aeacda6`, whose latest commit is the V6-A0 architecture audit and whose merge base with `v0.6.0` is the exact release commit.
+- Added the canonical `src/research_backtest` namespace and frozen contract vocabulary for source, schedule, effective-date alignment, return alignment, turnover, transaction-cost basis, and benchmark alignment. Invalid values fail explicitly through one dedicated contract error.
+- Added standalone frozen Backtest config dataclasses under `src/pipeline/research_backtest_config.py`; they are intentionally not integrated into the existing `PipelineConfig`, Runner, CLI, YAML, UI, or Artifact flows in this stage.
+- The Backtest Core remains frequency-agnostic. `holdings_dates` is the only schedule mode, ordered Holdings dates own the rebalance events, and no daily/weekly/monthly behavior or ResearchFrequency enum was introduced.
+- The frozen date/return intent is Holdings formation date -> `next_trading_day` effective date -> `adjusted_close_to_close` return. Concrete provider, qfq/hfq choice, price/calendar adapters, suspension/missing-price handling, and point-in-time verification remain deferred to V6-B2.
+- Source mode is explicit: `pipeline` or `files`. Files mode requires an explicit path and performs no latest/mtime/glob discovery or filesystem access during config validation.
+- Turnover is `half_l1_pre_to_target`: `0.5 * sum(abs(target_weight - pre_rebalance_weight))`, including the cash leg. Pre-rebalance weights mean return-drifted weights immediately before rebalancing; the initial portfolio is 100% cash, so a fully invested first purchase has turnover 1.0.
+- Transaction cost is a proportional research-friction assumption on one-way traded notional: `cost_return = traded_notional * cost_bps / 10000` in the future engine. `cost_bps` is explicit whenever the Backtest is enabled and has no hidden enabled default.
+- Benchmark code and annual risk-free rate are explicit whenever enabled. Benchmark alignment is `strict_common_calendar`; annualization defaults to 252 trading days. Disabled config may leave those values `None`.
+- Serialization is strict and JSON-safe: unknown fields are rejected at every level, caller mappings are deep-copied, `Path` values normalize to strings, and `to_dict`/`from_dict` round trips do not mutate input. The artifact subdirectory is restricted to one safe relative directory component.
+- No live-trading, broker, order, fill, slippage, lot, limit-up/down, capacity, borrow, financing, or settlement fields were added. Legacy `src/backtest/**` and existing `src/pipeline/config.py` remain unchanged.
+- Added focused contract/config coverage: `117 passed`. Related pipeline/config regression: `211 passed`. Full pytest under approved normal local process permissions: `2340 passed, 4 skipped, 11 warnings in 172.08s`; this is +117 passed over the V6-A0/v0.6.0 baseline.
+- The restricted Windows sandbox reproduced the existing 21 HistGradientBoosting/joblib named-pipe permission failures; the identical fixed-interpreter full suite passed under normal local process permissions without a workaround.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-B1 Trading Calendar + Benchmark Calendar Adapter; the exact adjusted-return source remains reserved for V6-B2.
+
+## 2026-08-09 V6-B1 Trading Calendar + Benchmark Calendar Adapter
+
+- V6-B1 completed on local branch `feature/research-backtest`; start and final HEAD remain `68f2459cb760411f6a1b46eebf05a10248863970`, the committed V6-A contracts/config revision based on `v0.6.0`.
+- Added an immutable canonical `TradingCalendar` with explicit inclusive natural-date coverage, sorted unique naive-midnight `pandas.Timestamp` open dates, fail-closed provider-row validation, `is_trading_day`, and strictly-greater `next_trading_day`.
+- Added `TushareTradingCalendarAdapter` with dependency injection around the existing `TushareClient.get_trade_cal(start_date, end_date)`. It passes normalized `YYYYMMDD` boundaries, performs no network work in tests, and leaves the existing provider wrapper unchanged; that wrapper continues to use `exchange=""` and requests `exchange,cal_date,is_open,pretrade_date`.
+- Provider responses must contain `cal_date` and integer `is_open`, cover every natural date in the requested inclusive window, contain no duplicate dates, and contain at least one open date. Raw order is canonicalized because the existing wrapper does not guarantee provider sorting; closed rows are retained for coverage proof but excluded from canonical open dates.
+- `next_trading_day(T)` always returns the first known open date strictly greater than T, whether T is open, a weekend, or a holiday. Unknown boundaries and insufficient future coverage raise dedicated coverage errors. There is no natural-day, pandas BDay, month-end, or other fallback.
+- Holdings dates remain the sole rebalance-schedule owner. The calendar primitive is frequency-agnostic and handles monthly-like, weekly-like, daily-like, and multiple same-month Holdings dates without reading a frequency field or generating a schedule.
+- Added pure `validate_strict_common_calendar(strategy_dates, benchmark_dates)`. It validates non-empty unique naive dates, canonicalizes input order, and requires exact date-set equality within an already selected evaluation window.
+- Benchmark mismatches fail closed with deterministic `missing_in_benchmark` and `extra_in_benchmark` timestamp tuples and counts. No silent intersection, unmatched-date dropping, forward fill, backward fill, nearest-date match, or outer alignment is performed.
+- No benchmark price/return fetch, benchmark NAV, hidden benchmark code, security adjusted return, qfq/hfq/adj-factor choice, Holdings adapter, Backtest engine/accounting, Artifact, `PipelineConfig`, Runner, CLI, YAML, UI, or live-execution behavior was added. V6-A contracts/config, legacy `src/backtest/**`, and the existing TuShare client remain unchanged.
+- Targeted B1 tests: `59 passed`. V6-A+B1 regression: `176 passed`. Provider/data regression: `45 passed`. V5 contracts/config compatibility: `72 passed`.
+- Full pytest under approved normal local process permissions: `2399 passed, 4 skipped, 11 warnings in 164.48s`; this is +59 passed over V6-A with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, frequency/fallback scans, strict-alignment scans, protected-diff checks, and source-frame immutability checks passed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-B2 Security + Benchmark Adjusted Return Adapter.
+
+## 2026-08-09 V6-B2 Security + Benchmark Daily Return Adapter
+
+- V6-B2 completed on local branch `feature/research-backtest`; start and final HEAD remain `6752b688a12b0204caa2253a260d1a3db26b5403`, the committed V6-B1 calendar revision based on `v0.6.0`.
+- Added minimal raw `TushareClient.get_daily` and `get_index_daily` wrappers following the existing client style. They delegate the explicit code/date scope and standard raw fields directly to `pro.daily` / `pro.index_daily`, perform no normalization or business logic, expose no hidden benchmark default, and preserve provider exceptions.
+- Security canonical daily return is formally `tushare.daily.pct_chg / 100`; benchmark canonical daily return is `tushare.index_daily.pct_chg / 100`. Both outputs are decimal returns and identify the existing `adjusted_close_to_close` research convention without constructing a price series.
+- Added exact canonical schemas `trade_date, ts_code, return` for securities and `trade_date, benchmark_code, return` for a single explicit benchmark. Dates are naive normalized `pandas.Timestamp` values, keys are unique, return values are finite real numerics, and output order is deterministic.
+- Security loading calls the injected client once per explicit unique code to keep the raw scope auditable. The resulting date/security panel is intentionally sparse: an explicit code may have no rows, but the adapter never creates Cartesian rows or silently substitutes observations. An entirely empty requested scope, unexpected code, out-of-range date, duplicate key, malformed value, or non-finite return fails closed.
+- Benchmark code is mandatory and raw `ts_code`, when present, must match it exactly. Mixed series, duplicate dates, empty data, malformed values, non-finite returns, and dates outside the explicit scope fail closed. B1 `validate_strict_common_calendar` remains the sole strategy/benchmark date compatibility gate.
+- No raw-close ratio or `pct_change`, qfq/hfq mode, adj-factor price reconstruction, zero fill, forward fill, backward fill, nearest match, silent intersection, NAV, metrics, execution-price behavior, or rebalance-frequency behavior was added.
+- Audit found no existing `daily`, `index_daily`, `suspend_d`, adj-factor, or delist provider wrapper. `daily_basic.close` remains valuation/liquidity data and is not used. Existing stock basic fetches only currently listed securities and exposes `list_date`; that is insufficient to distinguish suspension, pre-listing, post-delist, provider gaps, and universe mismatch.
+- V6-B3 remains required to define security availability evidence and explicit suspension/listing/delist/missing-return policy. B2 deliberately does not infer that a missing daily row is a suspension or assign any economic return to it.
+- Targeted B2/provider tests: `73 passed`. B1+B2 regression: `128 passed`. Provider/data regression: `12 passed`. V6-A regression: `117 passed`. V5 contracts/config compatibility: `72 passed`.
+- Full pytest under approved normal local process permissions: `2472 passed, 4 skipped, 11 warnings in 124.78s`; this is +73 passed over V6-B1 with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, return-source/static safety scans, source-frame immutability checks, protected-diff checks, and `git diff --check` passed.
+- V6-A contracts/config, B1 calendar/alignment, legacy `src/backtest/**`, `PipelineConfig`, Runner, CLI, YAML, UI, and dependencies remain unchanged.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-B3 Security Availability / Suspension / Missing-Return Policy.
+
+## 2026-08-09 V6-B3 Security Availability / Suspension / Missing-Return Policy
+
+- V6-B3 completed on local branch `feature/research-backtest`; start and final HEAD remain `fdab965f7b86f6520262fcbdc8bd9c528991dbb1`, the committed V6-B2 daily-return adapter revision based on `v0.6.0`.
+- Extended the existing raw TuShare wrapper minimally and backward-compatibly: `get_stock_basic(list_status="L")` still defaults to listed stocks but now accepts explicit L/D/P requests and includes `list_status`, `list_date`, and `delist_date`; `get_suspend_d` delegates explicit code/date/type scope and returns only `ts_code,trade_date,suspend_timing,suspend_type` raw events.
+- Added canonical lifecycle reconciliation and daily suspension/resumption normalization. Distinct L/D/P rows for one code may merge only when lifecycle facts are compatible; duplicate same-status rows, conflicting dates, a delisted row without delist date, impossible date order, duplicate daily suspension keys, malformed events, and scope leakage fail closed.
+- Added exact status schema `trade_date, ts_code, status` with immutable vocabulary AVAILABLE, SUSPENDED, PRE_LISTING, DELIST_DATE, POST_DELIST, and UNKNOWN_MISSING. Status construction is bounded to explicit codes and evaluation dates and reuses B1 `TradingCalendar` to reject closed-day return evaluation.
+- Lifecycle boundaries are explicit: before list date is PRE_LISTING; list date enters the active range; the provider's delist date is preserved as DELIST_DATE rather than guessed to be an ordinary active or post-delist day; strictly later dates are POST_DELIST.
+- AVAILABLE requires an active lifecycle date plus an observed canonical B2 return. SUSPENDED requires a same-date TuShare S event with no intraday `suspend_timing` segment and a missing return. A resume event, a dated intraday suspension segment, or no event cannot prove a full-day suspension and therefore leaves an active missing return UNKNOWN_MISSING.
+- Added `resolve_security_return`: finite observed returns pass unchanged only for compatible AVAILABLE/DELIST_DATE status; only proven SUSPENDED missing returns resolve to 0.0. That zero is a daily research holding-valuation convention, not evidence of tradability, execution, buying, selling, or rebalance feasibility.
+- PRE_LISTING, DELIST_DATE, POST_DELIST, AVAILABLE-with-missing, and UNKNOWN_MISSING all fail closed with date/code/status identity. A return plus proven full-day suspension, lifecycle data outside its valid range, or other return/status contradiction also fails closed.
+- No generic zero fill, forward/backward fill, row dropping, endless suspension forward propagation, schedule generation, frequency behavior, execution/order/fill simulation, filesystem discovery, benchmark behavior, or `PipelineConfig` integration was added.
+- B2 return panels and B1 calendar/benchmark alignment remain unchanged. V6-A contracts/config, legacy `src/backtest/**`, Runner, CLI, YAML, UI, and dependencies remain unchanged.
+- Targeted B3/provider tests: `53 passed`. B2+B3 regression: `113 passed`. B1+B2+B3 regression: `172 passed`. V6-A regression: `117 passed`. V5 contracts/config compatibility: `72 passed`.
+- Full pytest under approved normal local process permissions: `2521 passed, 4 skipped, 11 warnings in 166.95s`; this is +49 passed over V6-B2 with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, static zero-resolution/source scans, input immutability checks, protected-diff checks, line-length checks, and `git diff --check` passed.
+- Fixed Python: `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag operation was performed.
+- Next stage: V6-C Rebalance Accounting.
+
+## 2026-08-09 V6-C Rebalance Accounting / Weight Drift / Turnover
+
+- V6-C completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `39cebe2c7a574cea690617df5c2519e21aabfcce`, the committed V6-B3
+  availability revision based on `v0.6.0`.
+- Added a frequency-agnostic `RebalanceAccountingEngine` and defensive
+  `RebalanceAccountingResult`. Each V5 Holdings date T maps through B1
+  `TradingCalendar.next_trading_day(T)` to one strictly later open effective
+  boundary; multiple Holdings dates mapping to the same boundary fail closed.
+- Frozen post-close research convention: the first effective boundary has a
+  100% cash pre-state and ignores that date's security return. A target set at
+  effective-date close starts consuming close-to-close returns on the next open
+  date. The old portfolio then drifts through every open date up to and including
+  the next effective date before the next close-boundary rebalance.
+- V5 canonical Holdings schema validation is reused without modifying Holdings.
+  Runtime checks enforce unique date/code keys, finite non-negative target
+  weights, and per-date sums of one under the existing tight tolerance.
+- Daily drift uses `v_i' = w_i * (1 + r_i)`, zero-return cash, and complete-value
+  normalization. A return of exactly -1 is allowed when the portfolio survives;
+  a return below -1 or non-positive total portfolio value fails closed.
+- Canonical B2 observed returns and B3 `resolve_security_return` are reused.
+  Proven full-day suspension can resolve a missing positive-weight return to
+  zero; unknown/lifecycle-incompatible missing returns fail closed. Numeric-zero
+  securities do not require daily return/status rows.
+- Target cash is zero for v0.7 fully invested Holdings. Turnover is complete
+  half-L1 from drifted pre-rebalance weights to target weights, including the
+  cash leg. The first fully invested turnover is 1.0; no previous-target
+  shortcut, overlap proxy, clipping, or pseudo-CASH security is used.
+- Canonical rebalances contain the union of pre-held and target securities,
+  including exiting and entering names, with repeated event-level cash and
+  turnover audit fields and deterministic effective-date/code ordering.
+- No transaction cost, portfolio return, NAV, benchmark, metric, execution
+  simulator, Artifact, legacy backtest, or `PipelineConfig` integration was
+  added. V6-A, B1, B2, B3, V5 Holdings, data, signals, ML, app, scripts, config,
+  docs, README, and dependencies remain unchanged.
+- Targeted V6-C tests: `42 passed`. B3+C regression: `86 passed`.
+  B1+B2+B3+C regression: `214 passed`. V6-A regression: `117 passed`.
+  V5 Holdings compatibility: `184 passed`.
+- Full pytest under approved normal local process permissions:
+  `2563 passed, 4 skipped, 11 warnings in 181.85s`; this is +42 passed over V6-B3
+  with unchanged skips/warnings and no new xfail.
+- Static frequency/execution/cost-NAV scans, protected-diff checks, in-memory
+  compile/import smoke, deterministic input immutability tests, line-length
+  check, and `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
+  operation was performed.
+- Next stage: V6-D Portfolio Return / Transaction Cost / NAV.
+
+## 2026-08-09 V6-D Portfolio Daily Return / Transaction Cost / NAV
+
+- V6-D completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `e88fb542d06bc99193f2a48880adc1977acc6726`, the committed V6-C
+  rebalance-accounting revision based on `v0.6.0`.
+- Added `PortfolioDailyAccountingEngine` and defensive
+  `PortfolioDailyAccountingResult` for a canonical open-date series from the
+  first V6-C effective date through an explicit inclusive `end_date`.
+- Preserved the post-close convention. Daily gross return uses prior-close
+  weights; the first effective date begins as 100% cash with gross return zero;
+  a later effective-date return belongs to the old portfolio; the new target
+  starts contributing on the next open date.
+- Gross return and weight drift share one B2/B3 resolution pass. Observed B2
+  returns pass through, proven full-day suspension resolves missing return to
+  zero through B3, and unexplained/lifecycle-incompatible positive-weight
+  missing returns fail closed.
+- Extracted a pure internal C helper returning both one-day drift and gross
+  return while keeping the existing C helper and output semantics unchanged.
+  B1 already exposed immutable canonical `open_dates`, so calendar required no
+  change; B2 and B3 remain unchanged.
+- At every in-window event D recomputes the pre-state through daily drift and
+  compares all security weights and cash against V6-C under the shared tight
+  tolerance. Intrinsically malformed or tampered events and C/D disagreements
+  fail closed.
+- Traded notional is the one-way security sum `sum(abs(weight_change))`; the
+  cash leg is excluded. V6-C turnover remains a distinct complete half-L1 audit
+  value. Cost is `traded_notional * cost_bps / 10000`, never turnover times rate.
+- Cost is applied after the day's gross return at the rebalance close boundary.
+  Net factor is `(1 + gross_return) * (1 - transaction_cost)`; a non-finite cost,
+  cost at least one, or non-positive gross/net factor fails closed without caps
+  or clipping.
+- Gross NAV compounds gross factors from explicit `initial_nav` and ignores
+  costs. Net NAV compounds gross and cost factors multiplicatively. Research
+  cost affects NAV only and does not change target weights, drift proportions,
+  cash funding, or security trades.
+- No benchmark, performance metric, Artifact persistence, pipeline integration,
+  runner, CLI/YAML/UI, legacy backtest, or execution simulation was added. The
+  implementation is frequency-agnostic; Holdings-derived events alone determine
+  rebalance dates.
+- Targeted V6-D tests: `40 passed`. C+D regression: `82 passed`.
+  B1+B2+B3+C+D regression: `254 passed`. V6-A regression: `117 passed`.
+  V5 Holdings compatibility: `184 passed`.
+- Full pytest under approved normal local process permissions:
+  `2603 passed, 4 skipped, 11 warnings in 170.46s`; this is +40 passed over V6-C
+  with unchanged skips/warnings and no new xfail.
+- Static metric/Artifact/execution/frequency/cost-formula scans, protected-diff
+  checks, in-memory compile/import smoke, deterministic immutability tests,
+  line-length check, and `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
+  operation was performed.
+- Next stage: V6-E Benchmark + Performance Analytics.
+
+## 2026-08-09 V6-E Benchmark Alignment + Performance Analytics
+
+- V6-E completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `0d8e2c1eefdcd1cb33860a74fc80ab0906aecc69`, the committed V6-D
+  portfolio return/NAV revision based on `v0.6.0`.
+- Added `PerformanceAnalyticsEngine` and defensive `PerformanceAnalyticsResult`
+  with canonical benchmark daily accounting and deterministic JSON-safe metrics.
+- Reused B1 `validate_strict_common_calendar` after an explicit deterministic
+  crop to the unchanged D evaluation window. Missing, duplicate, mixed-code, or
+  in-window extra benchmark observations fail closed without intersection or
+  filling.
+- Benchmark identity comes only from explicit `BenchmarkConfig.benchmark_code`.
+  The first evaluation return is forced to zero at the first strategy effective
+  close, so its raw provider return does not enter benchmark NAV; canonical B2
+  returns begin contributing on the next strategy observation.
+- Benchmark NAV begins at D `initial_nav` and compounds positive finite daily
+  factors. It has no transaction cost. A later return of -1 or any return below
+  -1 fails closed when it would make the accounting factor non-positive.
+- Net strategy performance is primary for volatility, Sharpe, maximum drawdown,
+  tracking error, and information ratio. Gross total and annualized returns are
+  retained as explicit cost-before views.
+- Annualization uses all D daily observations, including the first effective
+  date, and configurable `PerformanceConfig.annualization_days`. Volatility and
+  active-return deviation use sample standard deviation (`ddof=1`). There is no
+  fixed 12-period or rebalance-frequency assumption.
+- The annual risk-free scalar is converted by simple division by annualization
+  days and used only in Sharpe. Insufficient-observation volatility/ratios and
+  zero-denominator ratios are represented by `None`; zero tracking error remains
+  the valid numeric value `0.0`.
+- Net maximum drawdown includes D `initial_nav` as the initial high-water mark,
+  so first-build transaction cost is captured. Cumulative and annualized excess
+  are frozen as strategy-minus-benchmark return differences; TE/IR use daily net
+  active returns.
+- Added turnover, traded-notional, and transaction-cost summaries plus
+  `transaction_cost_return_drag = gross_total_return - net_total_return`; this
+  cumulative drag remains distinct from the arithmetic sum of event cost rates.
+- No D, B1, B2, B3, C, contracts/config, legacy backtest, Artifact persistence,
+  pipeline integration, runner, CLI/YAML/UI, or execution behavior was changed.
+- Targeted V6-E tests: `40 passed`. D+E regression: `80 passed`.
+  B1+B2+B3+C+D+E regression: `294 passed`. V6-A regression: `117 passed`.
+  V5 Holdings compatibility: `184 passed`.
+- Full pytest under approved normal local process permissions:
+  `2643 passed, 4 skipped, 11 warnings in 165.71s`; this is +40 passed over V6-D
+  with unchanged skips/warnings and no new xfail.
+- Static frequency/alignment-discovery/execution/Artifact scans, protected-diff
+  checks, in-memory compile/import smoke, deterministic immutability and JSON
+  safety tests, line-length check, and `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
+  operation was performed.
+- Next stage: V6-F Research Backtest Artifact.
+
+## 2026-08-09 V6-F Research Backtest Artifact
+
+- V6-F completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `51f8586fce198e55d0887dd1ec18cd3d2cec695e`, the committed V6-E
+  performance analytics revision based on `v0.6.0`.
+- Added native Research Backtest Artifact schema `1.0` with the exact seven-file
+  layout: `rebalances.parquet`, `daily_portfolio.parquet`,
+  `benchmark.parquet`, `metrics.json`, `config.json`, `audit.json`, and
+  `manifest.json`.
+- Persisted the unchanged canonical V6-C, V6-D, and V6-E outputs. The Artifact
+  layer validates schemas, invariants, and a limited final-NAV/total-return
+  consistency check; it does not reimplement turnover, NAV, cost, return, or
+  performance-metric calculations.
+- `config.json` is the complete detached JSON-safe
+  `ResearchBacktestPipelineConfig.to_dict()` snapshot. Publication requires an
+  enabled, complete research-backtest config with transaction-cost, benchmark,
+  and performance assumptions.
+- `audit.json` records identity, coverage and counts, research assumptions,
+  source/return semantics, timing conventions, and direct provenance for one
+  explicit native Holdings Artifact.
+- Publication requires an explicit Holdings Artifact directory, reuses
+  `HoldingsArtifactStore.validate`, records exact manifest/data paths and
+  SHA-256 values plus rows/date count, and verifies that V6-C target states
+  match the validated Holdings data. Bare parquet, missing/tampered upstream
+  artifacts, and mismatched provenance fail closed.
+- The manifest records SHA-256 and byte size for the six payloads and excludes
+  itself. It is written last in a private staging directory, the complete
+  staging Artifact is validated, and publication uses one atomic directory
+  replace. Existing empty, valid, or corrupt targets are never overwritten.
+- The validator checks the exact file set, regular-file safety, manifest/schema
+  identity, size/hash integrity, strict JSON, complete config and audit,
+  canonical parquet schemas/invariants, upstream lineage, and C/D/E cross-file
+  consistency. Payload, metadata, JSON, schema, semantic, and upstream tampering
+  all fail closed.
+- There is no latest/mtime/glob discovery, network access, Pipeline integration,
+  execution simulator, provider orchestration, or legacy-backtest change.
+- Targeted V6-F tests: `49 passed`. V6 Artifact regression: `171 passed`.
+  Existing Artifact regression: `236 passed`. V6-A through V6-F focused
+  regression: `460 passed`. V5 compatibility: `175 passed`.
+- Full pytest under approved normal local process permissions:
+  `2692 passed, 4 skipped, 11 warnings in 146.63s`; this is +49 passed over V6-E
+  with unchanged skips/warnings and no new xfail.
+- Static discovery/execution/analytics-formula/return-reconstruction scans,
+  protected-diff checks, in-memory compile/import smoke, line-length check, and
+  `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, reset,
+  cherry-pick, or tag operation was performed.
+- Next stage: V6-G1 Backtest Source Adapter + Executor.
+
+## 2026-08-09 V6-G Full Backend Integration
+
+- V6-G completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `45668830950e746fa208a6aa3792c5837d08d71e`, the committed V6-F
+  Research Backtest Artifact revision based on `v0.6.0`.
+- G1 added an explicit native Holdings source adapter with strict `pipeline`
+  and `files` modes. Pipeline mode requires the exact current-run
+  `HoldingsPipelineResult`; files mode requires one explicit native Holdings
+  Artifact directory. Both revalidate the Artifact and fixed payload without
+  bare parquet, latest/mtime/glob scanning, fallback, or input mutation.
+- G1 added a standalone `ResearchBacktestPipelineExecutor` with an injected
+  existing market-data client, explicit runtime `end_date`, and explicit final
+  `artifact_dir`. It chains the frozen B1/B2/B3/C/D/E/F components without
+  reimplementing calendars, return/suspension policy, portfolio calculations,
+  analytics, or Artifact persistence.
+- The executor requests only the union of Holdings security codes, uses bounded
+  calendar/return/status data, rejects any Holdings event effective after the
+  evaluation end, and returns a frozen, detached, JSON-safe summary without
+  DataFrames.
+- G2 integrated `research_backtest` into top-level `PipelineConfig`, disabled by
+  default. The only canonical evaluation-end owner remains `backtest_end` via
+  `required_end_date`; no second end-date truth was added. Pipeline source
+  requires explicitly enabled Holdings, while files source is independent and
+  never receives a current Holdings result.
+- Runner order is now Data, Factor Research, Modeling Panel, ML, Signal,
+  Holdings, Research Backtest, then metadata. Runner owns
+  `<run_dir>/<artifact_subdir>`, injects the existing `TushareClient`, passes the
+  exact current Holdings result only in pipeline mode, and omits disabled V6
+  business output from the summary.
+- G3 added `config/research_backtest_pipeline.example.yaml`, the unchanged
+  generic `python scripts/run_pipeline.py --config ...` entry point, compact
+  CLI output, `docs/10_research_backtest_pipeline.md`, and a minimal README
+  link. No V6-specific CLI flags or hidden benchmark/cost/risk-free defaults
+  were added.
+- Architecture remains frequency-agnostic and preserves the boundary that V5
+  performs ranking/Top-N/weight construction while V6 only evaluates exact
+  Holdings targets. There is no live execution, broker/order simulation,
+  discovery fallback, or legacy-backtest change.
+- Synthetic integration covers real Runner-to-Executor pipeline/files paths,
+  validated final Artifacts and lineage, Top-N 5/10 preservation, and
+  monthly-like, weekly-like, and consecutive daily-like Holdings events.
+- G1 targeted tests: `19 passed`; G1 gate: `545 passed, 2 skipped`. G2 gate:
+  `134 passed`. G3 gate: `52 passed`. Final V6-G focused regression:
+  `719 passed, 2 skipped`.
+- Full pytest under approved normal local process permissions:
+  `2736 passed, 4 skipped, 11 warnings in 139.29s`; this is +44 passed over V6-F
+  with unchanged skips/warnings and no new xfail.
+- Protected-diff, discovery/formula/frequency/execution static scans, in-memory
+  compile/import smoke, line-length/trailing-whitespace checks, and
+  `git diff --check` passed.
+- No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase,
+  reset, cherry-pick, or tag operation was performed.
+- Next stage: V6-H Streamlit Research Dashboard.
+
+## 2026-08-09 V6-H Streamlit Research Backtest Dashboard
+
+- V6-H completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `fd477b7d6d99816e885e5632a638fd4372d2c8a3`, the committed V6-G full
+  backend integration revision based on `v0.6.0`.
+- Added a minimal Research Backtest section to the existing Streamlit pipeline
+  page. The enable default comes from canonical config; ordinary UI source is
+  fixed to current-run `pipeline` Holdings and does not expose files mode.
+- Holdings remains the sole owner of Top-N, ranking, direction, insufficient
+  universe policy, and equal-weight construction. V6-H adds no Backtest Top-N,
+  ranking, or weight logic.
+- The UI exposes explicit research assumptions for transaction cost bps,
+  benchmark code, and decimal annual risk-free rate. Schedule, next-trading-day
+  effectiveness, adjusted-close return convention, half-L1 turnover,
+  252-day annualization, and base NAV 1.0 remain canonical invariants rather
+  than selectors.
+- No Backtest frequency control or second end-date control was added;
+  `PipelineConfig.backtest_end` remains the only evaluation-end owner.
+- `run_pipeline` remains the single execution path through
+  `run_canonical_pipeline`; there is no direct Executor call, second Backtest
+  run, network path, fallback, or backend auto-enable change in the UI.
+- Dashboard cards use metrics unchanged from the `PipelineResult` summary and
+  format missing/non-finite values as `N/A`. The UI does not recompute metrics.
+- NAV display reads gross, net, and benchmark NAV values only from the exact
+  current result Artifact after `ResearchBacktestArtifactStore.validate`.
+  Canonical fixed filenames are reused; strict date equality is required and
+  there is no latest/mtime/glob discovery, fill, interpolation, normalization,
+  NAV reconstruction, or Artifact mutation. `artifacts.py` was unchanged.
+- Research details show the exact Artifact path, benchmark, dates, counts,
+  Holdings Top-N, cost bps, schedule, effective rule, and return convention.
+- Disabled behavior and the separately named legacy research/backtest expander
+  are preserved. No live trading, broker, order/fill, execution simulator, or
+  dependency was introduced.
+- UI targeted tests: `47 passed`. Cross-layer UI/Pipeline/Executor/Artifact
+  gate: `251 passed`. Complete V6 Research Backtest regression: `556 passed`.
+- Streamlit AppTest smoke passed for initial, disabled, and enabled page builds
+  with no exception, duplicate widget key, or session-state error.
+- Full pytest under approved normal local process permissions:
+  `2760 passed, 4 skipped, 11 warnings in 227.87s`; this is +24 passed over
+  V6-G with unchanged skips/warnings and no new xfail.
+- Formula/discovery/frequency/execution scans, protected-diff checks, in-memory
+  compile/import smoke, new-line-length check, and `git diff --check` passed.
+- No dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase,
+  reset, cherry-pick, or tag operation was performed.
+- Next stage: V6-I E2E + v0.7.0 Release Readiness.
+
+## 2026-08-09 V6-I E2E and v0.7.0 Local Release Readiness
+
+- V6-I completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `d980790f7d43cb11d0cffda860222d32ea641453`, the committed V6-H
+  Streamlit Research Backtest Dashboard revision based on exact release commit
+  `3920971443d12c71d4847de6d41e0c8d67336c88` (`v0.6.0`).
+- Release target is `v0.7.0`. The frozen product position is Research Portfolio
+  Backtest & Evaluation, not live trading, a broker/order simulator, OMS/EMS,
+  or an execution-quality engine. V6 A through V6 H are complete.
+- Version audit confirmed that Git tag is the repository's sole release-version
+  truth. There is no package/version metadata to update. Added
+  `docs/11_v0.7.0_release_readiness.md` using the existing numbered local
+  readiness convention and linked it from README without claiming remote CI,
+  merge, tag, or publication state.
+- Config E2E confirms the canonical example YAML roundtrip, pipeline source,
+  enabled Holdings, Top-N 10, unique `backtest_end`, exact 10 bps cost,
+  `000300.SH`, RF 0.0, 252 days, and all frozen schedule/alignment invariants.
+- Real pipeline-source Runner handoff uses the exact current Holdings Result,
+  real source adapter, Executor, C/D/E/F, valid seven-file schema-1.0 Artifact,
+  JSON-safe summary, and exact validated Artifact consumption by the Streamlit
+  dashboard loader.
+- Real files-source Runner coverage now also creates a different current-run
+  Holdings Result and proves that lineage and evaluation use only the explicit
+  configured native Holdings Artifact, with no fallback.
+- Top-N 5/10 preservation, exact targets/lineage, no V6 re-ranking, and absence
+  of a Research Backtest Top-N remain covered. Monthly-like, weekly-like, and
+  consecutive daily-like Holdings dates all use the unchanged executor/core.
+- Integrated timing E2E proves first-effective-day strategy return zero,
+  next-open target exposure, later-effective-day return ownership by the old
+  portfolio, delayed new-target contribution, and first benchmark return zero.
+- Integrated cost E2E proves zero-cost gross/net NAV equality, initial 10 bps
+  build cost 0.001 from notional 1, and full A-to-B cost 0.002 from notional 2
+  despite half-L1 turnover 1. Multiplicative net-return semantics are preserved.
+- Proven full-day suspension succeeds with zero research return; unexplained
+  missing, pre-listing, unresolved post-delist, and missing benchmark dates all
+  fail closed through the real executor path.
+- Artifact exact files/schema, hashes/sizes, cross-file consistency, lineage,
+  upstream and payload tamper, extra-file rejection, no-overwrite, manifest-last
+  atomicity, and failure cleanup remain green. Repeated synthetic executions
+  produce identical rebalances, daily portfolio, benchmark, metrics, counts,
+  and dates apart from allowed runtime metadata/paths.
+- Canonical CLI example parsing, JSON/human summary, no stage-specific business
+  flags, disabled old-config behavior, Streamlit config/run/Artifact/NAV/metric
+  boundaries, public API exports, failure propagation, and V5 ML/Signal/Holdings
+  plus legacy backtest compatibility all passed.
+- Fixed the sole release-consistency production issue: the Streamlit sidebar's
+  stale `V6-A Portfolio Dashboard` label now accurately says
+  `V6 Research Backtest Dashboard`. No calculation, contract, pipeline, source,
+  Artifact, or UI-control behavior changed.
+- Secret scan found only documented placeholders/environment-variable names;
+  production code/config contains no credential or personal absolute runtime
+  path. Existing absolute interpreter paths are development commands in older
+  README/docs/AGENT records. Dependency diffs are empty; ignored `.env`, cache,
+  local data/reports, and bytecode remain untracked.
+- Modified release/E2E/CLI/UI gate: `41 passed`. Final focused regression across
+  55 files: `1872 passed, 4 skipped in 126.06s`.
+- Full pytest under approved normal local process permissions:
+  `2766 passed, 4 skipped, 11 warnings in 234.50s`; this is +6 passed over V6-H
+  with unchanged skips/warnings and no new xfail.
+- Static discovery/frequency/formula/execution scans, V6 delta/hygiene audit,
+  public API audit, compile/import smoke, protected-diff review, line-length and
+  `git diff --check` gates passed.
+- Local status: **LOCAL RELEASE READY**. No dependency, remote Git, stage,
+  commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag operation
+  was performed.
+- Next manual procedure: (1) commit V6-I; (2) push feature branch; (3) open a
+  GitHub PR; (4) review and wait for CI; (5) merge main; (6) verify exact main;
+  (7) create annotated `v0.7.0` tag; (8) push and verify the tag.

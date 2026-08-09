@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from src.data.data_manager import DataManager
+from src.data.tushare_client import TushareClient
 from src.pipeline.config import PipelineConfig
 from src.pipeline.experiment import ExperimentManager
 from src.pipeline.ml_execution import MLExperimentPipelineExecutor
@@ -27,6 +29,10 @@ from src.pipeline.signal_execution import (
 from src.pipeline.holdings_execution import (
     HoldingsPipelineExecutionError,
     HoldingsPipelineExecutor,
+    HoldingsPipelineResult,
+)
+from src.pipeline.research_backtest_executor import (
+    ResearchBacktestPipelineExecutor,
 )
 
 
@@ -147,6 +153,7 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
             )
         summary["signal"] = signal_result.as_dict()
 
+    holdings_result = HoldingsPipelineResult.disabled()
     if config.holdings.enabled:
         holdings_executor = HoldingsPipelineExecutor(config.holdings)
         holdings_result = holdings_executor.execute(
@@ -154,6 +161,23 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
             signal_result=signal_result,
         )
         summary["holdings"] = holdings_result.as_dict()
+
+    if config.research_backtest.enabled:
+        backtest_executor = ResearchBacktestPipelineExecutor(
+            config.research_backtest,
+            TushareClient(),
+        )
+        artifact_dir = Path(run_dir) / config.research_backtest.artifact_subdir
+        backtest_result = backtest_executor.execute(
+            artifact_dir=artifact_dir,
+            end_date=required_end_date,
+            holdings_result=(
+                holdings_result
+                if config.research_backtest.source.mode == "pipeline"
+                else None
+            ),
+        )
+        summary["research_backtest"] = backtest_result.to_dict()
 
     experiment_manager.save_config_snapshot(run_dir, config)
     experiment_manager.save_run_info(

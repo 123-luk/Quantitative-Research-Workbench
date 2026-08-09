@@ -31,6 +31,12 @@ from src.pipeline.modeling_panel_config import (  # noqa: E402
     ModelingPanelPipelineConfigError,
     ModelingPanelPipelineError,
 )
+from src.pipeline.research_backtest_config import (  # noqa: E402
+    ResearchBacktestConfigError,
+)
+from src.pipeline.research_backtest_executor import (  # noqa: E402
+    ResearchBacktestPipelineExecutionError,
+)
 from src.pipeline.runner import run_pipeline  # noqa: E402
 
 
@@ -53,7 +59,10 @@ def parse_args(
     parser.add_argument(
         "--config",
         default=str(PROJECT_ROOT / "config" / "config.yaml"),
-        help="Path to YAML config; direct PipelineConfig YAML supports modeling_panel.",
+        help=(
+            "Path to grouped or direct PipelineConfig YAML, including optional "
+            "modeling_panel and research_backtest stages."
+        ),
     )
     parser.add_argument("--backtest-start", help="Backtest start date in YYYY-MM-DD.")
     parser.add_argument("--backtest-end", help="Backtest end date in YYYY-MM-DD.")
@@ -236,7 +245,7 @@ def load_pipeline_config(
         raw = yaml.safe_load(file)
     if not isinstance(raw, dict):
         raise ValueError(f"Config must be a YAML mapping: {config_path}")
-    if "modeling_panel" not in raw:
+    if not any(name in raw for name in ("modeling_panel", "research_backtest")):
         return PipelineConfig.from_yaml(
             config_path=config_path,
             overrides=overrides,
@@ -299,6 +308,9 @@ def build_output(config: PipelineConfig, summary: dict[str, Any]) -> dict[str, A
     holdings_summary = summary.get("holdings")
     if isinstance(holdings_summary, dict):
         output["holdings"] = dict(holdings_summary)
+    backtest_summary = summary.get("research_backtest")
+    if isinstance(backtest_summary, dict):
+        output["research_backtest"] = dict(backtest_summary)
     return output
 
 
@@ -367,6 +379,15 @@ def print_human_summary(output: dict[str, Any]) -> None:
             f"{holdings.get('insufficient_universe_policy')}"
         )
         print(f"Holdings weighting: {holdings.get('weighting')}")
+    backtest = output.get("research_backtest")
+    if isinstance(backtest, dict) and backtest.get("enabled") is True:
+        print("Research backtest enabled: true")
+        print(f"Research backtest artifact: {backtest.get('artifact_dir')}")
+        print(f"Research backtest benchmark: {backtest.get('benchmark_code')}")
+        print(
+            "Research backtest observations: "
+            f"{backtest.get('observation_count')}"
+        )
 
 
 @contextmanager
@@ -428,6 +449,14 @@ def main(
         message = " ".join(str(exc).splitlines())
         print(f"ML pipeline error: {message}", file=sys.stderr)
         return exit_code_for_ml_error(exc)
+    except ResearchBacktestConfigError as exc:
+        message = " ".join(str(exc).splitlines())
+        print(f"Research Backtest config error: {message}", file=sys.stderr)
+        return 2
+    except ResearchBacktestPipelineExecutionError as exc:
+        message = " ".join(str(exc).splitlines())
+        print(f"Research Backtest pipeline error: {message}", file=sys.stderr)
+        return 4
     return 0
 
 
