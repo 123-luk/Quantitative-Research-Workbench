@@ -53,6 +53,17 @@ from src.pipeline.holdings_execution import (
     HoldingsPipelineExecutor,
     HoldingsPipelineResult,
 )
+from src.pipeline.research_backtest_config import (
+    BacktestScheduleConfig,
+    BacktestSourceConfig,
+    BenchmarkConfig,
+    PerformanceConfig,
+    PortfolioAccountingConfig,
+    ResearchBacktestConfigError,
+    ResearchBacktestPipelineConfig,
+    ReturnAlignmentConfig,
+    TransactionCostConfig,
+)
 from src.pipeline.research_execution import (
     FactorResearchExecutionResult,
     FactorResearchPublishedOutputs,
@@ -102,5 +113,14 @@ __all__ = [
     "HoldingsPipelineExecutionError",
     "HoldingsPipelineExecutor",
     "HoldingsPipelineResult",
+    "BacktestScheduleConfig",
+    "BacktestSourceConfig",
+    "BenchmarkConfig",
+    "PerformanceConfig",
+    "PortfolioAccountingConfig",
+    "ResearchBacktestConfigError",
+    "ResearchBacktestPipelineConfig",
+    "ReturnAlignmentConfig",
+    "TransactionCostConfig",
     "run_pipeline",
 ]
