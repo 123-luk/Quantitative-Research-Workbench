@@ -190,7 +190,26 @@ def _drift_one_day(
     returns: dict[tuple[pd.Timestamp, str], float],
     statuses: dict[tuple[pd.Timestamp, str], str],
 ) -> tuple[dict[str, float], float]:
+    drifted, drifted_cash, _ = _drift_one_day_with_return(
+        weights,
+        cash,
+        trade_date,
+        returns,
+        statuses,
+    )
+    return drifted, drifted_cash
+
+
+def _drift_one_day_with_return(
+    weights: dict[str, float],
+    cash: float,
+    trade_date: pd.Timestamp,
+    returns: dict[tuple[pd.Timestamp, str], float],
+    statuses: dict[tuple[pd.Timestamp, str], str],
+) -> tuple[dict[str, float], float, float]:
+    """Resolve one day's returns once and return drift plus gross return."""
     values: dict[str, float] = {}
+    gross_return = 0.0
     for code, weight in weights.items():
         if weight <= WEIGHT_TOLERANCE:
             values[code] = weight
@@ -211,14 +230,15 @@ def _drift_one_day(
             raise WeightDriftError(
                 f"return cannot be below -1 for {trade_date:%Y-%m-%d}, {code!r}."
             )
+        gross_return += weight * daily_return
         values[code] = weight * (1.0 + daily_return)
-    total = sum(values.values()) + cash
-    if not np.isfinite(total) or total <= 0.0:
+    gross_factor = 1.0 + gross_return
+    if not np.isfinite(gross_factor) or gross_factor <= 0.0:
         raise WeightDriftError("drifted portfolio total value must be strictly positive.")
-    drifted = {code: value / total for code, value in values.items()}
-    drifted_cash = cash / total
+    drifted = {code: value / gross_factor for code, value in values.items()}
+    drifted_cash = cash / gross_factor
     _complete_state(drifted, drifted_cash, context="drifted pre-rebalance")
-    return drifted, drifted_cash
+    return drifted, drifted_cash, gross_return
 
 
 class RebalanceAccountingResult:

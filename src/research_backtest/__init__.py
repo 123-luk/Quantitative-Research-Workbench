@@ -81,6 +81,16 @@ from src.research_backtest.rebalance import (
     RebalanceScheduleError,
     WeightDriftError,
 )
+from src.research_backtest.portfolio import (
+    DAILY_PORTFOLIO_COLUMNS,
+    PortfolioConsistencyError,
+    PortfolioDailyAccountingEngine,
+    PortfolioDailyAccountingError,
+    PortfolioDailyAccountingResult,
+    PortfolioDailyInputError,
+    PortfolioTransactionCostError,
+    PortfolioValueError,
+)
 
 __all__ = [
     "AVAILABLE",
@@ -89,7 +99,15 @@ __all__ = [
     "BENCHMARK_DAILY_RETURN_COLUMNS",
     "BENCHMARK_RETURN_SOURCE_NAME",
     "DELIST_DATE",
+    "DAILY_PORTFOLIO_COLUMNS",
     "POST_DELIST",
+    "PortfolioConsistencyError",
+    "PortfolioDailyAccountingEngine",
+    "PortfolioDailyAccountingError",
+    "PortfolioDailyAccountingResult",
+    "PortfolioDailyInputError",
+    "PortfolioTransactionCostError",
+    "PortfolioValueError",
     "PRE_LISTING",
     "RESEARCH_BACKTEST_BENCHMARK_ALIGNMENT_POLICIES",
     "RESEARCH_BACKTEST_COST_RATE_BASES",
@@ -158,3 +176,4 @@ __all__ = [
 # this package.  The V6-A public contract deliberately reserves ``rebalance`` as
 # an absent operation name; only the explicit engine/result symbols are public.
 globals().pop("rebalance", None)
+globals().pop("portfolio", None)

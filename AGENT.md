@@ -2833,3 +2833,57 @@ override，V4-E3 为 CLI + YAML + docs。
   dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
   operation was performed.
 - Next stage: V6-D Portfolio Return / Transaction Cost / NAV.
+
+## 2026-08-09 V6-D Portfolio Daily Return / Transaction Cost / NAV
+
+- V6-D completed on local branch `feature/research-backtest`; start and final
+  HEAD remain `e88fb542d06bc99193f2a48880adc1977acc6726`, the committed V6-C
+  rebalance-accounting revision based on `v0.6.0`.
+- Added `PortfolioDailyAccountingEngine` and defensive
+  `PortfolioDailyAccountingResult` for a canonical open-date series from the
+  first V6-C effective date through an explicit inclusive `end_date`.
+- Preserved the post-close convention. Daily gross return uses prior-close
+  weights; the first effective date begins as 100% cash with gross return zero;
+  a later effective-date return belongs to the old portfolio; the new target
+  starts contributing on the next open date.
+- Gross return and weight drift share one B2/B3 resolution pass. Observed B2
+  returns pass through, proven full-day suspension resolves missing return to
+  zero through B3, and unexplained/lifecycle-incompatible positive-weight
+  missing returns fail closed.
+- Extracted a pure internal C helper returning both one-day drift and gross
+  return while keeping the existing C helper and output semantics unchanged.
+  B1 already exposed immutable canonical `open_dates`, so calendar required no
+  change; B2 and B3 remain unchanged.
+- At every in-window event D recomputes the pre-state through daily drift and
+  compares all security weights and cash against V6-C under the shared tight
+  tolerance. Intrinsically malformed or tampered events and C/D disagreements
+  fail closed.
+- Traded notional is the one-way security sum `sum(abs(weight_change))`; the
+  cash leg is excluded. V6-C turnover remains a distinct complete half-L1 audit
+  value. Cost is `traded_notional * cost_bps / 10000`, never turnover times rate.
+- Cost is applied after the day's gross return at the rebalance close boundary.
+  Net factor is `(1 + gross_return) * (1 - transaction_cost)`; a non-finite cost,
+  cost at least one, or non-positive gross/net factor fails closed without caps
+  or clipping.
+- Gross NAV compounds gross factors from explicit `initial_nav` and ignores
+  costs. Net NAV compounds gross and cost factors multiplicatively. Research
+  cost affects NAV only and does not change target weights, drift proportions,
+  cash funding, or security trades.
+- No benchmark, performance metric, Artifact persistence, pipeline integration,
+  runner, CLI/YAML/UI, legacy backtest, or execution simulation was added. The
+  implementation is frequency-agnostic; Holdings-derived events alone determine
+  rebalance dates.
+- Targeted V6-D tests: `40 passed`. C+D regression: `82 passed`.
+  B1+B2+B3+C+D regression: `254 passed`. V6-A regression: `117 passed`.
+  V5 Holdings compatibility: `184 passed`.
+- Full pytest under approved normal local process permissions:
+  `2603 passed, 4 skipped, 11 warnings in 170.46s`; this is +40 passed over V6-C
+  with unchanged skips/warnings and no new xfail.
+- Static metric/Artifact/execution/frequency/cost-formula scans, protected-diff
+  checks, in-memory compile/import smoke, deterministic immutability tests,
+  line-length check, and `git diff --check` passed.
+- Fixed Python:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`. No
+  dependency, remote Git, stage, commit, push, fetch, pull, merge, rebase, or tag
+  operation was performed.
+- Next stage: V6-E Benchmark + Performance Analytics.
