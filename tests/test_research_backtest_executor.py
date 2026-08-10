@@ -33,6 +33,14 @@ from src.pipeline import (
     HoldingsPipelineConfig,
     run_pipeline,
 )
+from src.portfolio_construction import (
+    PortfolioConstructionConfig,
+    PortfolioConstructionEngine,
+    PortfolioConstructionServices,
+)
+from src.portfolio_construction.adapters import (
+    ResearchBacktestHistoricalReturnService,
+)
 from src.research_backtest import ResearchBacktestArtifactStore
 
 
@@ -323,6 +331,149 @@ def test_files_mode_end_to_end(tmp_path: Path) -> None:
     assert ResearchBacktestArtifactStore().validate(result.artifact_dir).is_valid
 
 
+def test_all_portfolio_methods_feed_exact_weights_to_same_v6_engine(
+    tmp_path: Path,
+) -> None:
+    codes = tuple(f"S{index:02d}.SZ" for index in range(1, 11))
+    rows = [
+        {
+            "trade_date": pd.Timestamp(trade_date),
+            "ts_code": code,
+            "score": float(11 - rank),
+            "rank": rank,
+        }
+        for trade_date in ("2024-01-02", "2024-01-04")
+        for rank, code in enumerate(codes, start=1)
+    ]
+    signals = pd.DataFrame(rows)
+    signals["trade_date"] = signals["trade_date"].astype("datetime64[ns]")
+    signals["ts_code"] = signals["ts_code"].astype("string")
+    signals["rank"] = signals["rank"].astype(np.int64)
+    risk_returns = {
+        (trade_date, code): value
+        for index, code in enumerate(codes, start=1)
+        for trade_date, value in (
+            ("2023-12-29", float(-index)),
+            ("2024-01-01", 0.0),
+            ("2024-01-02", float(index)),
+            ("2024-01-03", 0.0),
+            ("2024-01-04", float(-index)),
+        )
+    }
+    portfolio_configs = {
+        "equal": PortfolioConstructionConfig("equal_weight", {}),
+        "rank": PortfolioConstructionConfig("rank_weight", {}),
+        "inverse": PortfolioConstructionConfig(
+            "inverse_volatility",
+            {"lookback_trading_days": 3, "min_observations": 3},
+        ),
+    }
+    selected_sets: dict[str, set[str]] = {}
+    first_date_weights: dict[str, np.ndarray] = {}
+
+    for name, portfolio_config in portfolio_configs.items():
+        provider = _Provider(codes=codes, security_pct_chg=risk_returns)
+        service = ResearchBacktestHistoricalReturnService(provider)
+        engine = PortfolioConstructionEngine(
+            services=PortfolioConstructionServices(
+                historical_returns=service
+            )
+        )
+        built = HoldingsBuilder(engine).build(
+            signals,
+            top_n=5,
+            insufficient_universe_policy="error",
+            weighting="equal_weight",
+            portfolio_construction=portfolio_config,
+        )
+        holdings = built.holdings
+        assert tuple(holdings.columns) == (
+            "trade_date",
+            "ts_code",
+            "target_weight",
+            "score",
+            "rank",
+        )
+        first = holdings.loc[
+            holdings["trade_date"] == pd.Timestamp("2024-01-02")
+        ]
+        selected_sets[name] = set(first["ts_code"])
+        first_date_weights[name] = first["target_weight"].to_numpy()
+
+        signal_dir = tmp_path / f"{name}-signal"
+        signal_dir.mkdir()
+        signal_path = signal_dir / "signals.parquet"
+        signal_path.write_bytes(b"synthetic-signal")
+        provenance = SignalArtifactProvenance(
+            signal_dir,
+            signal_path,
+            "1.0",
+            hashlib.sha256(signal_path.read_bytes()).hexdigest(),
+        )
+        written = HoldingsArtifactStore().write(
+            built,
+            provenance,
+            HoldingsArtifactConfig(tmp_path / f"{name}-holdings"),
+            portfolio_construction=portfolio_config,
+        )
+        assert HoldingsArtifactStore().validate(written.artifact_dir).is_valid
+        pipeline_result = HoldingsPipelineResult(
+            enabled=True,
+            source_signal_artifact_dir=signal_dir,
+            artifact_dir=written.artifact_dir,
+            holdings_path=written.holdings_path,
+            manifest_path=written.manifest_path,
+            rows=built.audit.output_rows,
+            trade_date_count=built.audit.trade_date_count,
+            requested_top_n=5,
+            insufficient_universe_policy="error",
+            weighting="equal_weight",
+            schema_version=written.schema_version,
+        )
+        backtest = ResearchBacktestPipelineExecutor(
+            _config(BacktestSourceConfig(mode="pipeline")), provider
+        ).execute(
+            artifact_dir=tmp_path / f"{name}-backtest",
+            end_date="2024-01-08",
+            holdings_result=pipeline_result,
+        )
+        assert ResearchBacktestArtifactStore().validate(
+            backtest.artifact_dir
+        ).is_valid
+        rebalances = pd.read_parquet(
+            backtest.artifact_dir / "rebalances.parquet"
+        )
+        actual = rebalances.loc[
+            rebalances["holdings_trade_date"] == pd.Timestamp("2024-01-02"),
+            ["ts_code", "target_weight"],
+        ].sort_values("ts_code", ignore_index=True)
+        expected = first.loc[:, ["ts_code", "target_weight"]].sort_values(
+            "ts_code", ignore_index=True
+        )
+        assert actual["ts_code"].astype(str).tolist() == (
+            expected["ts_code"].astype(str).tolist()
+        )
+        np.testing.assert_array_equal(
+            actual["target_weight"].to_numpy(),
+            expected["target_weight"].to_numpy(),
+        )
+
+    assert selected_sets["equal"] == selected_sets["rank"]
+    assert selected_sets["equal"] == selected_sets["inverse"]
+    assert not np.allclose(first_date_weights["equal"], first_date_weights["rank"])
+    assert not np.allclose(
+        first_date_weights["equal"], first_date_weights["inverse"]
+    )
+
+    top_ten = HoldingsBuilder().build(
+        signals,
+        top_n=10,
+        insufficient_universe_policy="error",
+        weighting="equal_weight",
+    ).holdings
+    assert top_ten.groupby("trade_date").size().tolist() == [10, 10]
+
+
 def test_result_is_json_safe_detached_and_has_no_frames(tmp_path: Path) -> None:
     holdings, _ = _holdings(tmp_path)
     result = ResearchBacktestPipelineExecutor(
@@ -581,7 +732,7 @@ def test_runner_pipeline_source_uses_real_executor_path(
             return SignalResult()
 
     class HoldingsExecutor:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, engine: object = None) -> None:
             pass
 
         def execute(
@@ -639,7 +790,7 @@ def test_runner_files_source_uses_real_executor_path(
             return SignalResult()
 
     class HoldingsExecutor:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, engine: object = None) -> None:
             pass
 
         def execute(

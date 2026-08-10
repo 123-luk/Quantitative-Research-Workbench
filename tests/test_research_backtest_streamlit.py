@@ -25,7 +25,12 @@ def test_research_backtest_disabled_surface_preserves_legacy_controls() -> None:
     assert "当前能力：V6 Research Backtest Dashboard" in source
     assert "当前版本：V6-A Portfolio Dashboard" not in source
     labels = [widget.label for widget in app.checkbox]
-    assert labels == ["Enable Research Backtest", "skip_fetch", "skip_plot"]
+    assert labels == [
+        "设置单股最大权重",
+        "Enable Research Backtest",
+        "skip_fetch",
+        "skip_plot",
+    ]
     assert not next(
         widget for widget in app.checkbox if widget.label == "Enable Research Backtest"
     ).value
@@ -55,3 +60,27 @@ def test_research_backtest_enabled_controls_build_without_widget_errors() -> Non
     )[0]
     assert "Research Backtest End Date" not in source
     assert "Backtest frequency" not in source
+
+
+def test_portfolio_controls_are_conditional_and_use_ui_suggestions() -> None:
+    app = _pipeline_page()
+    method = next(
+        widget for widget in app.selectbox if widget.label == "组合构建方法"
+    )
+    assert method.value == "等权"
+    number_labels = [widget.label for widget in app.number_input]
+    assert "波动率回看交易日" not in number_labels
+    assert "最少收益观测数" not in number_labels
+    assert "单股最大权重 (%)" not in number_labels
+
+    method.set_value("逆波动率")
+    cap = next(
+        widget for widget in app.checkbox if widget.label == "设置单股最大权重"
+    )
+    cap.set_value(True)
+    app.run()
+    assert not app.exception
+    values = {widget.label: widget.value for widget in app.number_input}
+    assert values["波动率回看交易日"] == 60
+    assert values["最少收益观测数"] == 40
+    assert values["单股最大权重 (%)"] == 20.0

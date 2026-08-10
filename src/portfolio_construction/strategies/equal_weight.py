@@ -18,6 +18,7 @@ from .common import parse_empty_params, proportional_output
 class EqualWeightStrategy:
     name = "equal_weight"
     supported_constraint_types = frozenset({"max_weight"})
+    required_services = frozenset()
 
     def parse_params(self, raw_params: Mapping[str, object]) -> None:
         return parse_empty_params(raw_params)

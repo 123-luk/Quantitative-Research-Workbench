@@ -19,6 +19,7 @@ from src.pipeline.research_backtest_config import (
     ReturnAlignmentConfig,
     TransactionCostConfig,
 )
+from src.portfolio_construction import ConstraintSpec, PortfolioConstructionConfig
 
 
 HIGH_SCORE_FIRST: Final = "分数越高越优"
@@ -26,6 +27,11 @@ LOW_SCORE_FIRST: Final = "分数越低越优"
 ERROR_IF_INSUFFICIENT: Final = "报错"
 USE_ALL_VALID: Final = "使用全部有效股票"
 EQUAL_WEIGHT_LABEL: Final = "等权"
+RANK_WEIGHT_LABEL: Final = "排名加权"
+INVERSE_VOLATILITY_LABEL: Final = "逆波动率"
+SUGGESTED_INVERSE_VOLATILITY_LOOKBACK: Final = 60
+SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS: Final = 40
+SUGGESTED_MAX_WEIGHT_PERCENT: Final = 20.0
 SUGGESTED_RESEARCH_BACKTEST_COST_BPS: Final = 10.0
 SUGGESTED_RESEARCH_BACKTEST_BENCHMARK: Final = "000300.SH"
 SUGGESTED_ANNUAL_RISK_FREE_RATE: Final = 0.0
@@ -38,6 +44,47 @@ INSUFFICIENT_POLICY_BY_LABEL: Final = {
     ERROR_IF_INSUFFICIENT: "error",
     USE_ALL_VALID: "allow_partial",
 }
+PORTFOLIO_METHOD_BY_LABEL: Final = {
+    EQUAL_WEIGHT_LABEL: "equal_weight",
+    RANK_WEIGHT_LABEL: "rank_weight",
+    INVERSE_VOLATILITY_LABEL: "inverse_volatility",
+}
+
+
+def build_portfolio_construction_ui_config(
+    *,
+    method_label: str = EQUAL_WEIGHT_LABEL,
+    lookback_trading_days: int = SUGGESTED_INVERSE_VOLATILITY_LOOKBACK,
+    min_observations: int = SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS,
+    max_weight_enabled: bool = False,
+    max_weight_percent: float = SUGGESTED_MAX_WEIGHT_PERCENT,
+) -> PortfolioConstructionConfig:
+    """Map display values onto the canonical V7 portfolio config."""
+    try:
+        method = PORTFOLIO_METHOD_BY_LABEL[method_label]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported portfolio construction option: {method_label!r}."
+        ) from exc
+    params: dict[str, object] = {}
+    if method == "inverse_volatility":
+        params = {
+            "lookback_trading_days": lookback_trading_days,
+            "min_observations": min_observations,
+        }
+    constraints = ()
+    if max_weight_enabled:
+        constraints = (
+            ConstraintSpec(
+                type="max_weight",
+                params={"max_weight": max_weight_percent / 100.0},
+            ),
+        )
+    return PortfolioConstructionConfig(
+        method=method,
+        params=params,
+        constraints=constraints,
+    )
 
 
 def get_default_holdings_top_n() -> int:
@@ -90,6 +137,13 @@ def build_effective_pipeline_config(
     top_n: int | None = None,
     signal_direction_label: str = HIGH_SCORE_FIRST,
     insufficient_policy_label: str = ERROR_IF_INSUFFICIENT,
+    portfolio_method_label: str = EQUAL_WEIGHT_LABEL,
+    inverse_volatility_lookback: int = SUGGESTED_INVERSE_VOLATILITY_LOOKBACK,
+    inverse_volatility_min_observations: int = (
+        SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS
+    ),
+    max_weight_enabled: bool = False,
+    max_weight_percent: float = SUGGESTED_MAX_WEIGHT_PERCENT,
     research_backtest_enabled: bool = False,
     research_backtest_cost_bps: float = SUGGESTED_RESEARCH_BACKTEST_COST_BPS,
     research_backtest_benchmark: str = SUGGESTED_RESEARCH_BACKTEST_BENCHMARK,
@@ -129,6 +183,13 @@ def build_effective_pipeline_config(
             "top_n": effective_top_n,
             "insufficient_universe_policy": insufficient_policy,
             "weighting": "equal_weight",
+            "portfolio_construction": build_portfolio_construction_ui_config(
+                method_label=portfolio_method_label,
+                lookback_trading_days=inverse_volatility_lookback,
+                min_observations=inverse_volatility_min_observations,
+                max_weight_enabled=max_weight_enabled,
+                max_weight_percent=max_weight_percent,
+            ).to_dict(),
         }
     )
     values["signal"] = signal
@@ -157,12 +218,25 @@ def build_selection_summary(config: PipelineConfig) -> dict[str, object]:
     policy_labels = {
         backend: label for label, backend in INSUFFICIENT_POLICY_BY_LABEL.items()
     }
+    method_labels = {
+        backend: label for label, backend in PORTFOLIO_METHOD_BY_LABEL.items()
+    }
+    portfolio = config.holdings.portfolio_construction
+    cap = next(
+        (
+            float(spec.params["max_weight"])
+            for spec in portfolio.constraints
+            if spec.type == "max_weight"
+        ),
+        None,
+    )
     return {
         "Top N": config.holdings.top_n,
         "Signal 排序": direction_labels[config.signal.signal_direction],
         "股票不足 N": policy_labels[
             config.holdings.insufficient_universe_policy
         ],
-        "权重方式": EQUAL_WEIGHT_LABEL,
+        "组合构建": method_labels[portfolio.method],
+        "单股权重上限": None if cap is None else f"{cap:.2%}",
         "source mode": config.signal.source.mode,
     }

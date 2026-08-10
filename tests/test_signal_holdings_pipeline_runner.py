@@ -220,7 +220,9 @@ def test_canonical_order_and_exact_same_run_result_identity(
             return signal_result
 
     class HoldingsExecutor:
-        def __init__(self, config: object) -> None: pass
+        def __init__(self, config: object, engine: object = None) -> None:
+            del config, engine
+
         def execute(self, run_dir: str | Path, *, signal_result: object = None) -> Result:
             events.append(("holdings", Path(run_dir)))
             identities.append(("signal", signal_result))

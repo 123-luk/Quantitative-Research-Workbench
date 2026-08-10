@@ -29,6 +29,10 @@ from src.holdings.contracts import (
     HOLDINGS_SCHEMA_VERSION,
     HoldingsContractError,
 )
+from src.portfolio_construction import (
+    PortfolioConstructionConfig,
+    PortfolioConstructionConfigError,
+)
 
 
 HOLDINGS_ARTIFACT_SCHEMA_VERSION = "1.0"
@@ -48,7 +52,8 @@ _PAYLOAD_FILENAMES = HOLDINGS_ARTIFACT_FILENAMES[:-1]
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _ISSUE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _CHUNK_SIZE = 1024 * 1024
-_CONFIG_FIELDS = {"top_n", "insufficient_universe_policy", "weighting"}
+_CONFIG_BASE_FIELDS = {"top_n", "insufficient_universe_policy", "weighting"}
+_CONFIG_EXTENDED_FIELDS = _CONFIG_BASE_FIELDS | {"portfolio_construction"}
 _PROVENANCE_FIELDS = {
     "signal_artifact_dir", "signal_path", "signal_schema_version",
     "signal_sha256",
@@ -295,7 +300,16 @@ class HoldingsArtifactFileRecord:
 
 
 def _business_config(value: object) -> dict[str, object]:
-    data = _strict_keys(value, _CONFIG_FIELDS, "Holdings config")
+    if not isinstance(value, Mapping) or any(
+        not isinstance(key, str) for key in value
+    ):
+        raise HoldingsArtifactValidationError(
+            "Holdings config must be a mapping with string keys."
+        )
+    fields = set(value)
+    if fields != _CONFIG_BASE_FIELDS and fields != _CONFIG_EXTENDED_FIELDS:
+        raise HoldingsArtifactValidationError("Holdings config fields are invalid.")
+    data = dict(value)
     top_n = data["top_n"]
     if type(top_n) is not int or top_n < 1:
         raise HoldingsArtifactValidationError("top_n must be a strict int >= 1.")
@@ -309,11 +323,22 @@ def _business_config(value: object) -> dict[str, object]:
     weighting = _trimmed(data["weighting"], "weighting")
     if weighting != "equal_weight":
         raise HoldingsArtifactValidationError("weighting is invalid.")
-    return {
+    result = {
         "top_n": top_n,
         "insufficient_universe_policy": policy,
         "weighting": weighting,
     }
+    if "portfolio_construction" in data:
+        try:
+            portfolio = PortfolioConstructionConfig.from_dict(
+                data["portfolio_construction"]
+            )
+        except PortfolioConstructionConfigError as exc:
+            raise HoldingsArtifactValidationError(
+                "portfolio_construction config is invalid."
+            ) from exc
+        result["portfolio_construction"] = portfolio.to_dict()
+    return result
 
 
 @dataclass(frozen=True)
@@ -751,9 +776,6 @@ def _holdings_errors(
             errors.append("Selected ranks are not contiguous 1..K.")
             break
         weights = group["target_weight"].to_numpy(dtype=np.float64)
-        if not np.allclose(weights, 1.0 / count, rtol=0, atol=1e-15):
-            errors.append("Holdings are not equal weighted.")
-            break
         if not math.isclose(
             float(weights.sum()), 1.0, rel_tol=0,
             abs_tol=WEIGHT_SUM_ABSOLUTE_TOLERANCE,
@@ -853,7 +875,10 @@ class HoldingsArtifactStore:
                 "insufficient_universe_policy": manifest.insufficient_universe_policy,
                 "weighting": manifest.weighting,
             }
-            if business != manifest_config:
+            business_base = {
+                key: business[key] for key in _CONFIG_BASE_FIELDS
+            }
+            if business_base != manifest_config:
                 issues.append(_issue("config_manifest_mismatch", "Config differs from manifest.", HOLDINGS_CONFIG_FILENAME))
         if audit is not None and business is not None:
             audit_config = {
@@ -861,7 +886,10 @@ class HoldingsArtifactStore:
                 "insufficient_universe_policy": audit["insufficient_universe_policy"],
                 "weighting": audit["weighting"],
             }
-            if audit_config != business:
+            business_base = {
+                key: business[key] for key in _CONFIG_BASE_FIELDS
+            }
+            if audit_config != business_base:
                 issues.append(_issue("audit_config_mismatch", "Audit differs from config.", HOLDINGS_AUDIT_FILENAME))
         if audit is not None and manifest is not None:
             if (
@@ -944,6 +972,8 @@ class HoldingsArtifactStore:
         result: HoldingsBuildResult,
         provenance: SignalArtifactProvenance,
         config: HoldingsArtifactConfig,
+        *,
+        portfolio_construction: PortfolioConstructionConfig | None = None,
     ) -> HoldingsArtifactWriteResult:
         if not isinstance(result, HoldingsBuildResult):
             raise HoldingsArtifactWriteError("result must be a HoldingsBuildResult.")
@@ -953,6 +983,13 @@ class HoldingsArtifactStore:
             )
         if not isinstance(config, HoldingsArtifactConfig):
             raise HoldingsArtifactWriteError("config must be HoldingsArtifactConfig.")
+        portfolio = portfolio_construction or PortfolioConstructionConfig(
+            "equal_weight", {}
+        )
+        if not isinstance(portfolio, PortfolioConstructionConfig):
+            raise HoldingsArtifactWriteError(
+                "portfolio_construction must be PortfolioConstructionConfig."
+            )
         target = _absolute(config.artifact_dir)
         parent = target.parent
         if target.exists() or target.is_symlink():
@@ -974,6 +1011,7 @@ class HoldingsArtifactStore:
                 "top_n": result.audit.requested_top_n,
                 "insufficient_universe_policy": result.audit.insufficient_universe_policy,
                 "weighting": result.audit.weighting,
+                "portfolio_construction": portfolio.to_dict(),
             }
             errors = _holdings_errors(holdings, business)
             if errors:

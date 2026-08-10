@@ -42,6 +42,7 @@ def request() -> PortfolioConstructionRequest:
 class TestStrategy:
     name = "test_strategy"
     supported_constraint_types = frozenset({"test_constraint", "max_weight"})
+    required_services = frozenset()
 
     def parse_params(self, raw_params: Mapping[str, object]) -> object:
         if set(raw_params) != {"weights"}:

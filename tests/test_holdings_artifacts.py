@@ -26,6 +26,7 @@ from src.holdings.artifacts import (
 )
 from src.holdings.builder import HoldingsBuilder
 from src.holdings.contracts import HOLDINGS_OUTPUT_COLUMNS
+from src.portfolio_construction import PortfolioConstructionConfig
 from src.signals import (
     PredictionSourceProvenance,
     SignalArtifactConfig,
@@ -55,12 +56,14 @@ def _result(
     counts: tuple[int, ...] = (15, 15),
     top_n: int = 10,
     policy: str = "error",
+    portfolio: PortfolioConstructionConfig | None = None,
 ):
     return HoldingsBuilder().build(
         _signal(counts),
         top_n=top_n,
         insufficient_universe_policy=policy,
         weighting="equal_weight",
+        portfolio_construction=portfolio,
     )
 
 
@@ -83,13 +86,36 @@ def _write(
     counts: tuple[int, ...] = (15, 15),
     top_n: int = 10,
     policy: str = "error",
+    portfolio: PortfolioConstructionConfig | None = None,
 ):
-    result = _result(counts, top_n, policy)
+    result = _result(counts, top_n, policy, portfolio)
     provenance = _provenance(tmp_path)
     written = HoldingsArtifactStore().write(
-        result, provenance, HoldingsArtifactConfig(tmp_path / name)
+        result,
+        provenance,
+        HoldingsArtifactConfig(tmp_path / name),
+        portfolio_construction=portfolio,
     )
     return result, provenance, written
+
+
+def test_old_three_key_v07_config_remains_valid(tmp_path: Path) -> None:
+    _, _, written = _write(tmp_path)
+    config = _json(written.config_path)
+    config.pop("portfolio_construction")
+    _write_json(written.config_path, config)
+    _refresh_record(written.artifact_dir, "config.json")
+    assert HoldingsArtifactStore().validate(written.artifact_dir).is_valid
+
+
+def test_rank_weight_payload_and_extended_config_validate(tmp_path: Path) -> None:
+    portfolio = PortfolioConstructionConfig("rank_weight", {})
+    result, _, written = _write(
+        tmp_path, name="ranked", portfolio=portfolio
+    )
+    assert written.validation.is_valid
+    assert _json(written.config_path)["portfolio_construction"] == portfolio.to_dict()
+    assert not np.allclose(result.holdings["target_weight"], 0.1)
 
 
 def _json(path: Path) -> dict[str, object]:
@@ -192,6 +218,11 @@ def test_write_validate_and_trace_configurable_top_n(
         "top_n": top_n,
         "insufficient_universe_policy": "error",
         "weighting": "equal_weight",
+        "portfolio_construction": {
+            "method": "equal_weight",
+            "params": {},
+            "constraints": [],
+        },
     }
     audit = _json(written.audit_path)
     assert audit["requested_top_n"] == top_n

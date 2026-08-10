@@ -22,6 +22,7 @@ class PortfolioConstructionStrategy(Protocol):
 
     name: str
     supported_constraint_types: frozenset[str]
+    required_services: frozenset[str]
 
     def parse_params(self, raw_params: Mapping[str, object]) -> object: ...
 
@@ -87,6 +88,13 @@ class PortfolioConstructionRegistry:
             raise PortfolioConstructionRegistryError(
                 "strategy supported_constraint_types must be a frozenset of names."
             )
+        required = getattr(strategy, "required_services", None)
+        if not isinstance(required, frozenset) or any(
+            not isinstance(item, str) or not item for item in required
+        ):
+            raise PortfolioConstructionRegistryError(
+                "strategy required_services must be a frozenset of names."
+            )
         if name in self._strategies:
             raise PortfolioConstructionRegistryError(
                 f"strategy {name!r} is already registered."
@@ -104,6 +112,10 @@ class PortfolioConstructionRegistry:
 
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(self._strategies))
+
+    def required_services(self, method: object) -> frozenset[str]:
+        """Return generic declared service capabilities for one strategy."""
+        return self.resolve(method).required_services
 
 
 class ConstraintRegistry:

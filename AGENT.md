@@ -3210,3 +3210,57 @@ override，V4-E3 为 CLI + YAML + docs。
   rebased, reset, cherry-picked, or tagged.
 - Holdings, Pipeline, YAML, CLI, Streamlit, Artifact, and Backtest integration
   are intentionally not part of P1. Next stage: V7-P2 Full Integration.
+
+## 2026-08-10 V7-P2 Portfolio Construction Full Integration
+
+- V7-P2 completed — Portfolio Construction Full Integration on local branch
+  `feature/portfolio-construction`; start and final HEAD remain the P1 commit
+  `24389a240cfe1644138a7033670f77aa40d77dcc`.
+- Holdings now owns a strict generic `portfolio_construction` config bridge;
+  old configs without that field deterministically default to `equal_weight`.
+- Existing Holdings Top-N ranks remain the sole selection owner. The Builder
+  passes only the selected snapshot to the registry-driven Engine, and the
+  contiguous `selection_position` remains internal rather than entering the
+  unchanged Holdings payload schema.
+- Strategy plugins declare generic required service capabilities. Equal and
+  rank weighting require no market service; inverse volatility requests the
+  injected `historical_returns` capability without Builder/Runner business
+  dispatch by construction method.
+- The concrete HistoricalReturnService reuses the V6 B1/B2/B3 calendar, daily
+  return, lifecycle, suspension, status, and missing-return semantics. Its
+  deterministic expanding calendar query resolves the last exact open-date
+  window through `risk_cutoff <= formation_date` and memoizes per run.
+- Pre-listing rows are excluded, proven full-day suspensions contribute zero,
+  and unexplained missing or unresolved lifecycle data fail closed. No future
+  return, price reconstruction, generic zero fill, or equal-weight fallback is
+  used.
+- Holdings remains exactly `trade_date`, `ts_code`, `target_weight`, `score`,
+  and `rank`. It is long-only and fully invested for all three built-ins.
+- Native Holdings config metadata records the exact portfolio construction
+  method, params, and constraints. Manifest/audit schemas and stage/file sets
+  remain unchanged, and old three-field v0.7 Holdings configs still validate.
+- Pipeline stage order and summary boundaries remain unchanged. The Runner
+  injects only declared services, reuses one run-scoped market client with V6,
+  and the CLI remains generic `--config` with no business-method flags.
+- Added a direct canonical YAML example plus README and
+  `docs/12_portfolio_construction.md` documentation for equal, rank, inverse
+  volatility, max-weight, timing, lineage, and non-goals.
+- Streamlit maps equal/rank/inverse methods, optional percentage max weight,
+  and conditional 60/40 inverse-volatility suggestions into canonical backend
+  config. Top-N, direction, insufficient policy, Research Backtest, and legacy
+  controls remain separate; the UI performs no weighting calculation.
+- The unchanged V6 Research Backtest consumes only exact Holdings
+  `target_weight`. A no-network synthetic cross-layer test proves equal, rank,
+  and inverse methods select the same Top-N set, produce different legal
+  weights, preserve those exact weights in the rebalance ledger, and publish
+  valid Holdings and Research Backtest Artifacts; Top-N 5 and 10 are covered.
+- The P1 custom registry plugin also enters HoldingsBuilder through dependency
+  injection with no method-specific Builder branch, preserving extensibility.
+- Gate E: `140 passed`; Gate F: `142 passed`; Gate G: `39 passed`; Gate H:
+  `1 passed`. Final focused V5/V6/V7 regression: `993 passed`.
+- Full pytest under approved normal local process permissions:
+  `2866 passed, 4 skipped, 11 warnings in 177.10s`; this is +27 passed over P1
+  with unchanged skips/warnings and no new xfail.
+- Protected diffs, static scans, in-memory compile, import smoke, and
+  `git diff --check` passed. No commit or remote Git operation was performed;
+  nothing was staged. Next stage: V7-P3 E2E + v0.8.0 release readiness.

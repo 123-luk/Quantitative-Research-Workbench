@@ -28,6 +28,7 @@ class InverseVolatilityParams:
 class InverseVolatilityStrategy:
     name = "inverse_volatility"
     supported_constraint_types = frozenset({"max_weight"})
+    required_services = frozenset({"historical_returns"})
 
     def parse_params(
         self, raw_params: Mapping[str, object]

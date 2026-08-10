@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath, PureWindowsPath
+
+from src.portfolio_construction import (
+    PortfolioConstructionConfig,
+    PortfolioConstructionConfigError,
+)
 
 
 class HoldingsConfigError(ValueError):
@@ -58,6 +63,11 @@ class HoldingsPipelineConfig:
     insufficient_universe_policy: str = "error"
     weighting: str = "equal_weight"
     artifact_subdir: str = "holdings"
+    portfolio_construction: PortfolioConstructionConfig = field(
+        default_factory=lambda: PortfolioConstructionConfig(
+            "equal_weight", {}
+        )
+    )
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
@@ -88,6 +98,21 @@ class HoldingsPipelineConfig:
         object.__setattr__(
             self, "artifact_subdir", _safe_artifact_subdir(self.artifact_subdir)
         )
+        try:
+            portfolio = (
+                self.portfolio_construction
+                if isinstance(
+                    self.portfolio_construction, PortfolioConstructionConfig
+                )
+                else PortfolioConstructionConfig.from_dict(
+                    self.portfolio_construction
+                )
+            )
+        except PortfolioConstructionConfigError as exc:
+            raise HoldingsConfigError(
+                "portfolio_construction configuration is invalid."
+            ) from exc
+        object.__setattr__(self, "portfolio_construction", portfolio)
 
     @classmethod
     def from_dict(
@@ -107,6 +132,7 @@ class HoldingsPipelineConfig:
                     "insufficient_universe_policy",
                     "weighting",
                     "artifact_subdir",
+                    "portfolio_construction",
                 }
             ),
             "holdings",
@@ -128,4 +154,5 @@ class HoldingsPipelineConfig:
             "insufficient_universe_policy": self.insufficient_universe_policy,
             "weighting": self.weighting,
             "artifact_subdir": self.artifact_subdir,
+            "portfolio_construction": self.portfolio_construction.to_dict(),
         }

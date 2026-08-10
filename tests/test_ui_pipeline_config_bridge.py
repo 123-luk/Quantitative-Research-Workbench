@@ -11,9 +11,12 @@ import yaml
 from app.services.pipeline_config_service import (
     ERROR_IF_INSUFFICIENT,
     HIGH_SCORE_FIRST,
+    INVERSE_VOLATILITY_LABEL,
     LOW_SCORE_FIRST,
+    RANK_WEIGHT_LABEL,
     USE_ALL_VALID,
     build_effective_pipeline_config,
+    build_portfolio_construction_ui_config,
     build_research_backtest_ui_config,
     build_selection_summary,
     get_default_holdings_top_n,
@@ -159,6 +162,58 @@ def test_top_n_changes_only_holdings_not_research_backtest() -> None:
     assert configs[0].research_backtest == configs[1].research_backtest
 
 
+@pytest.mark.parametrize(
+    ("label", "method"),
+    [
+        ("等权", "equal_weight"),
+        (RANK_WEIGHT_LABEL, "rank_weight"),
+        (INVERSE_VOLATILITY_LABEL, "inverse_volatility"),
+    ],
+)
+def test_portfolio_method_display_mapping(label: str, method: str) -> None:
+    config = build_portfolio_construction_ui_config(method_label=label)
+    assert config.method == method
+    expected = (
+        {"lookback_trading_days": 60, "min_observations": 40}
+        if method == "inverse_volatility"
+        else {}
+    )
+    assert dict(config.params) == expected
+
+
+def test_portfolio_cap_percent_maps_once_to_decimal_constraint() -> None:
+    effective = build_effective_pipeline_config(
+        _base(),
+        portfolio_method_label=RANK_WEIGHT_LABEL,
+        max_weight_enabled=True,
+        max_weight_percent=12.5,
+    )
+    portfolio = effective.holdings.portfolio_construction
+    assert portfolio.method == "rank_weight"
+    assert portfolio.constraints[0].to_dict() == {
+        "type": "max_weight",
+        "params": {"max_weight": 0.125},
+    }
+
+
+def test_inverse_volatility_ui_parameters_roundtrip_canonically() -> None:
+    effective = build_effective_pipeline_config(
+        _base(),
+        portfolio_method_label=INVERSE_VOLATILITY_LABEL,
+        inverse_volatility_lookback=80,
+        inverse_volatility_min_observations=55,
+    )
+    assert effective.holdings.portfolio_construction.to_dict() == {
+        "method": "inverse_volatility",
+        "params": {
+            "lookback_trading_days": 80,
+            "min_observations": 55,
+        },
+        "constraints": [],
+    }
+    assert PipelineConfig.from_dict(effective.to_dict()) == effective
+
+
 @pytest.mark.parametrize("top_n", [1, 10, 20, 1000])
 def test_top_n_mapping_accepts_the_backend_range(top_n: int) -> None:
     effective = build_effective_pipeline_config(_base(), top_n=top_n)
@@ -248,7 +303,8 @@ def test_pre_run_summary_is_derived_from_effective_config() -> None:
         "Top N": 10,
         "Signal 排序": LOW_SCORE_FIRST,
         "股票不足 N": USE_ALL_VALID,
-        "权重方式": "等权",
+        "组合构建": "等权",
+        "单股权重上限": None,
         "source mode": "ml",
     }
 
@@ -263,6 +319,9 @@ def test_streamlit_v5_surface_is_separate_from_legacy_top_n() -> None:
     assert '"--top-n"' not in canonical
     for forbidden in ("sort_values(", "nlargest(", "nsmallest(", "1.0 /"):
         assert forbidden not in canonical
+    assert '"组合构建方法"' in canonical
+    assert "build_effective_pipeline_config(" in canonical
+    assert "PortfolioConstructionEngine" not in canonical
 
 
 def test_streamlit_v6_surface_has_no_second_owner_or_unsupported_controls() -> None:

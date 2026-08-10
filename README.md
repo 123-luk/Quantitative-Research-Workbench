@@ -301,3 +301,14 @@ manual release steps are recorded in the
 [v0.7.0 Release Readiness checklist](docs/11_v0.7.0_release_readiness.md).
 This local readiness record does not claim a merged PR, passing remote CI, or a
 published `v0.7.0` tag.
+
+## V7 Portfolio Construction
+
+The canonical research chain is now Signal -> Top-N selection -> Portfolio
+Construction weighting -> Holdings -> Research Backtest. Portfolio Construction
+is an internal Holdings capability, not a separate Pipeline stage or Artifact;
+it preserves the exact Top-N security set and changes only target weights.
+
+See the [Portfolio Construction Guide](docs/12_portfolio_construction.md) and
+run the generic config entry point with
+`config/portfolio_construction_pipeline.example.yaml`.

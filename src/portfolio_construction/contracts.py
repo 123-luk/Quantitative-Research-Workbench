@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 import json
 import math
-from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -25,6 +24,28 @@ WEIGHT_ABSOLUTE_TOLERANCE = 1e-12
 CANDIDATE_COLUMNS = ("ts_code", "score", "rank", "selection_position")
 WEIGHT_COLUMNS = ("ts_code", "target_weight")
 RETURN_COLUMNS = ("trade_date", "ts_code", "return")
+
+
+class _FrozenMapping(Mapping[str, object]):
+    """Small detached immutable mapping that remains deepcopy-compatible."""
+
+    __slots__ = ("_data",)
+
+    def __init__(self, value: Mapping[str, object]) -> None:
+        self._data = dict(value)
+
+    def __getitem__(self, key: str) -> object:
+        return self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __deepcopy__(self, memo):
+        del memo
+        return self
 
 
 def normalize_date(value: object, *, field_name: str) -> pd.Timestamp:
@@ -115,7 +136,7 @@ class ConstraintSpec:
     def __post_init__(self) -> None:
         object.__setattr__(self, "type", canonical_name(self.type, field_name="type"))
         values = strict_mapping(self.params, context="constraint params")
-        object.__setattr__(self, "params", MappingProxyType(values))
+        object.__setattr__(self, "params", _FrozenMapping(values))
 
     @classmethod
     def from_dict(cls, value: object) -> ConstraintSpec:
@@ -145,7 +166,7 @@ class PortfolioConstructionConfig:
             self, "method", canonical_name(self.method, field_name="method")
         )
         params = strict_mapping(self.params, context="strategy params")
-        object.__setattr__(self, "params", MappingProxyType(params))
+        object.__setattr__(self, "params", _FrozenMapping(params))
         if not isinstance(self.constraints, tuple):
             raise PortfolioConstructionConfigError("constraints must be a tuple.")
         specs = tuple(
