@@ -3264,3 +3264,51 @@ override，V4-E3 为 CLI + YAML + docs。
 - Protected diffs, static scans, in-memory compile, import smoke, and
   `git diff --check` passed. No commit or remote Git operation was performed;
   nothing was staged. Next stage: V7-P3 E2E + v0.8.0 release readiness.
+
+## 2026-08-10 V7-P3 v0.8.0 Local Release Readiness
+
+- V7-P3 completed — v0.8.0 local release readiness. V7-P1 core and V7-P2
+  full integration remain frozen and complete; production code has zero P3
+  changes.
+- v0.7-style configurations without `portfolio_construction` resolve to exact
+  Equal Weight behavior. Top-N 1/5/10/20 preserve selected securities, row
+  order, scores, ranks, canonical payload columns, and `1/K` target weights.
+- Rank Weight remains selected-set ordinal `K..1`, independent of score scale
+  and non-contiguous raw rank values. `selection_position` remains internal.
+- Max Weight release numerics cover non-binding, partial/multiple binding,
+  uncapped ratio preservation, full investment, non-negativity, and infeasible
+  fail-closed behavior without cash or candidate replacement.
+- Inverse Volatility uses hand-checked sample standard deviation with `ddof=1`,
+  exact reciprocal-volatility normalization, strict params/minimum observations,
+  and zero/non-finite rejection with no epsilon or fallback.
+- Cross-layer no-lookahead proves opposite T+1 returns cannot change formation
+  Holdings weights. Weekend/non-open cutoff, deterministic long-holiday exact
+  open-date expansion, finite failure, and `risk_cutoff <= formation` passed.
+- Pre-listing dates do not count, valid post-listing observations count, proven
+  full-day suspension resolves to zero, and active unknown missing, unresolved
+  post-delist, and availability conflicts fail closed.
+- Generic service declarations keep Equal/Rank market independent and inject
+  historical returns only when required. Custom registry strategies still run
+  through Builder injection without Engine/Builder/Runner method dispatch.
+- Factor-count independence is proven at the canonical selected-candidate
+  projection boundary; factor names and matrices never enter construction.
+- Equal, Rank, and Inverse cross-layer Signal/Top-N/Construction/Holdings
+  Artifact/Research Backtest/Research Backtest Artifact flows preserve exact
+  candidates, weights, validators, lineage, and unchanged V6 accounting.
+- Canonical YAML/CLI, Streamlit conditional controls and decimal conversion,
+  single Runner path, old UI, JSON safety, determinism, failure atomicity,
+  public APIs, and Artifact compatibility passed.
+- Added `docs/13_v0.8.0_release_readiness.md` following the repository's
+  numbered readiness-doc convention. Git tags remain the only version truth;
+  no package version system was introduced.
+- V7-P3 release E2E: `11 passed`; focused release regression: `1005 passed`;
+  full pytest: `2877 passed, 4 skipped, 11 warnings in 212.43s`, +11 passed
+  over P2 with unchanged skips/warnings and no new xfail.
+- Static architecture, secrets/local paths, dependency drift, caches/binaries,
+  compile/import, protected diff, and `git diff --check` gates passed.
+- Final status: **LOCAL RELEASE READY**. No commit, remote Git, merge, reset,
+  rebase, cherry-pick, or tag operation was performed; nothing was staged.
+- Next manual procedure: commit V7-P3, push
+  `feature/portfolio-construction`, open a PR to `main`, review CI, merge,
+  verify exact `main`, create an annotated `v0.8.0` tag, then push and verify
+  that tag.

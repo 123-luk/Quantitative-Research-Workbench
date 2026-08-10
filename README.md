@@ -312,3 +312,7 @@ it preserves the exact Top-N security set and changes only target weights.
 See the [Portfolio Construction Guide](docs/12_portfolio_construction.md) and
 run the generic config entry point with
 `config/portfolio_construction_pipeline.example.yaml`.
+
+The frozen v0.8.0 semantics, compatibility gates, validation scope, and manual
+release procedure are recorded in the
+[v0.8.0 Local Release Readiness checklist](docs/13_v0.8.0_release_readiness.md).
