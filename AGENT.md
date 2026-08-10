@@ -3312,3 +3312,41 @@ override，V4-E3 为 CLI + YAML + docs。
   `feature/portfolio-construction`, open a PR to `main`, review CI, merge,
   verify exact `main`, create an annotated `v0.8.0` tag, then push and verify
   that tag.
+
+## 2026-08-10 V8-P1 Risk Model + Minimum Variance Core
+
+- Target release: `v0.9.0`.
+- Added strict, JSON-safe, defensively isolated `RiskModelConfig`, request,
+  result, error, estimator protocol, and fresh-instance registry contracts.
+- Historical covariance uses the exact selected asset order and one common
+  complete-case return window. It performs no pairwise covariance, filling,
+  candidate replacement, or selection; pre-listing rows leave the intersection,
+  while canonical resolved suspension zero remains an observation.
+- Added unannualized daily sample covariance with `ddof=1` and sklearn
+  `LedoitWolf(assume_centered=False, store_precision=False)` with shrinkage
+  diagnostics and direct-library parity tests.
+- Added centralized symmetry and relative PSD validation, strictly positive
+  diagonal validation, eigenvalue diagnostics, and JSON-safe singular condition
+  reporting. No clipping, epsilon repair, or nearest-PSD transformation occurs.
+- Added registry-driven `HistoricalCovarianceRiskModelService` with explicit
+  no-lookahead guards and minimum common-observation enforcement.
+- Added backend-neutral minimum-variance optimization contracts and the SciPy
+  SLSQP backend: objective `0.5*w.T*Sigma*w`, analytic gradient `Sigma*w`,
+  `ftol=1e-12`, `maxiter=1000`, `disp=False`.
+- Long-only, fully-invested constraints and the existing typed `max_weight` are
+  encoded directly as solver bounds. Solver output is validated without clipping,
+  normalization, equal-weight fallback, or inverse-volatility fallback.
+- Registered `minimum_variance` through the existing Portfolio Construction
+  registry with the generic `risk_model` service capability. Engine dispatch and
+  exact candidate-identity validation remain unchanged.
+- Mathematical tests cover hand-calculated sample covariance, diagonal
+  inverse-variance GMV, analytical positive GMV, binding/exact-feasible caps,
+  fail-closed backend results, and estimator/backend/strategy extensibility.
+- Gate A/B/C/D and focused V7/holdings compatibility: `238 passed`.
+- Full pytest: `2918 passed, 4 skipped, 11 warnings in 224.29s`; +41 passed over
+  v0.8.0 with unchanged skips/warnings and no new xfail.
+- Holdings and Pipeline integration are intentionally deferred to V8-P2 Full
+  Integration. Protected production paths and dependency files are unchanged.
+- No commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag was
+  performed. Nothing was staged.
+- Next: V8-P2 Full Integration.

@@ -8,10 +8,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 import json
 import math
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from src.risk_model import RiskModelService
 
 from .errors import (
     PortfolioConstructionConfigError,
@@ -475,3 +478,4 @@ class PortfolioConstructionServices:
     """Stable dependency container for portfolio constructors."""
 
     historical_returns: HistoricalReturnService | None = None
+    risk_model: RiskModelService | None = None
