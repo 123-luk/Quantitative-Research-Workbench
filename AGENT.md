@@ -3350,3 +3350,49 @@ override，V4-E3 为 CLI + YAML + docs。
 - No commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag was
   performed. Nothing was staged.
 - Next: V8-P2 Full Integration.
+
+## 2026-08-10 V8-P2 Risk Model + Minimum Variance Full Integration
+
+- Target release: `v0.9.0`.
+- Integrated `minimum_variance` through the existing HoldingsBuilder path;
+  Top-N still owns selection and Portfolio Construction changes only weights on
+  the exact selected set.
+- Added a fresh, run-scoped generic service factory registry and transitive
+  dependency resolver. It detects duplicate, unknown, cyclic, and null-factory
+  capabilities and constructs every resolved capability once.
+- The default dependency graph is
+  `minimum_variance -> risk_model -> historical_returns`; Equal/Rank require no
+  market service and Inverse Volatility requires only `historical_returns`.
+- Runner has no strategy-method business dispatch. The same lazy run-scoped
+  market client is reused by portfolio risk history and Research Backtest.
+- Historical covariance continues to use common complete-case dates, daily
+  unannualized sample or sklearn Ledoit-Wolf covariance, and the V8-P1 PSD/no
+  repair policy. SLSQP and `max_weight` solver bounds are unchanged.
+- Cross-layer concrete-provider tests cover T+1 perturbation, weekend cutoff,
+  pre-listing intersection, suspension zero, active unknown missing failure,
+  Top-N 5/10, and max-weight legality.
+- Holdings retains the exact five-column schema. Artifact validation now accepts
+  zero weights required by the frozen long-only `w_i >= 0` contract while still
+  rejecting negative weights; no schema/version bump occurred.
+- Holdings `config.json` naturally records the complete nested risk-model and
+  constraint configuration. No RiskModel Artifact, covariance payload, solver
+  payload, or additional file was introduced.
+- Pipeline stages and summaries are unchanged. The CLI remains config-only and
+  has no risk-model, covariance, lookback, solver, or max-weight business flags.
+- Added `config/minimum_variance_pipeline.example.yaml`,
+  `docs/14_risk_model_optimizer.md`, README integration, and Streamlit method,
+  estimator, lookback, minimum-observation, and existing max-weight controls.
+  UI values 120/80 are suggestions, not backend defaults; UI performs no risk or
+  optimizer mathematics.
+- Research Backtest calculations remain unchanged and consume only canonical
+  Holdings `target_weight`. Artifact lineage comparison now preserves upstream
+  zero-weight candidates while allowing only zero-weight extra exit rows.
+- Old Equal/Rank/Inverse/Max Weight configs and Signal, Holdings, and Research
+  Backtest Artifacts remain compatible.
+- Gate E: `45 passed`; Gate F: `87 passed`; Gate G: `46 passed`; Gate H:
+  `145 passed`; focused cross-version regression: `560 passed`.
+- Full pytest: `2942 passed, 4 skipped, 11 warnings in 240.07s`; +24 passed over
+  V8-P1 with unchanged skips/warnings and no new xfail.
+- No commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag was
+  performed. Nothing was staged.
+- Next: V8-P3 E2E + v0.9.0 Release Readiness.

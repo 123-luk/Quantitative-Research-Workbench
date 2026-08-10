@@ -29,8 +29,13 @@ USE_ALL_VALID: Final = "使用全部有效股票"
 EQUAL_WEIGHT_LABEL: Final = "等权"
 RANK_WEIGHT_LABEL: Final = "排名加权"
 INVERSE_VOLATILITY_LABEL: Final = "逆波动率"
+MINIMUM_VARIANCE_LABEL: Final = "Minimum Variance"
+SAMPLE_COVARIANCE_LABEL: Final = "Sample Covariance"
+LEDOIT_WOLF_LABEL: Final = "Ledoit-Wolf"
 SUGGESTED_INVERSE_VOLATILITY_LOOKBACK: Final = 60
 SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS: Final = 40
+SUGGESTED_RISK_MODEL_LOOKBACK: Final = 120
+SUGGESTED_RISK_MODEL_MIN_OBSERVATIONS: Final = 80
 SUGGESTED_MAX_WEIGHT_PERCENT: Final = 20.0
 SUGGESTED_RESEARCH_BACKTEST_COST_BPS: Final = 10.0
 SUGGESTED_RESEARCH_BACKTEST_BENCHMARK: Final = "000300.SH"
@@ -48,6 +53,11 @@ PORTFOLIO_METHOD_BY_LABEL: Final = {
     EQUAL_WEIGHT_LABEL: "equal_weight",
     RANK_WEIGHT_LABEL: "rank_weight",
     INVERSE_VOLATILITY_LABEL: "inverse_volatility",
+    MINIMUM_VARIANCE_LABEL: "minimum_variance",
+}
+RISK_ESTIMATOR_BY_LABEL: Final = {
+    SAMPLE_COVARIANCE_LABEL: "sample_covariance",
+    LEDOIT_WOLF_LABEL: "ledoit_wolf",
 }
 
 
@@ -56,6 +66,9 @@ def build_portfolio_construction_ui_config(
     method_label: str = EQUAL_WEIGHT_LABEL,
     lookback_trading_days: int = SUGGESTED_INVERSE_VOLATILITY_LOOKBACK,
     min_observations: int = SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS,
+    risk_model_estimator_label: str = LEDOIT_WOLF_LABEL,
+    risk_model_lookback: int = SUGGESTED_RISK_MODEL_LOOKBACK,
+    risk_model_min_observations: int = SUGGESTED_RISK_MODEL_MIN_OBSERVATIONS,
     max_weight_enabled: bool = False,
     max_weight_percent: float = SUGGESTED_MAX_WEIGHT_PERCENT,
 ) -> PortfolioConstructionConfig:
@@ -71,6 +84,21 @@ def build_portfolio_construction_ui_config(
         params = {
             "lookback_trading_days": lookback_trading_days,
             "min_observations": min_observations,
+        }
+    if method == "minimum_variance":
+        try:
+            estimator = RISK_ESTIMATOR_BY_LABEL[risk_model_estimator_label]
+        except KeyError as exc:
+            raise ValueError(
+                f"Unsupported risk estimator option: {risk_model_estimator_label!r}."
+            ) from exc
+        params = {
+            "risk_model": {
+                "estimator": estimator,
+                "params": {},
+                "lookback_trading_days": risk_model_lookback,
+                "min_observations": risk_model_min_observations,
+            }
         }
     constraints = ()
     if max_weight_enabled:
@@ -142,6 +170,9 @@ def build_effective_pipeline_config(
     inverse_volatility_min_observations: int = (
         SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS
     ),
+    risk_model_estimator_label: str = LEDOIT_WOLF_LABEL,
+    risk_model_lookback: int = SUGGESTED_RISK_MODEL_LOOKBACK,
+    risk_model_min_observations: int = SUGGESTED_RISK_MODEL_MIN_OBSERVATIONS,
     max_weight_enabled: bool = False,
     max_weight_percent: float = SUGGESTED_MAX_WEIGHT_PERCENT,
     research_backtest_enabled: bool = False,
@@ -187,6 +218,9 @@ def build_effective_pipeline_config(
                 method_label=portfolio_method_label,
                 lookback_trading_days=inverse_volatility_lookback,
                 min_observations=inverse_volatility_min_observations,
+                risk_model_estimator_label=risk_model_estimator_label,
+                risk_model_lookback=risk_model_lookback,
+                risk_model_min_observations=risk_model_min_observations,
                 max_weight_enabled=max_weight_enabled,
                 max_weight_percent=max_weight_percent,
             ).to_dict(),

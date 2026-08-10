@@ -75,6 +75,12 @@ from src.pipeline.research_execution import (
     FactorResearchPipelineExecutor,
 )
 from src.pipeline.runner import run_pipeline
+from src.pipeline.portfolio_services import (
+    PortfolioServiceFactoryRegistry,
+    PortfolioServiceGraphError,
+    PortfolioServiceRegistration,
+    PortfolioServiceResolver,
+)
 
 __all__ = [
     "ExperimentManager",
@@ -107,6 +113,10 @@ __all__ = [
     "FactorResearchPipelineExecutor",
     "FactorResearchPipelineConfig",
     "PipelineConfig",
+    "PortfolioServiceFactoryRegistry",
+    "PortfolioServiceGraphError",
+    "PortfolioServiceRegistration",
+    "PortfolioServiceResolver",
     "PredictionSourceConfig",
     "SignalConfigError",
     "SignalPipelineConfig",

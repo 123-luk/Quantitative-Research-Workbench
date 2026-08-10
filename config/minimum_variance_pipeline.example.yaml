@@ -1,0 +1,97 @@
+# Direct PipelineConfig example for V8 Minimum Variance integration.
+# The 120/80/0.20 values are explicit example choices, not backend defaults.
+backtest_start: "2024-01-01"
+backtest_end: "2024-12-31"
+train_years: 1
+max_lookback_months: 1
+stock_pool: hs300
+benchmark: 000300.SH
+strategy_name: minimum_variance_example
+selected_factors: []
+rebalance_frequency: M
+top_n: 10
+transaction_cost: 0.001
+data_root: data
+raw_data_dir: data/raw
+processed_data_dir: data/processed
+cache_dir: data/cache
+output_dir: data/output
+parquet_engine: auto
+required_datasets: []
+
+factor_research:
+  enabled: false
+
+modeling_panel:
+  enabled: true
+  source:
+    mode: files
+    factor_panel_path: data/processed/modeling_factor_panel.parquet
+    forward_returns_path: data/processed/modeling_forward_returns.parquet
+  builder:
+    label_column: forward_return
+    include_features: null
+    exclude_features: []
+    unmatched_policy: audit_and_drop
+    require_entry_after_signal: true
+    allow_missing_labels: true
+  output:
+    save_artifact: true
+    artifact_subdir: modeling_panel
+    parquet_compression: zstd
+    verify_after_write: true
+
+ml_experiment:
+  enabled: true
+  panel_path: null
+  save_artifacts: true
+  artifact_root: ml_artifacts
+  experiment_id: minimum_variance_example
+  parquet_compression: zstd
+  experiment:
+    dataset:
+      label_col: forward_return
+    walk_forward:
+      train_window_periods: 252
+      validation_periods: 20
+      window_type: rolling
+      retrain_frequency: 20
+      embargo_periods: 1
+    training:
+      model_name: ridge
+      model_params:
+        alpha: 1.0
+    evaluation:
+      minimum_cross_section_size: 3
+    permutation_importance: null
+
+signal:
+  enabled: true
+  source:
+    mode: ml
+    artifact_dir: null
+  prediction_column: prediction
+  signal_direction: descending
+  artifact_subdir: signal
+
+holdings:
+  enabled: true
+  top_n: 10
+  insufficient_universe_policy: error
+  weighting: equal_weight
+  artifact_subdir: holdings
+  portfolio_construction:
+    method: minimum_variance
+    params:
+      risk_model:
+        estimator: ledoit_wolf
+        params: {}
+        lookback_trading_days: 120
+        min_observations: 80
+    constraints:
+      - type: max_weight
+        params:
+          max_weight: 0.20
+
+research_backtest:
+  enabled: false

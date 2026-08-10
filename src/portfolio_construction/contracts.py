@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 import json
 import math
@@ -479,3 +479,30 @@ class PortfolioConstructionServices:
 
     historical_returns: HistoricalReturnService | None = None
     risk_model: RiskModelService | None = None
+    extensions: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.extensions, Mapping):
+            raise PortfolioConstructionValidationError(
+                "service extensions must be a mapping."
+            )
+        values = dict(self.extensions)
+        if any(
+            not isinstance(name, str)
+            or not name
+            or name != name.strip()
+            or name in {"historical_returns", "risk_model"}
+            for name in values
+        ):
+            raise PortfolioConstructionValidationError(
+                "service extension names must be canonical and non-reserved."
+            )
+        object.__setattr__(self, "extensions", _FrozenMapping(values))
+
+    def capability(self, name: str) -> object | None:
+        """Return a built-in or extension capability by exact name."""
+        if name == "historical_returns":
+            return self.historical_returns
+        if name == "risk_model":
+            return self.risk_model
+        return self.extensions.get(name)

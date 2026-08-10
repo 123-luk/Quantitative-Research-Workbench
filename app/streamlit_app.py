@@ -31,10 +31,15 @@ from app.services.pipeline_config_service import (  # noqa: E402
     ERROR_IF_INSUFFICIENT,
     HIGH_SCORE_FIRST,
     INVERSE_VOLATILITY_LABEL,
+    LEDOIT_WOLF_LABEL,
     LOW_SCORE_FIRST,
     RANK_WEIGHT_LABEL,
+    MINIMUM_VARIANCE_LABEL,
+    SAMPLE_COVARIANCE_LABEL,
     SUGGESTED_INVERSE_VOLATILITY_LOOKBACK,
     SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS,
+    SUGGESTED_RISK_MODEL_LOOKBACK,
+    SUGGESTED_RISK_MODEL_MIN_OBSERVATIONS,
     SUGGESTED_MAX_WEIGHT_PERCENT,
     USE_ALL_VALID,
     build_effective_pipeline_config,
@@ -198,7 +203,12 @@ def render_pipeline_page(project_root: Path) -> None:
     st.subheader("Portfolio Construction")
     portfolio_method_label = st.selectbox(
         "组合构建方法",
-        [EQUAL_WEIGHT_LABEL, RANK_WEIGHT_LABEL, INVERSE_VOLATILITY_LABEL],
+        [
+            EQUAL_WEIGHT_LABEL,
+            RANK_WEIGHT_LABEL,
+            INVERSE_VOLATILITY_LABEL,
+            MINIMUM_VARIANCE_LABEL,
+        ],
     )
     max_weight_enabled = st.checkbox("设置单股最大权重", value=False)
     max_weight_percent = SUGGESTED_MAX_WEIGHT_PERCENT
@@ -235,6 +245,39 @@ def render_pipeline_page(project_root: Path) -> None:
                     value=min(
                         SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS,
                         inverse_volatility_lookback,
+                    ),
+                    step=1,
+                )
+            )
+
+    risk_model_estimator_label = LEDOIT_WOLF_LABEL
+    risk_model_lookback = SUGGESTED_RISK_MODEL_LOOKBACK
+    risk_model_min_observations = SUGGESTED_RISK_MODEL_MIN_OBSERVATIONS
+    if portfolio_method_label == MINIMUM_VARIANCE_LABEL:
+        risk_model_estimator_label = st.selectbox(
+            "Risk Model Estimator",
+            [SAMPLE_COVARIANCE_LABEL, LEDOIT_WOLF_LABEL],
+            index=1,
+        )
+        risk_left, risk_right = st.columns(2)
+        with risk_left:
+            risk_model_lookback = int(
+                st.number_input(
+                    "Risk Lookback Trading Days",
+                    min_value=2,
+                    value=SUGGESTED_RISK_MODEL_LOOKBACK,
+                    step=1,
+                )
+            )
+        with risk_right:
+            risk_model_min_observations = int(
+                st.number_input(
+                    "Risk Minimum Observations",
+                    min_value=2,
+                    max_value=risk_model_lookback,
+                    value=min(
+                        SUGGESTED_RISK_MODEL_MIN_OBSERVATIONS,
+                        risk_model_lookback,
                     ),
                     step=1,
                 )
@@ -298,6 +341,9 @@ def render_pipeline_page(project_root: Path) -> None:
                 inverse_volatility_min_observations=(
                     inverse_volatility_min_observations
                 ),
+                risk_model_estimator_label=risk_model_estimator_label,
+                risk_model_lookback=risk_model_lookback,
+                risk_model_min_observations=risk_model_min_observations,
                 max_weight_enabled=max_weight_enabled,
                 max_weight_percent=max_weight_percent,
                 research_backtest_enabled=enable_research_backtest,

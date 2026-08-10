@@ -604,23 +604,30 @@ def _validate_lineage(value: object) -> tuple[dict[str, object], pd.DataFrame]:
 
 def _holdings_match(rebalances: pd.DataFrame, holdings: pd.DataFrame) -> None:
     target = rebalances.loc[
-        rebalances["target_weight"].gt(WEIGHT_TOLERANCE),
-        ["holdings_trade_date", "ts_code", "target_weight"],
+        :, ["holdings_trade_date", "ts_code", "target_weight"]
     ].rename(columns={"holdings_trade_date": "trade_date"})
-    target = target.sort_values(
-        ["trade_date", "ts_code"], kind="mergesort", ignore_index=True
-    )
     upstream = holdings.loc[:, ["trade_date", "ts_code", "target_weight"]]
-    upstream = upstream.sort_values(
-        ["trade_date", "ts_code"], kind="mergesort", ignore_index=True
+    target_index = target.set_index(["trade_date", "ts_code"])
+    upstream_index = upstream.set_index(["trade_date", "ts_code"])
+    if not target_index.index.is_unique or not upstream_index.index.is_unique:
+        raise ResearchBacktestArtifactValidationError(
+            "rebalance or upstream Holdings targets are duplicated."
+        )
+    missing = upstream_index.index.difference(target_index.index)
+    extra = target_index.index.difference(upstream_index.index)
+    matched = target_index.reindex(upstream_index.index)
+    extra_values = target_index.loc[extra, "target_weight"].to_numpy(
+        dtype=np.float64
     )
-    target_keys = tuple(zip(target["trade_date"], target["ts_code"]))
-    upstream_keys = tuple(zip(upstream["trade_date"], upstream["ts_code"]))
-    if target_keys != upstream_keys or not np.allclose(
-        target["target_weight"],
-        upstream["target_weight"],
-        rtol=0.0,
-        atol=WEIGHT_TOLERANCE,
+    if (
+        len(missing)
+        or bool((np.abs(extra_values) > WEIGHT_TOLERANCE).any())
+        or not np.allclose(
+            matched["target_weight"].to_numpy(dtype=np.float64),
+            upstream_index["target_weight"].to_numpy(dtype=np.float64),
+            rtol=0.0,
+            atol=WEIGHT_TOLERANCE,
+        )
     ):
         raise ResearchBacktestArtifactValidationError(
             "rebalance targets differ from upstream Holdings Artifact."

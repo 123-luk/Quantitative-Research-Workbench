@@ -43,6 +43,12 @@ from src.portfolio_construction import (
 from src.portfolio_construction.adapters import (
     ResearchBacktestHistoricalReturnService,
 )
+from src.risk_model import HistoricalCovarianceRiskModelService
+from src.pipeline.portfolio_services import (
+    PortfolioServiceFactoryRegistry,
+    PortfolioServiceGraphError,
+    PortfolioServiceResolver,
+)
 
 
 def _portfolio_engine(
@@ -50,23 +56,46 @@ def _portfolio_engine(
     market_client_factory: Callable[[], object],
     *,
     shared_client: object | None,
+    strategy_registry=None,
+    service_registry: PortfolioServiceFactoryRegistry | None = None,
 ) -> tuple[PortfolioConstructionEngine, object | None]:
-    registry = build_default_portfolio_construction_registry()
+    registry = strategy_registry or build_default_portfolio_construction_registry()
     required = registry.required_services(method)
-    unknown = required - {"historical_returns"}
-    if unknown:
-        raise HoldingsPipelineExecutionError(
-            f"unsupported portfolio service requirements: {tuple(sorted(unknown))!r}."
-        )
     client = shared_client
-    if required and client is None:
-        client = market_client_factory()
-    services = PortfolioConstructionServices(
-        historical_returns=(
-            ResearchBacktestHistoricalReturnService(client)
-            if "historical_returns" in required
-            else None
+
+    def market_client() -> object:
+        nonlocal client
+        if client is None:
+            client = market_client_factory()
+        return client
+
+    factories = service_registry or PortfolioServiceFactoryRegistry()
+    if service_registry is None:
+        factories.register(
+            "historical_returns",
+            factory=lambda resolved: ResearchBacktestHistoricalReturnService(
+                market_client()
+            ),
         )
+        factories.register(
+            "risk_model",
+            dependencies={"historical_returns"},
+            factory=lambda resolved: HistoricalCovarianceRiskModelService(
+                resolved["historical_returns"]  # type: ignore[arg-type]
+            ),
+        )
+    try:
+        resolved = PortfolioServiceResolver(factories).resolve(required)
+    except PortfolioServiceGraphError as exc:
+        raise HoldingsPipelineExecutionError(str(exc)) from exc
+    services = PortfolioConstructionServices(
+        historical_returns=resolved.get("historical_returns"),  # type: ignore[arg-type]
+        risk_model=resolved.get("risk_model"),  # type: ignore[arg-type]
+        extensions={
+            name: value
+            for name, value in resolved.items()
+            if name not in {"historical_returns", "risk_model"}
+        },
     )
     return PortfolioConstructionEngine(
         strategy_registry=registry, services=services

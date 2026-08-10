@@ -748,8 +748,8 @@ def _holdings_errors(
             continue
         if not np.isfinite(values).all():
             errors.append(f"{name} contains non-finite values.")
-        if name == "target_weight" and bool((values <= 0).any()):
-            errors.append("target_weight must be strictly positive.")
+        if name == "target_weight" and bool((values < 0).any()):
+            errors.append("target_weight must be nonnegative.")
     ranks = frame["rank"]
     if not pd.api.types.is_integer_dtype(ranks.dtype) or bool((ranks <= 0).any()):
         errors.append("rank must be positive integer data.")
