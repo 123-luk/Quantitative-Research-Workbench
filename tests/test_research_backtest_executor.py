@@ -42,6 +42,7 @@ from src.portfolio_construction.adapters import (
     ResearchBacktestHistoricalReturnService,
 )
 from src.research_backtest import ResearchBacktestArtifactStore
+from src.risk_model import HistoricalCovarianceRiskModelService
 
 
 def _holdings(
@@ -367,6 +368,15 @@ def test_all_portfolio_methods_feed_exact_weights_to_same_v6_engine(
             "inverse_volatility",
             {"lookback_trading_days": 3, "min_observations": 3},
         ),
+        "minimum_variance": PortfolioConstructionConfig(
+            "minimum_variance",
+            {"risk_model": {
+                "estimator": "ledoit_wolf",
+                "params": {},
+                "lookback_trading_days": 3,
+                "min_observations": 3,
+            }},
+        ),
     }
     selected_sets: dict[str, set[str]] = {}
     first_date_weights: dict[str, np.ndarray] = {}
@@ -376,7 +386,8 @@ def test_all_portfolio_methods_feed_exact_weights_to_same_v6_engine(
         service = ResearchBacktestHistoricalReturnService(provider)
         engine = PortfolioConstructionEngine(
             services=PortfolioConstructionServices(
-                historical_returns=service
+                historical_returns=service,
+                risk_model=HistoricalCovarianceRiskModelService(service),
             )
         )
         built = HoldingsBuilder(engine).build(
@@ -417,6 +428,11 @@ def test_all_portfolio_methods_feed_exact_weights_to_same_v6_engine(
             portfolio_construction=portfolio_config,
         )
         assert HoldingsArtifactStore().validate(written.artifact_dir).is_valid
+        stored_config = json.loads(written.config_path.read_text(encoding="utf-8"))
+        assert stored_config["portfolio_construction"] == portfolio_config.to_dict()
+        assert {path.name for path in written.artifact_dir.iterdir()} == {
+            "holdings.parquet", "config.json", "audit.json", "manifest.json"
+        }
         pipeline_result = HoldingsPipelineResult(
             enabled=True,
             source_signal_artifact_dir=signal_dir,
@@ -460,9 +476,13 @@ def test_all_portfolio_methods_feed_exact_weights_to_same_v6_engine(
 
     assert selected_sets["equal"] == selected_sets["rank"]
     assert selected_sets["equal"] == selected_sets["inverse"]
+    assert selected_sets["equal"] == selected_sets["minimum_variance"]
     assert not np.allclose(first_date_weights["equal"], first_date_weights["rank"])
     assert not np.allclose(
         first_date_weights["equal"], first_date_weights["inverse"]
+    )
+    assert not np.allclose(
+        first_date_weights["rank"], first_date_weights["minimum_variance"]
     )
 
     top_ten = HoldingsBuilder().build(

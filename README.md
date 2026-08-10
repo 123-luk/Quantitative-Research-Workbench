@@ -316,3 +316,24 @@ run the generic config entry point with
 The frozen v0.8.0 semantics, compatibility gates, validation scope, and manual
 release procedure are recorded in the
 [v0.8.0 Local Release Readiness checklist](docs/13_v0.8.0_release_readiness.md).
+
+## V8 Risk Model and Minimum Variance
+
+The research chain now supports another registry-driven weighting method:
+
+```text
+Signal -> Top-N -> Portfolio Construction
+                    |- Equal Weight
+                    |- Rank Weight
+                    |- Inverse Volatility
+                    `- Minimum Variance -> Risk Model
+                 -> Holdings -> Research Backtest
+```
+
+Minimum Variance preserves the exact Top-N set and uses a common complete-case
+historical covariance with long-only, fully-invested SLSQP optimization. The
+Risk Model remains an internal Holdings capability, not a Pipeline stage or
+Artifact. Run the standard config-only CLI with
+`config/minimum_variance_pipeline.example.yaml` and see
+[Risk Model and Minimum Variance](docs/14_risk_model_optimizer.md) for the
+frozen covariance, dependency, optimization, and compatibility semantics.

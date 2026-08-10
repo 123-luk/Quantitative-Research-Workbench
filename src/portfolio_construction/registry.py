@@ -164,15 +164,17 @@ class ConstraintRegistry:
 
 
 def build_default_portfolio_construction_registry() -> PortfolioConstructionRegistry:
-    """Return an independently mutable registry with all V7-P1 strategies."""
+    """Return an independently mutable registry with all core strategies."""
     from .strategies.equal_weight import EqualWeightStrategy
     from .strategies.inverse_volatility import InverseVolatilityStrategy
+    from .strategies.minimum_variance import MinimumVarianceConstructor
     from .strategies.rank_weight import RankWeightStrategy
 
     registry = PortfolioConstructionRegistry()
     registry.register(EqualWeightStrategy())
     registry.register(RankWeightStrategy())
     registry.register(InverseVolatilityStrategy())
+    registry.register(MinimumVarianceConstructor())
     return registry
 
 

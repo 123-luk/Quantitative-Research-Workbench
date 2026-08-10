@@ -37,6 +37,7 @@ from .strategies import (
     EqualWeightStrategy,
     InverseVolatilityParams,
     InverseVolatilityStrategy,
+    MinimumVarianceConstructor,
     RankWeightStrategy,
 )
 
@@ -54,6 +55,7 @@ __all__ = [
     "InverseVolatilityStrategy",
     "MaxWeightConstraint",
     "MaxWeightParams",
+    "MinimumVarianceConstructor",
     "PortfolioConstructionConfig",
     "PortfolioConstructionConfigError",
     "PortfolioConstructionConstraintError",

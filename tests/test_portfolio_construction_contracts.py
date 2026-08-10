@@ -137,7 +137,12 @@ def test_strategy_registry_exact_duplicate_unknown_and_fresh_defaults() -> None:
     first = build_default_portfolio_construction_registry()
     second = build_default_portfolio_construction_registry()
     assert first is not second
-    assert first.names() == ("equal_weight", "inverse_volatility", "rank_weight")
+    assert first.names() == (
+        "equal_weight",
+        "inverse_volatility",
+        "minimum_variance",
+        "rank_weight",
+    )
 
 
 def test_constraint_registry_exact_duplicate_unknown_and_typed_parse() -> None:

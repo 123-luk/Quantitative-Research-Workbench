@@ -3312,3 +3312,126 @@ override，V4-E3 为 CLI + YAML + docs。
   `feature/portfolio-construction`, open a PR to `main`, review CI, merge,
   verify exact `main`, create an annotated `v0.8.0` tag, then push and verify
   that tag.
+
+## 2026-08-10 V8-P1 Risk Model + Minimum Variance Core
+
+- Target release: `v0.9.0`.
+- Added strict, JSON-safe, defensively isolated `RiskModelConfig`, request,
+  result, error, estimator protocol, and fresh-instance registry contracts.
+- Historical covariance uses the exact selected asset order and one common
+  complete-case return window. It performs no pairwise covariance, filling,
+  candidate replacement, or selection; pre-listing rows leave the intersection,
+  while canonical resolved suspension zero remains an observation.
+- Added unannualized daily sample covariance with `ddof=1` and sklearn
+  `LedoitWolf(assume_centered=False, store_precision=False)` with shrinkage
+  diagnostics and direct-library parity tests.
+- Added centralized symmetry and relative PSD validation, strictly positive
+  diagonal validation, eigenvalue diagnostics, and JSON-safe singular condition
+  reporting. No clipping, epsilon repair, or nearest-PSD transformation occurs.
+- Added registry-driven `HistoricalCovarianceRiskModelService` with explicit
+  no-lookahead guards and minimum common-observation enforcement.
+- Added backend-neutral minimum-variance optimization contracts and the SciPy
+  SLSQP backend: objective `0.5*w.T*Sigma*w`, analytic gradient `Sigma*w`,
+  `ftol=1e-12`, `maxiter=1000`, `disp=False`.
+- Long-only, fully-invested constraints and the existing typed `max_weight` are
+  encoded directly as solver bounds. Solver output is validated without clipping,
+  normalization, equal-weight fallback, or inverse-volatility fallback.
+- Registered `minimum_variance` through the existing Portfolio Construction
+  registry with the generic `risk_model` service capability. Engine dispatch and
+  exact candidate-identity validation remain unchanged.
+- Mathematical tests cover hand-calculated sample covariance, diagonal
+  inverse-variance GMV, analytical positive GMV, binding/exact-feasible caps,
+  fail-closed backend results, and estimator/backend/strategy extensibility.
+- Gate A/B/C/D and focused V7/holdings compatibility: `238 passed`.
+- Full pytest: `2918 passed, 4 skipped, 11 warnings in 224.29s`; +41 passed over
+  v0.8.0 with unchanged skips/warnings and no new xfail.
+- Holdings and Pipeline integration are intentionally deferred to V8-P2 Full
+  Integration. Protected production paths and dependency files are unchanged.
+- No commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag was
+  performed. Nothing was staged.
+- Next: V8-P2 Full Integration.
+
+## 2026-08-10 V8-P2 Risk Model + Minimum Variance Full Integration
+
+- Target release: `v0.9.0`.
+- Integrated `minimum_variance` through the existing HoldingsBuilder path;
+  Top-N still owns selection and Portfolio Construction changes only weights on
+  the exact selected set.
+- Added a fresh, run-scoped generic service factory registry and transitive
+  dependency resolver. It detects duplicate, unknown, cyclic, and null-factory
+  capabilities and constructs every resolved capability once.
+- The default dependency graph is
+  `minimum_variance -> risk_model -> historical_returns`; Equal/Rank require no
+  market service and Inverse Volatility requires only `historical_returns`.
+- Runner has no strategy-method business dispatch. The same lazy run-scoped
+  market client is reused by portfolio risk history and Research Backtest.
+- Historical covariance continues to use common complete-case dates, daily
+  unannualized sample or sklearn Ledoit-Wolf covariance, and the V8-P1 PSD/no
+  repair policy. SLSQP and `max_weight` solver bounds are unchanged.
+- Cross-layer concrete-provider tests cover T+1 perturbation, weekend cutoff,
+  pre-listing intersection, suspension zero, active unknown missing failure,
+  Top-N 5/10, and max-weight legality.
+- Holdings retains the exact five-column schema. Artifact validation now accepts
+  zero weights required by the frozen long-only `w_i >= 0` contract while still
+  rejecting negative weights; no schema/version bump occurred.
+- Holdings `config.json` naturally records the complete nested risk-model and
+  constraint configuration. No RiskModel Artifact, covariance payload, solver
+  payload, or additional file was introduced.
+- Pipeline stages and summaries are unchanged. The CLI remains config-only and
+  has no risk-model, covariance, lookback, solver, or max-weight business flags.
+- Added `config/minimum_variance_pipeline.example.yaml`,
+  `docs/14_risk_model_optimizer.md`, README integration, and Streamlit method,
+  estimator, lookback, minimum-observation, and existing max-weight controls.
+  UI values 120/80 are suggestions, not backend defaults; UI performs no risk or
+  optimizer mathematics.
+- Research Backtest calculations remain unchanged and consume only canonical
+  Holdings `target_weight`. Artifact lineage comparison now preserves upstream
+  zero-weight candidates while allowing only zero-weight extra exit rows.
+- Old Equal/Rank/Inverse/Max Weight configs and Signal, Holdings, and Research
+  Backtest Artifacts remain compatible.
+- Gate E: `45 passed`; Gate F: `87 passed`; Gate G: `46 passed`; Gate H:
+  `145 passed`; focused cross-version regression: `560 passed`.
+- Full pytest: `2942 passed, 4 skipped, 11 warnings in 240.07s`; +24 passed over
+  V8-P1 with unchanged skips/warnings and no new xfail.
+- No commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag was
+  performed. Nothing was staged.
+- Next: V8-P3 E2E + v0.9.0 Release Readiness.
+
+## 2026-08-10 V8-P3 v0.9.0 Release Readiness
+
+- Completed local release readiness for Risk Model + Constrained Minimum
+  Variance 1.0; P1 core and P2 integration remain frozen, with no P3 production
+  or dependency changes.
+- Confirmed Top-N as the sole selection owner and exact selected identity across
+  RiskModelRequest, RiskModelResult, optimizer weights, canonical Holdings, and
+  downstream lineage. Selected zero-weight securities remain canonical rows;
+  negative weights remain invalid and each formation stays fully invested.
+- Ground truth covers exact daily unannualized sample covariance (`ddof=1`),
+  analytical long-only GMV at `<=1e-7`, scale and asset/row permutation
+  invariance, diagonal/correlated/near-singular matrices, and 60 fixed-seed SPD
+  cases for K=2..20.
+- Exact common-date, M-1/M observation boundary, listing, suspension zero,
+  active missing, post-delist, weekend/holiday cutoff, and strong T+1
+  no-lookahead behavior remain green through the concrete return lifecycle.
+- Sample and Ledoit-Wolf preserve assets/count/cutoff; nonzero shrinkage changes
+  covariance as expected and Ledoit-Wolf covariance/weights are deterministic.
+- Max Weight K/cap cases (5/.20, 5/.25, 5/.19, 10/.10, 10/.15) pass direct
+  feasibility and independent diagonal KKT-reference checks, with no
+  clip-normalize implementation.
+- The default and custom generic service graphs, chain, diamond shared cache,
+  cycle/unknown failure, no-market Equal/Rank behavior, solver/risk atomicity,
+  factor-count independence, and score/rank independence passed.
+- Equal, Rank, Inverse, old configs/artifacts, V7 custom strategies, Signal to
+  Holdings to Research Backtest Artifacts, exact file/schema/config/lineage,
+  determinism, accounting, config-only CLI, and pure Streamlit mapping passed.
+- P3 E2E: `23 passed`; Gate I: `72 passed`; Gate J: `186 passed`; Gate K:
+  `192 passed`; 50-file cross-version focused regression: `1155 passed`.
+- Full pytest under normal local process permissions: `2965 passed, 4 skipped,
+  11 warnings in 209.67s`; +23 passes over V8-P2 with unchanged skips/warnings
+  and no new xfail. An earlier sandbox-only attempt was invalid because Windows
+  denied sklearn/joblib named-pipe creation; it did not expose a product defect.
+- Static scans, 159-file in-memory compile, key imports, protected production
+  diffs, and Git hygiene passed. No commit, remote Git, push, fetch, pull, merge,
+  rebase, reset, cherry-pick, or tag was performed; HEAD remains the P2 commit.
+- Final status: **LOCAL RELEASE READY**. Next: user commits P3, then follows the
+  PR/release workflow.
