@@ -3160,3 +3160,53 @@ override，V4-E3 为 CLI + YAML + docs。
 - Next manual procedure: (1) commit V6-I; (2) push feature branch; (3) open a
   GitHub PR; (4) review and wait for CI; (5) merge main; (6) verify exact main;
   (7) create annotated `v0.7.0` tag; (8) push and verify the tag.
+
+## 2026-08-10 V7-P1 Portfolio Construction Core
+
+- V7-P1 completed for target `v0.8.0` on local branch
+  `feature/portfolio-construction`; start and final HEAD remain exact v0.7.0
+  release commit `0ff75aa2e7601aeb01ae9e6861d42689eebbacac`.
+- The architecture keeps selection and weighting separate: existing Holdings
+  remains the owner of Top-N, direction, and insufficient-universe policy;
+  Portfolio Construction accepts only the exact selected candidate snapshot
+  and cannot add, drop, replace, or re-rank securities.
+- Constructors satisfy configured constraints. The registry-driven Engine
+  resolves plugins and typed params, hands off dependencies, then independently
+  validates exact candidate identity, long-only fully-invested weights, and all
+  registered constraints without clipping, optimization, or fallback.
+- Added generic strict `method` / `params` / `constraints` config contracts,
+  immutable candidate/result contracts, detached JSON-safe serialization, a
+  fresh-instance strategy registry, and a fresh-instance constraint registry.
+- Built-in strategies are `equal_weight`, `rank_weight`, and
+  `inverse_volatility`. Rank weighting uses contiguous internal
+  `selection_position`, never assumes upstream `rank` is contiguous, and never
+  reads factor feature names or score scale.
+- Added `max_weight` with a deterministic active-set capped-proportional
+  allocator. It enforces feasibility, preserves uncapped attractiveness ratios,
+  remains fully invested, and fails closed without cash or clip-normalize logic.
+- Added the provider-neutral `HistoricalReturnService` /
+  `HistoricalReturnWindow` boundary, stable services container, strict sparse
+  return validation, `SampleVolatilityEstimator` with `ddof=1`, and inverse
+  volatility without epsilon floors, candidate drops, missing-data fills, or
+  equal-weight fallback.
+- No-lookahead guards reject a cutoff after formation, rows after cutoff or
+  formation, unrequested securities, and windows exceeding the requested
+  lookback. Missing/insufficient observations and zero/non-finite volatility
+  fail closed.
+- The public request is factor-count agnostic and uses exactly `ts_code`,
+  `score`, `rank`, and `selection_position`; the result uses exactly `ts_code`
+  and `target_weight`, with diagnostics kept outside Holdings columns.
+- Gate A: `21 passed`; Gate B: `19 passed`; Gate C: `19 passed`; Gate D:
+  `14 passed`. Combined V7-P1 focused suite: `73 passed`. Existing
+  Holdings/Signal/Pipeline compatibility: `347 passed`; complete V6 Research
+  Backtest compatibility: `521 passed`.
+- Full pytest under approved normal local process permissions:
+  `2839 passed, 4 skipped, 11 warnings in 219.14s`; this is +73 passed over
+  v0.7.0 with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, 88-column scan, 2,500 randomized allocator cases,
+  provider/selection/fallback/dispatch static scans, protected-diff review, and
+  `git diff --check` passed. No dependency change or remote Git operation was
+  performed; nothing was staged, committed, pushed, fetched, pulled, merged,
+  rebased, reset, cherry-picked, or tagged.
+- Holdings, Pipeline, YAML, CLI, Streamlit, Artifact, and Backtest integration
+  are intentionally not part of P1. Next stage: V7-P2 Full Integration.
