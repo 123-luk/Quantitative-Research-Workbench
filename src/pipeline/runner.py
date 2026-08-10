@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from src.data.data_manager import DataManager
@@ -34,14 +35,57 @@ from src.pipeline.holdings_execution import (
 from src.pipeline.research_backtest_executor import (
     ResearchBacktestPipelineExecutor,
 )
+from src.portfolio_construction import (
+    PortfolioConstructionEngine,
+    PortfolioConstructionServices,
+    build_default_portfolio_construction_registry,
+)
+from src.portfolio_construction.adapters import (
+    ResearchBacktestHistoricalReturnService,
+)
 
 
-def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
+def _portfolio_engine(
+    method: str,
+    market_client_factory: Callable[[], object],
+    *,
+    shared_client: object | None,
+) -> tuple[PortfolioConstructionEngine, object | None]:
+    registry = build_default_portfolio_construction_registry()
+    required = registry.required_services(method)
+    unknown = required - {"historical_returns"}
+    if unknown:
+        raise HoldingsPipelineExecutionError(
+            f"unsupported portfolio service requirements: {tuple(sorted(unknown))!r}."
+        )
+    client = shared_client
+    if required and client is None:
+        client = market_client_factory()
+    services = PortfolioConstructionServices(
+        historical_returns=(
+            ResearchBacktestHistoricalReturnService(client)
+            if "historical_returns" in required
+            else None
+        )
+    )
+    return PortfolioConstructionEngine(
+        strategy_registry=registry, services=services
+    ), client
+
+
+def run_pipeline(
+    config: PipelineConfig,
+    *,
+    market_client_factory: Callable[[], object] | None = None,
+) -> dict[str, Any]:
     """Run the V1 pipeline skeleton and return a concise run summary.
 
     The V1 runner only checks local data cache readiness and creates experiment
     artifacts. It does not download TuShare data, train models, or run backtests.
     """
+    client_factory = TushareClient if market_client_factory is None else (
+        market_client_factory
+    )
     required_start_date = config.required_start_date
     required_end_date = config.required_end_date
 
@@ -154,8 +198,16 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
         summary["signal"] = signal_result.as_dict()
 
     holdings_result = HoldingsPipelineResult.disabled()
+    market_client: object | None = None
     if config.holdings.enabled:
-        holdings_executor = HoldingsPipelineExecutor(config.holdings)
+        holdings_engine, market_client = _portfolio_engine(
+            config.holdings.portfolio_construction.method,
+            client_factory,
+            shared_client=market_client,
+        )
+        holdings_executor = HoldingsPipelineExecutor(
+            config.holdings, holdings_engine
+        )
         holdings_result = holdings_executor.execute(
             run_dir,
             signal_result=signal_result,
@@ -163,9 +215,11 @@ def run_pipeline(config: PipelineConfig) -> dict[str, Any]:
         summary["holdings"] = holdings_result.as_dict()
 
     if config.research_backtest.enabled:
+        if market_client is None:
+            market_client = client_factory()
         backtest_executor = ResearchBacktestPipelineExecutor(
             config.research_backtest,
-            TushareClient(),
+            market_client,  # type: ignore[arg-type]
         )
         artifact_dir = Path(run_dir) / config.research_backtest.artifact_subdir
         backtest_result = backtest_executor.execute(

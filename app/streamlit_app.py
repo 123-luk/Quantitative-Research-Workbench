@@ -30,7 +30,12 @@ from app.services.pipeline_config_service import (  # noqa: E402
     EQUAL_WEIGHT_LABEL,
     ERROR_IF_INSUFFICIENT,
     HIGH_SCORE_FIRST,
+    INVERSE_VOLATILITY_LABEL,
     LOW_SCORE_FIRST,
+    RANK_WEIGHT_LABEL,
+    SUGGESTED_INVERSE_VOLATILITY_LOOKBACK,
+    SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS,
+    SUGGESTED_MAX_WEIGHT_PERCENT,
     USE_ALL_VALID,
     build_effective_pipeline_config,
     build_selection_summary,
@@ -190,6 +195,51 @@ def render_pipeline_page(project_root: Path) -> None:
         )
         st.text_input("权重方式", value=EQUAL_WEIGHT_LABEL, disabled=True)
 
+    st.subheader("Portfolio Construction")
+    portfolio_method_label = st.selectbox(
+        "组合构建方法",
+        [EQUAL_WEIGHT_LABEL, RANK_WEIGHT_LABEL, INVERSE_VOLATILITY_LABEL],
+    )
+    max_weight_enabled = st.checkbox("设置单股最大权重", value=False)
+    max_weight_percent = SUGGESTED_MAX_WEIGHT_PERCENT
+    if max_weight_enabled:
+        max_weight_percent = float(
+            st.number_input(
+                "单股最大权重 (%)",
+                min_value=0.01,
+                value=SUGGESTED_MAX_WEIGHT_PERCENT,
+                step=0.5,
+            )
+        )
+    inverse_volatility_lookback = SUGGESTED_INVERSE_VOLATILITY_LOOKBACK
+    inverse_volatility_min_observations = (
+        SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS
+    )
+    if portfolio_method_label == INVERSE_VOLATILITY_LABEL:
+        inverse_left, inverse_right = st.columns(2)
+        with inverse_left:
+            inverse_volatility_lookback = int(
+                st.number_input(
+                    "波动率回看交易日",
+                    min_value=2,
+                    value=SUGGESTED_INVERSE_VOLATILITY_LOOKBACK,
+                    step=1,
+                )
+            )
+        with inverse_right:
+            inverse_volatility_min_observations = int(
+                st.number_input(
+                    "最少收益观测数",
+                    min_value=2,
+                    max_value=inverse_volatility_lookback,
+                    value=min(
+                        SUGGESTED_INVERSE_VOLATILITY_MIN_OBSERVATIONS,
+                        inverse_volatility_lookback,
+                    ),
+                    step=1,
+                )
+            )
+
     st.subheader("Research Backtest")
     enable_research_backtest = st.checkbox(
         "Enable Research Backtest",
@@ -243,6 +293,13 @@ def render_pipeline_page(project_root: Path) -> None:
                 top_n=top_n,
                 signal_direction_label=direction_label,
                 insufficient_policy_label=insufficient_label,
+                portfolio_method_label=portfolio_method_label,
+                inverse_volatility_lookback=inverse_volatility_lookback,
+                inverse_volatility_min_observations=(
+                    inverse_volatility_min_observations
+                ),
+                max_weight_enabled=max_weight_enabled,
+                max_weight_percent=max_weight_percent,
                 research_backtest_enabled=enable_research_backtest,
                 research_backtest_cost_bps=cost_bps,
                 research_backtest_benchmark=benchmark_code,
@@ -281,6 +338,9 @@ def render_pipeline_page(project_root: Path) -> None:
                     "Holdings dates": holdings.get("trade_date_count"),
                     "Signal direction": signal.get("signal_direction"),
                     "weighting": holdings.get("weighting"),
+                    "portfolio construction": (
+                        effective_config.holdings.portfolio_construction.method
+                    ),
                 }
             )
             research_backtest = result.get("research_backtest")

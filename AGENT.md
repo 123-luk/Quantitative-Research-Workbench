@@ -3160,3 +3160,155 @@ override，V4-E3 为 CLI + YAML + docs。
 - Next manual procedure: (1) commit V6-I; (2) push feature branch; (3) open a
   GitHub PR; (4) review and wait for CI; (5) merge main; (6) verify exact main;
   (7) create annotated `v0.7.0` tag; (8) push and verify the tag.
+
+## 2026-08-10 V7-P1 Portfolio Construction Core
+
+- V7-P1 completed for target `v0.8.0` on local branch
+  `feature/portfolio-construction`; start and final HEAD remain exact v0.7.0
+  release commit `0ff75aa2e7601aeb01ae9e6861d42689eebbacac`.
+- The architecture keeps selection and weighting separate: existing Holdings
+  remains the owner of Top-N, direction, and insufficient-universe policy;
+  Portfolio Construction accepts only the exact selected candidate snapshot
+  and cannot add, drop, replace, or re-rank securities.
+- Constructors satisfy configured constraints. The registry-driven Engine
+  resolves plugins and typed params, hands off dependencies, then independently
+  validates exact candidate identity, long-only fully-invested weights, and all
+  registered constraints without clipping, optimization, or fallback.
+- Added generic strict `method` / `params` / `constraints` config contracts,
+  immutable candidate/result contracts, detached JSON-safe serialization, a
+  fresh-instance strategy registry, and a fresh-instance constraint registry.
+- Built-in strategies are `equal_weight`, `rank_weight`, and
+  `inverse_volatility`. Rank weighting uses contiguous internal
+  `selection_position`, never assumes upstream `rank` is contiguous, and never
+  reads factor feature names or score scale.
+- Added `max_weight` with a deterministic active-set capped-proportional
+  allocator. It enforces feasibility, preserves uncapped attractiveness ratios,
+  remains fully invested, and fails closed without cash or clip-normalize logic.
+- Added the provider-neutral `HistoricalReturnService` /
+  `HistoricalReturnWindow` boundary, stable services container, strict sparse
+  return validation, `SampleVolatilityEstimator` with `ddof=1`, and inverse
+  volatility without epsilon floors, candidate drops, missing-data fills, or
+  equal-weight fallback.
+- No-lookahead guards reject a cutoff after formation, rows after cutoff or
+  formation, unrequested securities, and windows exceeding the requested
+  lookback. Missing/insufficient observations and zero/non-finite volatility
+  fail closed.
+- The public request is factor-count agnostic and uses exactly `ts_code`,
+  `score`, `rank`, and `selection_position`; the result uses exactly `ts_code`
+  and `target_weight`, with diagnostics kept outside Holdings columns.
+- Gate A: `21 passed`; Gate B: `19 passed`; Gate C: `19 passed`; Gate D:
+  `14 passed`. Combined V7-P1 focused suite: `73 passed`. Existing
+  Holdings/Signal/Pipeline compatibility: `347 passed`; complete V6 Research
+  Backtest compatibility: `521 passed`.
+- Full pytest under approved normal local process permissions:
+  `2839 passed, 4 skipped, 11 warnings in 219.14s`; this is +73 passed over
+  v0.7.0 with unchanged skips/warnings and no new xfail.
+- Compile/import smoke, 88-column scan, 2,500 randomized allocator cases,
+  provider/selection/fallback/dispatch static scans, protected-diff review, and
+  `git diff --check` passed. No dependency change or remote Git operation was
+  performed; nothing was staged, committed, pushed, fetched, pulled, merged,
+  rebased, reset, cherry-picked, or tagged.
+- Holdings, Pipeline, YAML, CLI, Streamlit, Artifact, and Backtest integration
+  are intentionally not part of P1. Next stage: V7-P2 Full Integration.
+
+## 2026-08-10 V7-P2 Portfolio Construction Full Integration
+
+- V7-P2 completed — Portfolio Construction Full Integration on local branch
+  `feature/portfolio-construction`; start and final HEAD remain the P1 commit
+  `24389a240cfe1644138a7033670f77aa40d77dcc`.
+- Holdings now owns a strict generic `portfolio_construction` config bridge;
+  old configs without that field deterministically default to `equal_weight`.
+- Existing Holdings Top-N ranks remain the sole selection owner. The Builder
+  passes only the selected snapshot to the registry-driven Engine, and the
+  contiguous `selection_position` remains internal rather than entering the
+  unchanged Holdings payload schema.
+- Strategy plugins declare generic required service capabilities. Equal and
+  rank weighting require no market service; inverse volatility requests the
+  injected `historical_returns` capability without Builder/Runner business
+  dispatch by construction method.
+- The concrete HistoricalReturnService reuses the V6 B1/B2/B3 calendar, daily
+  return, lifecycle, suspension, status, and missing-return semantics. Its
+  deterministic expanding calendar query resolves the last exact open-date
+  window through `risk_cutoff <= formation_date` and memoizes per run.
+- Pre-listing rows are excluded, proven full-day suspensions contribute zero,
+  and unexplained missing or unresolved lifecycle data fail closed. No future
+  return, price reconstruction, generic zero fill, or equal-weight fallback is
+  used.
+- Holdings remains exactly `trade_date`, `ts_code`, `target_weight`, `score`,
+  and `rank`. It is long-only and fully invested for all three built-ins.
+- Native Holdings config metadata records the exact portfolio construction
+  method, params, and constraints. Manifest/audit schemas and stage/file sets
+  remain unchanged, and old three-field v0.7 Holdings configs still validate.
+- Pipeline stage order and summary boundaries remain unchanged. The Runner
+  injects only declared services, reuses one run-scoped market client with V6,
+  and the CLI remains generic `--config` with no business-method flags.
+- Added a direct canonical YAML example plus README and
+  `docs/12_portfolio_construction.md` documentation for equal, rank, inverse
+  volatility, max-weight, timing, lineage, and non-goals.
+- Streamlit maps equal/rank/inverse methods, optional percentage max weight,
+  and conditional 60/40 inverse-volatility suggestions into canonical backend
+  config. Top-N, direction, insufficient policy, Research Backtest, and legacy
+  controls remain separate; the UI performs no weighting calculation.
+- The unchanged V6 Research Backtest consumes only exact Holdings
+  `target_weight`. A no-network synthetic cross-layer test proves equal, rank,
+  and inverse methods select the same Top-N set, produce different legal
+  weights, preserve those exact weights in the rebalance ledger, and publish
+  valid Holdings and Research Backtest Artifacts; Top-N 5 and 10 are covered.
+- The P1 custom registry plugin also enters HoldingsBuilder through dependency
+  injection with no method-specific Builder branch, preserving extensibility.
+- Gate E: `140 passed`; Gate F: `142 passed`; Gate G: `39 passed`; Gate H:
+  `1 passed`. Final focused V5/V6/V7 regression: `993 passed`.
+- Full pytest under approved normal local process permissions:
+  `2866 passed, 4 skipped, 11 warnings in 177.10s`; this is +27 passed over P1
+  with unchanged skips/warnings and no new xfail.
+- Protected diffs, static scans, in-memory compile, import smoke, and
+  `git diff --check` passed. No commit or remote Git operation was performed;
+  nothing was staged. Next stage: V7-P3 E2E + v0.8.0 release readiness.
+
+## 2026-08-10 V7-P3 v0.8.0 Local Release Readiness
+
+- V7-P3 completed — v0.8.0 local release readiness. V7-P1 core and V7-P2
+  full integration remain frozen and complete; production code has zero P3
+  changes.
+- v0.7-style configurations without `portfolio_construction` resolve to exact
+  Equal Weight behavior. Top-N 1/5/10/20 preserve selected securities, row
+  order, scores, ranks, canonical payload columns, and `1/K` target weights.
+- Rank Weight remains selected-set ordinal `K..1`, independent of score scale
+  and non-contiguous raw rank values. `selection_position` remains internal.
+- Max Weight release numerics cover non-binding, partial/multiple binding,
+  uncapped ratio preservation, full investment, non-negativity, and infeasible
+  fail-closed behavior without cash or candidate replacement.
+- Inverse Volatility uses hand-checked sample standard deviation with `ddof=1`,
+  exact reciprocal-volatility normalization, strict params/minimum observations,
+  and zero/non-finite rejection with no epsilon or fallback.
+- Cross-layer no-lookahead proves opposite T+1 returns cannot change formation
+  Holdings weights. Weekend/non-open cutoff, deterministic long-holiday exact
+  open-date expansion, finite failure, and `risk_cutoff <= formation` passed.
+- Pre-listing dates do not count, valid post-listing observations count, proven
+  full-day suspension resolves to zero, and active unknown missing, unresolved
+  post-delist, and availability conflicts fail closed.
+- Generic service declarations keep Equal/Rank market independent and inject
+  historical returns only when required. Custom registry strategies still run
+  through Builder injection without Engine/Builder/Runner method dispatch.
+- Factor-count independence is proven at the canonical selected-candidate
+  projection boundary; factor names and matrices never enter construction.
+- Equal, Rank, and Inverse cross-layer Signal/Top-N/Construction/Holdings
+  Artifact/Research Backtest/Research Backtest Artifact flows preserve exact
+  candidates, weights, validators, lineage, and unchanged V6 accounting.
+- Canonical YAML/CLI, Streamlit conditional controls and decimal conversion,
+  single Runner path, old UI, JSON safety, determinism, failure atomicity,
+  public APIs, and Artifact compatibility passed.
+- Added `docs/13_v0.8.0_release_readiness.md` following the repository's
+  numbered readiness-doc convention. Git tags remain the only version truth;
+  no package version system was introduced.
+- V7-P3 release E2E: `11 passed`; focused release regression: `1005 passed`;
+  full pytest: `2877 passed, 4 skipped, 11 warnings in 212.43s`, +11 passed
+  over P2 with unchanged skips/warnings and no new xfail.
+- Static architecture, secrets/local paths, dependency drift, caches/binaries,
+  compile/import, protected diff, and `git diff --check` gates passed.
+- Final status: **LOCAL RELEASE READY**. No commit, remote Git, merge, reset,
+  rebase, cherry-pick, or tag operation was performed; nothing was staged.
+- Next manual procedure: commit V7-P3, push
+  `feature/portfolio-construction`, open a PR to `main`, review CI, merge,
+  verify exact `main`, create an annotated `v0.8.0` tag, then push and verify
+  that tag.

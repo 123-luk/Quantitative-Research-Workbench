@@ -159,7 +159,7 @@ def _patch_runner(
             return signal_result
 
     class HoldingsExecutor:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, engine: object = None) -> None:
             pass
 
         def execute(self, run_dir: object, **kwargs: object) -> _StageResult:

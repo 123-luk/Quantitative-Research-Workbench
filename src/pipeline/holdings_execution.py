@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.portfolio_construction import PortfolioConstructionEngine
+
 from src.holdings import (
     HOLDINGS_ARTIFACT_SCHEMA_VERSION,
     HoldingsArtifactConfig,
@@ -150,12 +152,23 @@ class HoldingsPipelineResult:
 class HoldingsPipelineExecutor:
     """Build and persist Holdings from one explicit Signal Artifact."""
 
-    def __init__(self, config: HoldingsPipelineConfig) -> None:
+    def __init__(
+        self,
+        config: HoldingsPipelineConfig,
+        engine: PortfolioConstructionEngine | None = None,
+    ) -> None:
         if not isinstance(config, HoldingsPipelineConfig):
             raise HoldingsPipelineExecutionError(
                 "config must be HoldingsPipelineConfig."
             )
         self.config = config
+        if engine is not None and not isinstance(
+            engine, PortfolioConstructionEngine
+        ):
+            raise HoldingsPipelineExecutionError(
+                "engine must be PortfolioConstructionEngine."
+            )
+        self._engine = engine or PortfolioConstructionEngine()
 
     def execute(
         self,
@@ -188,11 +201,12 @@ class HoldingsPipelineExecutor:
                     "source Signal Artifact has no Signal Parquet record."
                 )
             signals = pd.read_parquet(signal_path, engine="pyarrow")
-            built = HoldingsBuilder().build(
+            built = HoldingsBuilder(self._engine).build(
                 signals,
                 top_n=self.config.top_n,
                 insufficient_universe_policy=self.config.insufficient_universe_policy,
                 weighting=self.config.weighting,
+                portfolio_construction=self.config.portfolio_construction,
             )
             provenance = SignalArtifactProvenance(
                 signal_artifact_dir=source_dir,
@@ -209,6 +223,7 @@ class HoldingsPipelineExecutor:
                 built,
                 provenance,
                 HoldingsArtifactConfig(artifact_dir),
+                portfolio_construction=self.config.portfolio_construction,
             )
         except HoldingsPipelineExecutionError:
             raise

@@ -1,4 +1,4 @@
-"""Pure in-memory Top-N selection and equal-weight V5 Holdings construction."""
+"""Pure in-memory Top-N selection and portfolio-weight Holdings construction."""
 
 from __future__ import annotations
 
@@ -14,6 +14,11 @@ from src.holdings.contracts import (
     validate_holdings_columns,
 )
 from src.signals.contracts import SIGNAL_KEY_COLUMNS, SIGNAL_OUTPUT_COLUMNS
+from src.portfolio_construction import (
+    PortfolioConstructionConfig,
+    PortfolioConstructionEngine,
+    PortfolioConstructionRequest,
+)
 
 
 WEIGHT_SUM_ABSOLUTE_TOLERANCE = 1e-12
@@ -93,7 +98,18 @@ class HoldingsBuildResult:
 
 
 class HoldingsBuilder:
-    """Select existing Signal ranks and assign long-only equal weights."""
+    """Select existing Signal ranks and assign validated long-only weights."""
+
+    def __init__(
+        self, engine: PortfolioConstructionEngine | None = None
+    ) -> None:
+        if engine is not None and not isinstance(
+            engine, PortfolioConstructionEngine
+        ):
+            raise HoldingsDataError(
+                "engine must be PortfolioConstructionEngine."
+            )
+        self._engine = engine or PortfolioConstructionEngine()
 
     def build(
         self,
@@ -102,12 +118,20 @@ class HoldingsBuilder:
         top_n: int,
         insufficient_universe_policy: str,
         weighting: str,
+        portfolio_construction: PortfolioConstructionConfig | None = None,
     ) -> HoldingsBuildResult:
         """Build Holdings using explicit effective config with no business defaults."""
         frame = self._validated_signal(signals)
         requested = self._top_n(top_n)
         policy = self._policy(insufficient_universe_policy)
         weighting_value = self._weighting(weighting)
+        construction = portfolio_construction or PortfolioConstructionConfig(
+            "equal_weight", {}
+        )
+        if not isinstance(construction, PortfolioConstructionConfig):
+            raise HoldingsDataError(
+                "portfolio_construction must be PortfolioConstructionConfig."
+            )
 
         available = frame.groupby("trade_date", sort=False).size()
         insufficient = available[available < requested]
@@ -121,13 +145,25 @@ class HoldingsBuilder:
 
         selected = frame.loc[frame["rank"] <= requested].copy(deep=True)
         selected_counts = selected.groupby("trade_date", sort=False).size()
-        selected.insert(
-            2,
-            "target_weight",
-            selected["trade_date"].map(
-                lambda value: 1.0 / int(selected_counts.loc[value])
-            ).astype(np.float64),
-        )
+        weighted_groups: list[pd.DataFrame] = []
+        for trade_date, group in selected.groupby("trade_date", sort=False):
+            candidates = group.loc[:, ["ts_code", "score", "rank"]].copy(
+                deep=True
+            )
+            candidates["selection_position"] = np.arange(
+                1, len(candidates) + 1, dtype=np.int64
+            )
+            request = PortfolioConstructionRequest(trade_date, candidates)
+            constructed = self._engine.construct(request, construction)
+            weights = constructed.weights.set_index("ts_code")["target_weight"]
+            weighted = group.copy(deep=True)
+            weighted.insert(
+                2,
+                "target_weight",
+                weighted["ts_code"].map(weights).astype(np.float64),
+            )
+            weighted_groups.append(weighted)
+        selected = pd.concat(weighted_groups, ignore_index=True)
         output = selected.loc[:, list(HOLDINGS_OUTPUT_COLUMNS)].copy(deep=True)
         output = output.sort_values(
             ["trade_date", "rank", "ts_code"], kind="mergesort"
