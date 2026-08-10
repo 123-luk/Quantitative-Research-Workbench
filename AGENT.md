@@ -3396,3 +3396,42 @@ override，V4-E3 为 CLI + YAML + docs。
 - No commit, push, fetch, pull, merge, rebase, reset, cherry-pick, or tag was
   performed. Nothing was staged.
 - Next: V8-P3 E2E + v0.9.0 Release Readiness.
+
+## 2026-08-10 V8-P3 v0.9.0 Release Readiness
+
+- Completed local release readiness for Risk Model + Constrained Minimum
+  Variance 1.0; P1 core and P2 integration remain frozen, with no P3 production
+  or dependency changes.
+- Confirmed Top-N as the sole selection owner and exact selected identity across
+  RiskModelRequest, RiskModelResult, optimizer weights, canonical Holdings, and
+  downstream lineage. Selected zero-weight securities remain canonical rows;
+  negative weights remain invalid and each formation stays fully invested.
+- Ground truth covers exact daily unannualized sample covariance (`ddof=1`),
+  analytical long-only GMV at `<=1e-7`, scale and asset/row permutation
+  invariance, diagonal/correlated/near-singular matrices, and 60 fixed-seed SPD
+  cases for K=2..20.
+- Exact common-date, M-1/M observation boundary, listing, suspension zero,
+  active missing, post-delist, weekend/holiday cutoff, and strong T+1
+  no-lookahead behavior remain green through the concrete return lifecycle.
+- Sample and Ledoit-Wolf preserve assets/count/cutoff; nonzero shrinkage changes
+  covariance as expected and Ledoit-Wolf covariance/weights are deterministic.
+- Max Weight K/cap cases (5/.20, 5/.25, 5/.19, 10/.10, 10/.15) pass direct
+  feasibility and independent diagonal KKT-reference checks, with no
+  clip-normalize implementation.
+- The default and custom generic service graphs, chain, diamond shared cache,
+  cycle/unknown failure, no-market Equal/Rank behavior, solver/risk atomicity,
+  factor-count independence, and score/rank independence passed.
+- Equal, Rank, Inverse, old configs/artifacts, V7 custom strategies, Signal to
+  Holdings to Research Backtest Artifacts, exact file/schema/config/lineage,
+  determinism, accounting, config-only CLI, and pure Streamlit mapping passed.
+- P3 E2E: `23 passed`; Gate I: `72 passed`; Gate J: `186 passed`; Gate K:
+  `192 passed`; 50-file cross-version focused regression: `1155 passed`.
+- Full pytest under normal local process permissions: `2965 passed, 4 skipped,
+  11 warnings in 209.67s`; +23 passes over V8-P2 with unchanged skips/warnings
+  and no new xfail. An earlier sandbox-only attempt was invalid because Windows
+  denied sklearn/joblib named-pipe creation; it did not expose a product defect.
+- Static scans, 159-file in-memory compile, key imports, protected production
+  diffs, and Git hygiene passed. No commit, remote Git, push, fetch, pull, merge,
+  rebase, reset, cherry-pick, or tag was performed; HEAD remains the P2 commit.
+- Final status: **LOCAL RELEASE READY**. Next: user commits P3, then follows the
+  PR/release workflow.
