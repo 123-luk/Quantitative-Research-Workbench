@@ -3481,3 +3481,42 @@ override，V4-E3 为 CLI + YAML + docs。
 - No commit, staging, remote Git, dependency installation, merge, rebase,
   reset, cherry-pick, or tag operation was performed. P2 remains Results,
   Runs, and Data backed by exact public Artifact/catalog APIs.
+
+## 2026-08-11 V9-P2 Artifact-Backed Results + Runs + Data
+
+- Target release: `v0.10.0`.
+- Completed exact-run `ResultService`: every request resolves one validated
+  canonical run identity and reads only that run's configured, validator-backed
+  Artifacts. There is no latest, mtime, glob, or cross-run fallback.
+- Results now has substantive Overview, Holdings, Returns, Config, and Artifacts
+  tabs. Metric truth comes directly from Research Backtest `metrics.json`; NAV
+  comes from `daily_portfolio.parquet`, and benchmark NAV comes from
+  `benchmark.parquet` with exact date alignment.
+- Drawdown is derived only for chart display from canonical net NAV and never
+  replaces `net_max_drawdown`. Monthly returns are explicitly a display-only
+  calendar-month compounding of canonical daily `net_return`.
+- Holdings reads the exact five-column Holdings Artifact, preserves canonical
+  order and selected zero-weight rows, and adds only formation-date filtering
+  and a weight chart.
+- Config reads the exact run snapshot rather than UI draft state. Artifact
+  identity, schema version, validation status, and recorded ML/Signal/Holdings/
+  Research Backtest lineage are shown when canonically available.
+- Added minimal generic read-only `ExperimentManager.list_run_ids()` and
+  `resolve_run_dir()` APIs with direct-child, syntax, existence, directory, and
+  symbolic-link checks.
+- Added a deterministic `RunCatalogService` and substantive Runs page. Catalog
+  chronology uses only canonical `run_info.json.created_at`; missing metadata is
+  `N/A`, and opening Results always carries the exact selected run ID.
+- Added read-only `DataStatusService` and Data page backed by DataManager,
+  DataCache, and ParquetStore readiness/path/existence contracts. There are no
+  download, update, repair, delete, provider, network, or write actions.
+- Overview, New Run, Results, Runs, and Data are now all substantive while the
+  legacy dashboard surface remains available and existing backend/public
+  contracts remain backward compatible.
+- Focused cross-version regression: `414 passed`. Syntax/import smoke passed.
+  Streamlit started successfully and all five Workbench routes passed AppTest.
+- Full pytest: `3037 passed, 4 skipped, 11 warnings in 225.81s`; +44 passes over
+  the V9-P1 baseline, with unchanged skips/warnings and no new xfail.
+- No commit, staging, remote Git, dependency change, push, fetch, pull, merge,
+  rebase, reset, cherry-pick, or tag operation was performed.
+- Next: V9-P3 GUI E2E + v0.10.0 Release Readiness.

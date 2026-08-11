@@ -1,5 +1,15 @@
 # quant-factor-system
 
+## Research Workbench (v0.10.0)
+
+The Streamlit Research Workbench now provides substantive **Overview**, **New
+Run**, **Results**, **Runs**, and **Data** pages. Results and run navigation use
+one exact canonical `run_id`; metrics, NAV, benchmark, Holdings, configuration,
+and lineage come from validated Artifacts without latest/mtime fallback. The
+Data page is a read-only view of local cache readiness and performs no download
+or update. See `docs/16_research_workbench.md` and
+`docs/17_research_workbench_results.md`.
+
 A 股多因子选股、回测、单股研究与 Streamlit 可视化 App。
 
 ## 1. 项目简介
