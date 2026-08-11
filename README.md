@@ -376,3 +376,11 @@ use current or future members, while custom and all-A-share membership applies
 explicit listing/delisting lifecycle boundaries. Eligibility and observation
 availability remain separate downstream concerns. See
 [Universe 1.0](docs/20_universe_1_0.md).
+
+### Adjusted Price and Factor Frequency
+
+P4C2 adds a canonical ResearchCalendar, typed trading-day/month/as-of history,
+factor-owned DAILY/MONTHLY metadata, and anchor-free research adjusted OHLC via
+exact `raw * adj_factor`. Research Backtest accounting remains on provider
+`pct_chg / 100`; frequency never implies global monthly resampling. See
+[Adjusted Price and Factor Frequency](docs/21_adjusted_price_factor_frequency.md).

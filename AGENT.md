@@ -3634,3 +3634,36 @@ override，V4-E3 为 CLI + YAML + docs。
 - In-memory compile covered 190 production Python files. Static discovery,
   provider-boundary, eligibility-filter, target-weight, formatting, protected
   quant-diff, dependency, and Git hygiene checks passed.
+
+## 2026-08-11 V9-P4C2 Adjusted Price + Factor Frequency
+
+- Added canonical `ResearchCalendar` DAILY/monthly formation resolution and
+  typed `TRADING_DAYS`, `CALENDAR_MONTHS`, and `LATEST_AS_OF` history contracts.
+- Trading-day windows include formation T as their final observation and never
+  approximate open dates with calendar-day subtraction. Partial final months
+  without complete evidence are not mislabeled as monthly formations.
+- Extended the existing `FactorMetadata` source of truth with strict
+  `FactorFrequencySpec` values and generic requirements. Legacy factors remain
+  DAILY-only unless explicit; five valuation/size factors support DAILY and
+  MONTHLY as-of observations without monthly averaging.
+- Added CURATED-only adjusted prices using exact same-key
+  `raw OHLC * adj_factor`. Missing, duplicate, non-finite, bool, or nonpositive
+  adjustment data fails closed; volume and amount remain unadjusted.
+- No dynamic end anchor, generic fill, global monthly aggregation, Universe
+  reimplementation, provider call, or RAW access exists in research services.
+  MonthlyMarketBar remains deferred because P4C3 has no unambiguous need yet.
+- P4B integration proves repeated identical daily + adj_factor preparation
+  performs zero provider calls and returns identical adjusted observations.
+- Research Backtest security and benchmark returns remain on `pct_chg / 100`;
+  factor formulas, accounting, portfolio/risk, Signal/Holdings, ML, pipeline
+  stages, and Artifact schemas are unchanged.
+- P4C2 dedicated verification: `21 passed in 6.98s`; P4B/P4C1, Factors, and
+  V5–V8 focused regression: `2011 passed, 11 warnings in 215.33s`.
+- The single final full-suite invocation passed: `3145 passed, 4 skipped, 11
+  warnings in 270.39s`, exactly +21 passes with unchanged skips/warnings versus
+  the frozen P4C1 baseline.
+- In-memory compile covered 194 production Python files. Static no-anchor,
+  no-fill, no-global-resample, backtest-source, Universe-boundary, protected
+  diff, dependency, formatting, and Git hygiene checks passed.
+- Next: P4C3 ResearchInputBuilder plus ForwardReturn / Modeling Panel
+  materialization.
