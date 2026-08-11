@@ -358,3 +358,12 @@ foundation; Artifact-backed Results, Runs, and Data views remain P2 work.
 
 See [V9 Quant Research Workbench](docs/16_research_workbench.md) for the audited
 registries, exact run handoff, artifact contracts, and phase boundaries.
+
+### Data Layer 2.0 core
+
+The P4B core separates immutable-ish TuShare RAW responses from canonical,
+partitioned CURATED Parquet. Exact coverage truth lives in transactional SQLite
+at `data/metadata/catalog.sqlite`; legacy min/max metadata is compatibility-only.
+Ordinary preparation fetches only missing coverage units, never refreshes
+completed history, and uses instance-injected credentials. See
+[Data Layer 2.0](docs/19_data_layer_2_0.md).

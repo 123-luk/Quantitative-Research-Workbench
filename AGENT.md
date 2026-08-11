@@ -3564,3 +3564,36 @@ override，V4-E3 为 CLI + YAML + docs。
 - No production code, dependency, commit, staging, remote Git, push, fetch,
   pull, merge, rebase, reset, cherry-pick, or tag operation was performed.
 - Decision: **LOCAL RELEASE READY = YES**.
+
+## 2026-08-11 V9-P4B Data Layer 2.0 Core
+
+- Added frozen L0 RAW and L1 CURATED architecture without creating research
+  panels or changing Factor, ML, Signal, Holdings, Portfolio, Risk, Backtest,
+  pipeline-order, or Artifact semantics.
+- Added `ResearchFrequency` and a fresh registry containing the eight canonical
+  `trade_cal`, `stock_basic`, `daily`, `daily_basic`, `adj_factor`, `suspend_d`,
+  `index_daily`, and `index_weight` dataset contracts.
+- Replaced min/max completeness truth with a transactional SQLite coverage
+  ledger keyed by exact dataset, scope, and unit. Legacy JSON remains read-only
+  compatibility data and is never trusted by the new planner.
+- Added exact-unit missing planning, registry-driven TuShare fetch strategies,
+  provider completeness checks, token-free fetch auditing, RAW capture,
+  partitioned CURATED Parquet, deterministic hashes, and conservative migration.
+- Canonical merge is primary-key aware: identical duplicates are idempotent and
+  conflicting payloads fail closed. Temporary writes are reread and validated
+  before atomic replacement; ledger completion follows replacement only.
+- Removed TuShare global `set_token` mutation in favor of instance-level
+  `pro_api(token)` injection. Tokens are never included in data or metadata.
+- GUI navigation/i18n, ResearchInputBuilder, research panels, and New Run
+  integration remain explicitly deferred to P4A/P4C/P4D.
+- Final focused cross-version regression: `1223 passed in 106.73s`.
+- The single monolithic full-suite invocation reached `3088 passed, 4 skipped`
+  but 21 unchanged Histogram Gradient Boosting tests failed because joblib's
+  Windows physical-core probe was denied by the restricted runner; it also
+  emitted one extra loky warning. Test bootstrap now sets the documented
+  `LOKY_MAX_CPU_COUNT=1` limit. The complete affected set then passed without
+  a manual environment override: `259 passed, 2 skipped in 20.63s`.
+- In-memory compile covered 184 production Python files. Static security,
+  protected-quant-diff, dependency, formatting, and Git hygiene checks passed.
+- No commit, staging, remote Git operation, dependency change, or `.env`
+  modification was performed. Next: P4C ResearchInputBuilder.

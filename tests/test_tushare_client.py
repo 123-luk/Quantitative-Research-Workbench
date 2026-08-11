@@ -32,6 +32,18 @@ class _FakePro:
         self.calls.append(("suspend_d", kwargs))
         return self.suspend_frame
 
+    def trade_cal(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("trade_cal", kwargs))
+        return pd.DataFrame({"exchange": ["SSE"], "cal_date": ["20240102"], "is_open": [1], "pretrade_date": ["20231229"]})
+
+    def daily_basic(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("daily_basic", kwargs))
+        return pd.DataFrame({"ts_code": ["A"], "trade_date": ["20240102"]})
+
+    def index_weight(self, **kwargs: object) -> pd.DataFrame:
+        self.calls.append(("index_weight", kwargs))
+        return pd.DataFrame({"index_code": ["I"], "con_code": ["A"], "trade_date": ["20240131"], "weight": [1.0]})
+
 
 def _client(pro: _FakePro) -> TushareClient:
     client = object.__new__(TushareClient)
@@ -158,3 +170,36 @@ def test_provider_exception_is_not_hidden_by_raw_wrapper() -> None:
         assert str(exc) == "provider error"
     else:
         raise AssertionError("raw provider exception must propagate")
+
+
+def test_instance_token_uses_pro_api_without_global_set_token(monkeypatch) -> None:
+    pro = _FakePro()
+    calls: list[str] = []
+    monkeypatch.setattr("src.data.tushare_client.ts.pro_api", lambda token: calls.append(token) or pro)
+    monkeypatch.setattr("src.data.tushare_client.ts.set_token", lambda _token: (_ for _ in ()).throw(AssertionError("global token mutation")))
+    client = TushareClient("fake-token")
+    assert client.pro is pro
+    assert calls == ["fake-token"]
+
+
+def test_adj_factor_delegates_exact_raw_scope() -> None:
+    class Pro(_FakePro):
+        def adj_factor(self, **kwargs: object) -> pd.DataFrame:
+            self.calls.append(("adj_factor", kwargs))
+            return pd.DataFrame({"ts_code": ["A"], "trade_date": ["20240102"], "adj_factor": [1.0]})
+    pro = Pro()
+    result = _client(pro).get_adj_factor(trade_date="20240102")
+    assert len(result) == 1
+    assert pro.calls == [("adj_factor", {"ts_code": None, "trade_date": "20240102", "start_date": None, "end_date": None, "fields": "ts_code,trade_date,adj_factor"})]
+
+
+def test_remaining_v1_endpoints_delegate_explicit_scopes() -> None:
+    pro = _FakePro()
+    client = _client(pro)
+    client.get_trade_cal("20240101", "20240102")
+    client.get_daily_basic(ts_code=None, trade_date="20240102")
+    client.get_index_weight(index_code="000300.SH", start_date="20240101", end_date="20240131")
+    assert [name for name, _ in pro.calls] == ["trade_cal", "daily_basic", "index_weight"]
+    assert pro.calls[0][1]["fields"] == "exchange,cal_date,is_open,pretrade_date"
+    assert pro.calls[1][1]["trade_date"] == "20240102"
+    assert pro.calls[2][1]["index_code"] == "000300.SH"

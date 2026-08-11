@@ -116,3 +116,30 @@ class DataManager:
             "required_end_date": required_end,
             "missing_ranges": missing_ranges,
         }
+
+    def create_data_layer_2_service(self, *, open_dates=None, client_factory=None):
+        """Create the explicit-write Data Layer 2.0 service on demand.
+
+        ``DataManager`` construction and legacy ``prepare_data`` remain
+        read-only. The SQLite catalog is created only at this explicit boundary.
+        """
+        from src.data.canonical_store import PartitionedParquetStore, RawParquetStore
+        from src.data.coverage_ledger import CoverageLedger
+        from src.data.dataset_registry import create_default_dataset_registry
+        from src.data.preparation import DataPreparationService
+
+        data_config = self.config.get("data", {})
+        root = Path(data_config.get("root", "data"))
+        curated_dir = Path(data_config.get("curated_dir", root / "curated"))
+        metadata_dir = Path(data_config.get("metadata_dir", root / "metadata"))
+        raw_dir = Path(data_config.get("raw_dir", root / "raw"))
+        engine = str(data_config.get("parquet_engine", "auto"))
+        parquet_engine = "pyarrow" if engine == "auto" else engine
+        return DataPreparationService(
+            registry=create_default_dataset_registry(),
+            ledger=CoverageLedger(metadata_dir / "catalog.sqlite"),
+            curated_store=PartitionedParquetStore(curated_dir, engine=parquet_engine),
+            raw_store=RawParquetStore(raw_dir, engine=parquet_engine),
+            open_dates=open_dates,
+            client_factory=client_factory,
+        )
