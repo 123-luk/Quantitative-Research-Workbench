@@ -3520,3 +3520,47 @@ override，V4-E3 为 CLI + YAML + docs。
 - No commit, staging, remote Git, dependency change, push, fetch, pull, merge,
   rebase, reset, cherry-pick, or tag operation was performed.
 - Next: V9-P3 GUI E2E + v0.10.0 Release Readiness.
+
+## 2026-08-11 V9-P3 completed — v0.10.0 Release Readiness
+
+- Product: Quant Research Workbench 1.0 with substantive Overview, New Run,
+  Results, Runs, and Data pages.
+- Proved the offline user journey through canonical UI mapping and the real
+  Modeling -> ML -> Signal -> Holdings -> Research Backtest pipeline, then
+  exact Artifact-backed Results, Runs catalog reopen, and read-only Data status.
+- Generated two distinct real runs and verified exact isolation of metrics,
+  NAV, Holdings, config snapshots, ML experiment identity, and lineage with no
+  latest, mtime, glob, nearest, prefix, fuzzy, or cross-run fallback.
+- Confirmed all Results metric truth comes directly from canonical
+  `metrics.json`; NAV and benchmark preserve exact Artifact series and dates;
+  drawdown/monthly returns remain presentation-only derivations.
+- Confirmed canonical Holdings order, selection, and zero-weight rows remain
+  preserved and detached across result reads.
+- Config always reopens the exact run's snapshot rather than a changed UI
+  draft. ML -> Signal -> Holdings -> Research Backtest lineage uses only actual
+  validated Artifact identities, paths, and schema versions.
+- Corrupt Holdings, missing Research Backtest payload, wrong schema version,
+  and integrity failures fail closed. Missing Research Backtest retains valid
+  Holdings, Config, and earlier lineage with an explicit unavailable state.
+- RunCatalog uses only canonical `run_info.json.created_at` for Latest
+  semantics. Missing historical metadata remains `N/A` and is never inferred
+  from directory identity or filesystem timestamps.
+- DataStatus and Data UI remained read-only: no provider/network call,
+  download, refresh, repair, cache write, Parquet write, or large-file scan.
+- Current-session failure returned a safe failed outcome with the exact
+  callback-created run ID, did not select fake Results, and preserved the
+  documented limitation that early historical failures may have no persisted
+  status/stage/reason/timestamp.
+- Streamlit five-route AppTest passed. Headless Streamlit started on random
+  local port 24022 and was intentionally stopped without provider access.
+- Gate L: `18 passed`; Gate M: `8 passed`; Gate N: `15 passed`; combined P3:
+  `41 passed in 11.75s`.
+- V5–V9 focused regression: `879 passed in 63.74s`.
+- Full pytest: `3078 passed, 4 skipped, 11 warnings in 164.62s`; +41 passes over
+  P2 with unchanged skips/warnings and no new xfail.
+- In-memory compile/import covered 175 production Python files. Protected
+  production and dependency diffs remained empty; quant/business semantics,
+  pipeline stages, and Artifact schemas are unchanged.
+- No production code, dependency, commit, staging, remote Git, push, fetch,
+  pull, merge, rebase, reset, cherry-pick, or tag operation was performed.
+- Decision: **LOCAL RELEASE READY = YES**.
