@@ -67,6 +67,14 @@ class ResearchInputMaterialization:
         object.__setattr__(self, "diagnostics", dict(self.diagnostics))
 
 
+@dataclass(frozen=True)
+class ResearchInputInspection:
+    """Read-only result for one exact source/config identity."""
+
+    materialization_id: str
+    reusable: bool
+
+
 class ResearchMaterializationStore:
     """Publish one validated content-addressed input set via directory rename."""
 
@@ -98,6 +106,11 @@ class ResearchMaterializationStore:
                 raise ResearchInputDataUnavailable(f"existing materialization file failed validation: {name}.")
             paths[name] = path
         return ResearchInputMaterialization(materialization_id, target, True, paths, manifest.get("diagnostics", {}))
+
+    def resolve(self, materialization_id: str) -> ResearchInputMaterialization | None:
+        """Return one hash-validated identity, or None when it is not published."""
+        target = self.root / materialization_id
+        return self._validated_existing(target, materialization_id) if target.exists() else None
 
     def publish(self, materialization_id: str, frames: Mapping[str, pd.DataFrame], manifest_values: Mapping[str, object]) -> ResearchInputMaterialization:
         if not isinstance(materialization_id, str) or len(materialization_id) != 64 or any(character not in "0123456789abcdef" for character in materialization_id):
@@ -253,7 +266,23 @@ class ResearchInputBuilder:
         }
         return _json_hash(payload)
 
-    def build(self, plan: ResearchInputPlan) -> ResearchInputMaterialization:
+    def _identity_inputs(self, plan: ResearchInputPlan) -> tuple[dict[str, pd.DataFrame], tuple[str, ...]]:
+        snapshots = tuple(self.universe_service.resolve(plan.universe_spec, formation, self.universe_data) for formation in plan.formation_dates)
+        score_panel = self._schedule(plan, snapshots)
+        securities = tuple(sorted({code for snapshot in snapshots for code in snapshot.securities}))
+        factor_input, factor_sources = self._factor_input(plan, securities)
+        price_panel, price_source = self._price_panel(plan, securities)
+        identities = tuple(snapshot.source_identity for snapshot in snapshots) + factor_sources + (price_source,)
+        return {"factor_input.parquet": factor_input, "price_panel.parquet": price_panel, "score_panel.parquet": score_panel}, identities
+
+    def inspect(self, plan: ResearchInputPlan) -> ResearchInputInspection:
+        """Resolve exact local sources and report cache reuse without publishing."""
+        self._validate_plan(plan)
+        frames, sources = self._identity_inputs(plan)
+        identity = self._identity(plan, sources, frames)
+        return ResearchInputInspection(identity, self.store.resolve(identity) is not None)
+
+    def _validate_plan(self, plan: ResearchInputPlan) -> None:
         if not isinstance(plan, ResearchInputPlan):
             raise TypeError("plan must be a ResearchInputPlan.")
         if tuple(self.factor_runner.config.factor_names) != plan.factor_ids:
@@ -262,17 +291,17 @@ class ResearchInputBuilder:
             raise ResearchInputError("factor runner forward-return config differs from ResearchInputPlan.")
         if self.factor_runner.config.use_neutralization:
             raise ResearchInputError("P4C3 canonical exposure materialization is not implemented; neutralization must remain disabled.")
-        snapshots = tuple(self.universe_service.resolve(plan.universe_spec, formation, self.universe_data) for formation in plan.formation_dates)
-        score_panel = self._schedule(plan, snapshots)
-        securities = tuple(sorted({code for snapshot in snapshots for code in snapshot.securities}))
-        factor_input, factor_sources = self._factor_input(plan, securities)
-        price_panel, price_source = self._price_panel(plan, securities)
-        source_identities = tuple(snapshot.source_identity for snapshot in snapshots) + factor_sources + (price_source,)
-        identity_inputs = {"factor_input.parquet": factor_input, "price_panel.parquet": price_panel, "score_panel.parquet": score_panel}
+
+    def build(self, plan: ResearchInputPlan) -> ResearchInputMaterialization:
+        self._validate_plan(plan)
+        identity_inputs, source_identities = self._identity_inputs(plan)
+        factor_input = identity_inputs["factor_input.parquet"]
+        price_panel = identity_inputs["price_panel.parquet"]
+        score_panel = identity_inputs["score_panel.parquet"]
         materialization_id = self._identity(plan, source_identities, identity_inputs)
-        target = self.store.root / materialization_id
-        if target.exists():
-            return self.store._validated_existing(target, materialization_id)
+        existing = self.store.resolve(materialization_id)
+        if existing is not None:
+            return existing
         try:
             result = self.factor_runner.run(factor_input, score_panel, price_panel)
         except Exception as exc:

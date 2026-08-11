@@ -240,6 +240,7 @@ def test_navigation_and_exact_results_handoff_use_small_state() -> None:
         "current_run_id",
         "selected_run_id",
         "last_run_status",
+        "locale",
     }
     with pytest.raises(ValueError):
         open_results(state, "")
@@ -302,22 +303,20 @@ def test_app_ui_purity_static_gate() -> None:
 def test_streamlit_five_page_shell_and_registry_driven_new_run() -> None:
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     assert not app.exception
-    navigation = app.sidebar.selectbox[0]
-    assert tuple(navigation.options) == NAVIGATION_ROUTES
-    navigation.set_value("New Run")
+    assert tuple(app.sidebar.selectbox[0].options) == ("中文", "English")
+    app = AppTest.from_file(str(ROOT / "app" / "views" / "new_run.py"), default_timeout=30).run()
+    app.session_state["locale"] = "en"
     app.run()
     assert not app.exception
     assert [item.value for item in app.header] == [
         "1. Data & Universe",
-        "2. Factor / Modeling",
+        "2. Factor & Modeling",
         "3. Signal & Selection",
         "4. Portfolio Construction",
         "5. Research Backtest",
     ]
-    assert next(item for item in app.multiselect if item.label == "Factors").options == [
-        "momentum_20d",
-        "volatility_20d",
-    ]
+    factors = next(item for item in app.multiselect if item.label == "Factors").options
+    assert "bp" in factors and factors
     assert len([item for item in app.button if item.label == "Run Research"]) == 1
 
 
@@ -325,8 +324,8 @@ def test_streamlit_five_page_shell_and_registry_driven_new_run() -> None:
     "model_name", ("ridge", "elastic_net", "hist_gradient_boosting")
 )
 def test_streamlit_dynamic_model_schemas_render(model_name: str) -> None:
-    app = AppTest.from_file(str(APP), default_timeout=30).run()
-    app.sidebar.selectbox[0].set_value("New Run")
+    app = AppTest.from_file(str(ROOT / "app" / "views" / "new_run.py"), default_timeout=30).run()
+    app.session_state["locale"] = "en"
     app.run()
     model = next(item for item in app.selectbox if item.label == "Model")
     model.set_value(model_name)

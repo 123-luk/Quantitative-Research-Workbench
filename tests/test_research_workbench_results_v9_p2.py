@@ -9,11 +9,17 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.pages import data as data_page
-from app.pages import results as results_page
-from app.pages import runs as runs_page
-from app.services.data_status_service import DataStatusService
-from app.services.data_status_service import DataStatusView, DatasetStatusView
+from app.views import data as data_page
+from app.views import results as results_page
+from app.views import runs as runs_page
+from app.services.data_status_service import (
+    CanonicalDatasetStatus,
+    DataLayer2StatusService,
+    DataLayer2StatusView,
+    DataStatusService,
+    DataStatusView,
+    DatasetStatusView,
+)
 from app.services.formatting import (
     format_bps,
     format_count,
@@ -633,9 +639,9 @@ class _FakeUI:
 
 
 def test_results_ui_requires_exact_selected_run() -> None:
-    ui = _FakeUI()
+    ui = _FakeUI(state={"locale": "en"})
     results_page.render(ui)
-    assert ui.infos == ["Select or complete an exact run before opening Results."]
+    assert ui.infos == ["Select or complete an exact run_id before opening Results."]
 
 
 def test_results_ui_renders_all_tabs_and_preserves_zero_weight_row(
@@ -654,7 +660,7 @@ def test_results_ui_renders_all_tabs_and_preserves_zero_weight_row(
             return bundle
 
     monkeypatch.setattr(results_page, "ResultService", _Service)
-    ui = _FakeUI(state={"selected_run_id": run_id})
+    ui = _FakeUI(state={"selected_run_id": run_id, "locale": "en"})
     results_page.render(ui)
 
     assert ui.tab_labels == ("Overview", "Holdings", "Returns", "Config", "Artifacts")
@@ -691,46 +697,27 @@ def test_runs_ui_opens_the_exact_selected_run(monkeypatch: pytest.MonkeyPatch) -
             return (summary,)
 
     monkeypatch.setattr(runs_page, "RunCatalogService", _Catalog)
-    ui = _FakeUI(pressed={"Open Results"})
+    ui = _FakeUI(state={"locale": "en"}, pressed={"Open Results"})
     runs_page.render(ui)
     assert ui.session_state["selected_run_id"] == exact
     assert ui.session_state["current_page"] == "Results"
-    assert ui.rerun_called is True
+    assert ui.rerun_called is False
 
 
 def test_data_ui_is_substantive_and_has_no_update_controls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    status = DataStatusView(
-        configured_data_root="C:/data",
-        raw_data_root="C:/data/raw",
-        cache_metadata_path="C:/data/cache/data_status.json",
-        cache_status="ready",
-        required_start_date="2024-01-01",
-        required_end_date="2024-01-31",
-        required_datasets=("daily",),
-        datasets=(
-            DatasetStatusView(
-                "daily",
-                "C:/data/raw/daily.parquet",
-                True,
-                "2024-01-01",
-                "2024-01-31",
-                "2024-02-01T00:00:00",
-                (),
-            ),
-        ),
-    )
+    status = DataLayer2StatusView("C:/data", "C:/data/curated", "C:/data/metadata/catalog.sqlite", True, (CanonicalDatasetStatus("daily", "1.0", 22),))
 
     class _StatusService:
-        def get_status(self) -> DataStatusView:
+        def get_status(self) -> DataLayer2StatusView:
             return status
 
-    monkeypatch.setattr(data_page, "DataStatusService", _StatusService)
-    ui = _FakeUI()
+    monkeypatch.setattr(data_page, "DataLayer2StatusService", _StatusService)
+    ui = _FakeUI(state={"locale": "en"})
     data_page.render(ui)
     assert ui.title_value == "Data"
-    assert ("Cache Status", "ready") in ui.metrics
+    assert ("Coverage Ledger", "READY") in ui.metrics
     assert len(ui.frames) == 1
     assert ui.pressed == set()
 
@@ -739,7 +726,6 @@ def test_streamlit_all_five_workbench_routes_have_no_import_crash() -> None:
     app_path = Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py"
     app = AppTest.from_file(str(app_path), default_timeout=30).run()
     assert not app.exception
-    for route in ("Overview", "New Run", "Results", "Runs", "Data"):
-        app.sidebar.selectbox[0].set_value(route)
-        app.run()
-        assert not app.exception
+    for route in ("overview", "new_run", "results", "runs", "data"):
+        page = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app" / "views" / f"{route}.py"), default_timeout=30).run()
+        assert not page.exception

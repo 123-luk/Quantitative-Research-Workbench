@@ -16,6 +16,7 @@ def open_results(state: MutableMapping[str, object], run_id: str) -> None:
 
 
 def initialize_session_state(state: MutableMapping[str, object]) -> None:
+    state.setdefault("locale", "zh-CN")
     state.setdefault("current_page", "Overview")
     if state["current_page"] not in NAVIGATION_ROUTES:
         state["current_page"] = "Overview"

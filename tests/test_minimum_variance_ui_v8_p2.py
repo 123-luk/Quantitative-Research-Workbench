@@ -65,12 +65,14 @@ def test_unknown_risk_estimator_is_rejected_by_ui_bridge():
 
 
 def test_streamlit_contains_controls_but_no_risk_or_optimizer_math():
-    source = (Path(__file__).parents[1] / "app" / "streamlit_app.py").read_text(
-        encoding="utf-8"
-    )
+    root = Path(__file__).parents[1] / "app"
+    source = "\n".join((root / path).read_text(encoding="utf-8") for path in (
+        "streamlit_app.py", "views/new_run.py", "i18n/catalog.py",
+        "services/pipeline_config_service.py",
+    ))
     for required in (
         "MINIMUM_VARIANCE_LABEL",
-        "Risk Model Estimator",
+        "Risk Estimator",
         "Risk Lookback Trading Days",
         "Risk Minimum Observations",
     ):

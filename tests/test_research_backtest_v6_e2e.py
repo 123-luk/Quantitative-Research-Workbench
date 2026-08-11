@@ -69,8 +69,8 @@ def test_release_docs_example_readme_and_ui_use_consistent_boundaries() -> None:
     readiness = READINESS.read_text(encoding="utf-8")
     ui = STREAMLIT_APP.read_text(encoding="utf-8")
     assert "docs/11_v0.7.0_release_readiness.md" in readme
-    assert "当前能力：V6 Research Backtest Dashboard" in ui
-    assert "当前版本：V6-A Portfolio Dashboard" not in ui
+    assert "st.navigation" in ui
+    assert "Legacy dashboard" not in ui
     for phrase in (
         "Research Backtest",
         "holdings_dates",

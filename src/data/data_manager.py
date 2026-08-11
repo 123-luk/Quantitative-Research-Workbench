@@ -74,9 +74,9 @@ class DataManager:
         params = dict(pipeline_config or {})
         data_config = self.config.get("data", {})
         datasets = (
-            params.get("required_datasets")
-            or data_config.get("required_datasets")
-            or DEFAULT_REQUIRED_DATASETS
+            params["required_datasets"]
+            if "required_datasets" in params
+            else data_config.get("required_datasets", DEFAULT_REQUIRED_DATASETS)
         )
         return [str(dataset) for dataset in datasets]
 

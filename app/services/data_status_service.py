@@ -5,6 +5,9 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
+import sqlite3
+
+import yaml
 
 from src.data.data_manager import DataManager
 
@@ -75,3 +78,44 @@ class DataStatusService:
             datasets=tuple(rows),
         )
 
+
+@dataclass(frozen=True)
+class CanonicalDatasetStatus:
+    dataset_id: str
+    schema_version: str
+    complete_units: int
+
+
+@dataclass(frozen=True)
+class DataLayer2StatusView:
+    data_root: str
+    curated_root: str
+    ledger_path: str
+    ledger_exists: bool
+    datasets: tuple[CanonicalDatasetStatus, ...]
+
+
+class DataLayer2StatusService:
+    """Read registry and aggregate ledger counts without creating SQLite state."""
+
+    def __init__(self, config_path: str | Path = "config/config.yaml") -> None:
+        self.config_path = Path(config_path)
+
+    def get_status(self) -> DataLayer2StatusView:
+        from src.data.dataset_registry import create_default_dataset_registry
+
+        values = yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}
+        data = values.get("data", {})
+        root = Path(data.get("root", "data")).resolve()
+        curated = Path(data.get("curated_dir", root / "curated")).resolve()
+        ledger = Path(data.get("metadata_dir", root / "metadata")) / "catalog.sqlite"
+        counts: dict[str, int] = {}
+        if ledger.is_file():
+            connection = sqlite3.connect(f"file:{ledger.as_posix()}?mode=ro", uri=True)
+            try:
+                counts = {str(row[0]): int(row[1]) for row in connection.execute("SELECT dataset_id,COUNT(*) FROM coverage_units WHERE status='COMPLETE' GROUP BY dataset_id")}
+            finally:
+                connection.close()
+        registry = create_default_dataset_registry()
+        rows = tuple(CanonicalDatasetStatus(spec.dataset_id, spec.schema_version, counts.get(spec.dataset_id, 0)) for spec in registry.list_specs())
+        return DataLayer2StatusView(str(root), str(curated), str(ledger.resolve()), ledger.is_file(), rows)

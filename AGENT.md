@@ -3708,3 +3708,33 @@ override，V4-E3 为 CLI + YAML + docs。
 - No dependency, `.env`, commit, staging, remote Git, push, fetch, pull, merge,
   rebase, reset, cherry-pick, or tag operation was performed. Next: P4D
   Workbench First-Run Integration.
+
+## 2026-08-11 V9-P4D Workbench First-Run Integration
+
+- Replaced the competing native-pages/custom/legacy routing surfaces with one
+  explicit `st.Page` / `st.navigation` entry registering exactly Overview, New
+  Run, Results, Runs, and Data. All visible legacy dashboard compatibility
+  controls were removed; every direct route renders a substantive state.
+- Added strict centralized `zh-CN`/`en` catalogs with equal key sets, visible
+  missing-key markers, Chinese default, and session-persistent language state.
+- Added session-memory password credential handling with session > environment
+  > none resolution, provider-boundary reveal, typed provider error classes,
+  and no secret persistence or display.
+- New Run now owns canonical `UniverseSpec` and `ResearchFrequency` controls,
+  local-only readiness preview, missing-only P4B preparation, and automatic
+  P4C3 materialization. The five prepared Parquet paths are internal bindings,
+  not user inputs.
+- The thin `FirstRunOrchestrator` binds exact generated files into the existing
+  Factor Research/Modeling contracts and runs the unchanged ML, Signal,
+  Holdings, Portfolio, Risk, and Research Backtest stages. `score_panel`
+  remains the exact formation/universe key schedule.
+- Research planning includes the configured walk-forward training, validation,
+  embargo, and forward-label maturity history, preserving the existing
+  no-lookahead guard while enabling a genuine first run.
+- Empty-local CUSTOM/DAILY, INDEX/MONTHLY, and ALL_A_SHARES flows use offline
+  TuShare-shaped providers and complete through exact artifact-backed Results.
+  The identical CUSTOM rerun requires zero provider calls; INDEX fetches only
+  its selected scope and ALL_A_SHARES requests no `index_weight`.
+- Data and Overview are read-only and do not fetch or mutate canonical state on
+  render. Neutralization continues to fail closed until canonical point-in-time
+  exposure materialization exists.

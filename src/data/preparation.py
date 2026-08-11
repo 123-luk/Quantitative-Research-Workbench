@@ -81,6 +81,21 @@ class DataPreparationService:
     def _planner(self) -> MissingDataPlanner:
         return MissingDataPlanner(self.registry, self.ledger, open_dates=self.open_dates)
 
+    def inspect(self, requirements: Iterable[DataRequirement]) -> tuple[MissingDataPlan, ...]:
+        """Plan exact missing coverage without provider calls or data writes."""
+        normalized = tuple(
+            sorted(
+                coalesce_requirements(requirements),
+                key=lambda item: (
+                    self.registry.get(item.dataset_id).coverage_kind.value != "CALENDAR_DATE",
+                    item.dataset_id,
+                    item.scope,
+                    item.required_start,
+                ),
+            )
+        )
+        return self._planner().plan(normalized)
+
     def ensure(self, requirements: Iterable[DataRequirement], credential: str | None = None, *, client: object | None = None) -> DataPreparationResult:
         normalized = tuple(sorted(coalesce_requirements(requirements), key=lambda item: (self.registry.get(item.dataset_id).coverage_kind.value != "CALENDAR_DATE", item.dataset_id, item.scope, item.required_start)))
         calls = 0

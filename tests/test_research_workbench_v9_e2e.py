@@ -858,14 +858,15 @@ def test_gate_n_streamlit_five_routes_reset_without_selected_run_guessing() -> N
     app = AppTest.from_file(str(app_path), default_timeout=30).run()
     assert not app.exception
     assert app.session_state["selected_run_id"] is None
-    for route in ("Overview", "New Run", "Results", "Runs", "Data"):
-        app.sidebar.selectbox[0].set_value(route)
-        app.run()
-        assert not app.exception
+    app.session_state["locale"] = "en"
+    for route in ("overview", "new_run", "results", "runs", "data"):
+        page = AppTest.from_file(str(app_path.parent / "views" / f"{route}.py"), default_timeout=30).run()
+        assert not page.exception
     assert app.session_state["selected_run_id"] is None
-    app.sidebar.selectbox[0].set_value("Results")
-    app.run()
-    assert any("exact run" in item.value.lower() for item in app.info)
+    results = AppTest.from_file(str(app_path.parent / "views" / "results.py"), default_timeout=30).run()
+    results.session_state["locale"] = "en"
+    results.run()
+    assert any("exact run" in item.value.lower() for item in results.info)
 
 
 def test_gate_n_workbench_ui_purity_has_only_allowed_display_derivations() -> None:

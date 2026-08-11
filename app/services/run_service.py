@@ -36,10 +36,13 @@ class RunService:
     """Run the existing pipeline once and preserve only its exact returned identity."""
 
     def __init__(
-        self, runner: Callable[[PipelineConfig], dict[str, object]] | None = None
+        self,
+        runner: Callable[..., dict[str, object]] | None = None,
+        *,
+        supports_identity_hook: bool | None = None,
     ) -> None:
         self._runner = run_pipeline if runner is None else runner
-        self._supports_identity_hook = runner is None
+        self._supports_identity_hook = runner is None if supports_identity_hook is None else supports_identity_hook
 
     def run(self, config: PipelineConfig) -> RunOutcome:
         if not isinstance(config, PipelineConfig):
@@ -53,7 +56,7 @@ class RunService:
 
         try:
             summary = (
-                run_pipeline(config, run_created_callback=remember_run)
+                self._runner(config, run_created_callback=remember_run)
                 if self._supports_identity_hook
                 else self._runner(config)
             )

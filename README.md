@@ -2,13 +2,28 @@
 
 ## Research Workbench (v0.10.0)
 
-The Streamlit Research Workbench now provides substantive **Overview**, **New
-Run**, **Results**, **Runs**, and **Data** pages. Results and run navigation use
-one exact canonical `run_id`; metrics, NAV, benchmark, Holdings, configuration,
-and lineage come from validated Artifacts without latest/mtime fallback. The
-Data page is a read-only view of local cache readiness and performs no download
-or update. See `docs/16_research_workbench.md` and
-`docs/17_research_workbench_results.md`.
+The Quant Research Workbench is the only default Streamlit UI. One explicit
+navigation registers **Overview**, **New Run**, **Results**, **Runs**, and
+**Data**; the legacy dashboard is not exposed. Results and run navigation use
+one exact canonical `run_id`, with no latest/mtime fallback.
+
+### First use
+
+1. Run `streamlit run app/streamlit_app.py` from the repository root.
+2. Keep the default Chinese UI or switch the single global selector to English.
+3. Optionally enter a TuShare token in the password field. It stays in session
+   memory; an existing environment token is the fallback and is never shown.
+4. In New Run, select CUSTOM, INDEX, or ALL_A_SHARES; DAILY or MONTHLY; then
+   configure factors, ML, selection, portfolio construction, and backtest.
+5. Review the local-only Data Readiness plan and run. Missing canonical units
+   are downloaded automatically, research inputs are materialized, and the
+   existing pipeline opens the exact successful run in Results.
+
+Complete local coverage requires no token, and an identical repeat makes zero
+provider calls. Prepared Parquet paths are no longer manual first-run inputs.
+The Data page remains read-only. See
+`docs/23_workbench_first_run_integration.md` for the complete contract; older
+dashboard descriptions below are historical and are not registered UI routes.
 
 A 股多因子选股、回测、单股研究与 Streamlit 可视化 App。
 

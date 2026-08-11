@@ -393,6 +393,11 @@ def build_pipeline_config(
             "evaluate_composite": evaluate_composite,
         },
     }
+    if "forward_entry_lag_periods" in state or "forward_holding_periods" in state:
+        factor_research["forward_returns"] = {
+            "entry_lag_periods": state.get("forward_entry_lag_periods", 1),
+            "holding_periods": state.get("forward_holding_periods", 20),
+        }
     if factor_research_enabled:
         factor_research.update(
             {

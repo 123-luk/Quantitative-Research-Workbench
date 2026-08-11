@@ -1,2 +1,0 @@
-"""Quant Research Workbench pages."""
-
