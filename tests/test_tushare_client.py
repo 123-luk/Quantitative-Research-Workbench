@@ -63,7 +63,7 @@ def test_get_stock_basic_passes_explicit_lifecycle_status(list_status: str) -> N
                 "exchange": "",
                 "list_status": list_status,
                 "fields": (
-                    "ts_code,symbol,name,area,industry,market,list_status,"
+                    "ts_code,symbol,name,area,industry,market,exchange,curr_type,list_status,"
                     "list_date,delist_date"
                 ),
             },

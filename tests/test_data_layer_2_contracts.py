@@ -35,7 +35,7 @@ def test_registry_contains_exact_eight_frozen_specs() -> None:
     for dataset_id, expected in EXPECTED.items():
         spec = registry.get(dataset_id)
         assert (spec.primary_key, spec.native_frequency, spec.scope_kind, spec.coverage_kind, spec.storage_partition, spec.fetch_strategy) == expected
-        assert spec.schema_version == "1.0"
+        assert spec.schema_version == ("1.1" if dataset_id == "stock_basic" else "1.0")
         assert spec.revision_policy in {RevisionPolicy.MISSING_ONLY, RevisionPolicy.EXPLICIT_REFRESH}
 
 

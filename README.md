@@ -367,3 +367,12 @@ at `data/metadata/catalog.sqlite`; legacy min/max metadata is compatibility-only
 Ordinary preparation fetches only missing coverage units, never refreshes
 completed history, and uses instance-injected credentials. See
 [Data Layer 2.0](docs/19_data_layer_2_0.md).
+
+### Universe 1.0
+
+The first L2 Research Data contract resolves immutable point-in-time membership
+for CUSTOM, INDEX, and ALL_A_SHARES universes. Historical index snapshots never
+use current or future members, while custom and all-A-share membership applies
+explicit listing/delisting lifecycle boundaries. Eligibility and observation
+availability remain separate downstream concerns. See
+[Universe 1.0](docs/20_universe_1_0.md).

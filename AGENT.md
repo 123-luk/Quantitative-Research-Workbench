@@ -3597,3 +3597,40 @@ override，V4-E3 为 CLI + YAML + docs。
   protected-quant-diff, dependency, formatting, and Git hygiene checks passed.
 - No commit, staging, remote Git operation, dependency change, or `.env`
   modification was performed. Next: P4C ResearchInputBuilder.
+
+## 2026-08-11 V9-P4C1 Universe 1.0
+
+- Added immutable `UniverseSpec` and `UniverseSnapshot` contracts for CUSTOM,
+  INDEX, and ALL_A_SHARES membership, with a fresh resolver registry and
+  explicit canonical-data service boundary.
+- CUSTOM accepts canonical `ts_code` values or a bare six-digit symbol only
+  when canonical `stock_basic` proves exactly one match. First-occurrence order
+  is preserved after canonicalization and lifecycle filtering.
+- INDEX selects only the latest provider snapshot date on or before formation;
+  there is no current-member history backfill, future snapshot backward fill,
+  nearest-date selection, or filesystem discovery. Provider weights are source
+  diagnostics only and never portfolio target weights.
+- ALL_A_SHARES uses the stock endpoint's equity contract plus canonical market,
+  exchange, and CNY metadata for Shanghai/Shenzhen main boards, ChiNext, STAR,
+  and Beijing A shares. ST, suspension, liquidity, and listing-age filters are
+  explicitly outside Universe membership.
+- All resolvers apply `list_date <= T < delist_date`. The exclusive membership
+  boundary is separate from V6 delist-date observation-return handling.
+- Universe-owned requirements are exactly stock_basic for CUSTOM/ALL and
+  stock_basic plus scoped index_weight for INDEX; no daily/factor datasets are
+  requested. P4B integration proves identical second preparation makes zero
+  provider calls and produces the same snapshot.
+- Extended canonical stock_basic schema to 1.1 with provider `exchange` and
+  `curr_type`, enabling classification without exchange-prefix guessing while
+  preserving the existing lifecycle adapter fields.
+- No current PipelineConfig/runner, quant semantics, stage ordering, or
+  Artifact schema was changed. Next: P4C2 AdjustedPriceService and research
+  frequency/calendar semantics.
+- Universe/P4B dedicated verification: `15 passed in 3.26s`; focused P4B and
+  V5–V9 cross-layer regression: `1230 passed in 114.52s`.
+- The single final full-suite invocation passed: `3124 passed, 4 skipped, 11
+  warnings in 259.80s`, exactly +15 passes with unchanged skips/warnings versus
+  the frozen P4B baseline.
+- In-memory compile covered 190 production Python files. Static discovery,
+  provider-boundary, eligibility-filter, target-weight, formatting, protected
+  quant-diff, dependency, and Git hygiene checks passed.
