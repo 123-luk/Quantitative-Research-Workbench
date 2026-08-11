@@ -80,6 +80,15 @@ from app.services.research_backtest_ui_service import (  # noqa: E402
     load_research_backtest_dashboard,
 )
 from src.pipeline.config import PipelineConfig  # noqa: E402
+from app.components.navigation import (  # noqa: E402
+    NAVIGATION_ROUTES,
+    initialize_session_state,
+)
+from app.pages import data as workbench_data  # noqa: E402
+from app.pages import new_run as workbench_new_run  # noqa: E402
+from app.pages import overview as workbench_overview  # noqa: E402
+from app.pages import results as workbench_results  # noqa: E402
+from app.pages import runs as workbench_runs  # noqa: E402
 
 
 RISK_NOTICE = "本应用展示的是历史样本回测和量化研究结果，不代表未来表现，不构成投资建议。"
@@ -1120,33 +1129,52 @@ def render_factor_research_page(data: dict[str, pd.DataFrame]) -> None:
 
 
 def main() -> None:
-    """Run the Streamlit dashboard application."""
-    st.set_page_config(page_title="Quant Factor System", layout="wide")
-    project_root = get_project_root()
-    data = load_dashboard_data(project_root)
-    figure_paths = get_figure_paths(project_root)
-
-    st.sidebar.title("Quant Factor System")
-    page = st.sidebar.radio(
+    """Run the V9 workbench while retaining the old dashboard as a legacy tool."""
+    st.set_page_config(page_title="Quant Research Workbench", layout="wide")
+    initialize_session_state(st.session_state)
+    st.sidebar.title("Quant Research Workbench")
+    page = st.sidebar.selectbox(
         "Navigation",
-        ["首页 Dashboard", "运行研究流水线", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
+        NAVIGATION_ROUTES,
+        index=NAVIGATION_ROUTES.index(str(st.session_state["current_page"])),
     )
-    st.sidebar.markdown("当前能力：V6 Research Backtest Dashboard")
-    st.sidebar.markdown("数据来源：TuShare + local CSV")
-    st.sidebar.info("如数据为空，请先运行 scripts/run_research_pipeline.py")
+    if page != st.session_state["current_page"]:
+        st.session_state["current_page"] = page
 
-    if page == "首页 Dashboard":
-        render_dashboard_page(data, figure_paths)
-    elif page == "运行研究流水线":
-        render_pipeline_page(project_root)
-    elif page == "推荐投资组合":
-        render_portfolio_page(data)
-    elif page == "单只股票分析":
-        render_single_stock_page(data)
-    elif page == "回测结果":
-        render_backtest_page(data, figure_paths)
-    elif page == "因子研究":
-        render_factor_research_page(data)
+    legacy_page = "首页 Dashboard"
+    with st.sidebar.expander("Legacy dashboard compatibility"):
+        legacy_page = st.radio(
+            "Legacy Navigation",
+            ["首页 Dashboard", "运行研究流水线", "推荐投资组合", "单只股票分析", "回测结果", "因子研究"],
+            key="legacy_page",
+        )
+        st.markdown("当前能力：V6 Research Backtest Dashboard")
+
+    if legacy_page != "首页 Dashboard":
+        project_root = get_project_root()
+        if legacy_page == "运行研究流水线":
+            render_pipeline_page(project_root)
+            return
+        data = load_dashboard_data(project_root)
+        figure_paths = get_figure_paths(project_root)
+        if legacy_page == "推荐投资组合":
+            render_portfolio_page(data)
+        elif legacy_page == "单只股票分析":
+            render_single_stock_page(data)
+        elif legacy_page == "回测结果":
+            render_backtest_page(data, figure_paths)
+        elif legacy_page == "因子研究":
+            render_factor_research_page(data)
+        return
+
+    pages = {
+        "Overview": workbench_overview.render,
+        "New Run": workbench_new_run.render,
+        "Results": workbench_results.render,
+        "Runs": workbench_runs.render,
+        "Data": workbench_data.render,
+    }
+    pages[page](st)
 
 
 if __name__ == "__main__":

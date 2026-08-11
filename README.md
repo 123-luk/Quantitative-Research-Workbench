@@ -337,3 +337,14 @@ Artifact. Run the standard config-only CLI with
 `config/minimum_variance_pipeline.example.yaml` and see
 [Risk Model and Minimum Variance](docs/14_risk_model_optimizer.md) for the
 frozen covariance, dependency, optimization, and compatibility semantics.
+
+## V9 Research Workbench development
+
+The registry-driven Streamlit Research Workbench is under development for
+v0.10.0. P1 provides the five-page shell and canonical New Run execution
+foundation; Artifact-backed Results, Runs, and Data views remain P2 work.
+
+    streamlit run app/streamlit_app.py
+
+See [V9 Quant Research Workbench](docs/16_research_workbench.md) for the audited
+registries, exact run handoff, artifact contracts, and phase boundaries.

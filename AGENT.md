@@ -3435,3 +3435,49 @@ override，V4-E3 为 CLI + YAML + docs。
   rebase, reset, cherry-pick, or tag was performed; HEAD remains the P2 commit.
 - Final status: **LOCAL RELEASE READY**. Next: user commits P3, then follows the
   PR/release workflow.
+
+## 2026-08-11 V9-P1 Registry-Driven Research Workbench GUI Core
+
+- Target release: `v0.10.0`.
+- Added a wide-layout Streamlit Research Workbench with the five main pages
+  Overview, New Run, Results, Runs, and Data; the prior dashboard remains in a
+  separate backward-compatibility surface.
+- Factor selection is driven by the default FactorRegistry; the audited names
+  are `momentum_20d` and `volatility_20d`. Legacy YAML-only `pe`, `pb`, and
+  `roe` values are not advertised as runnable capabilities.
+- Model selection is driven by ModelRegistry for `elastic_net`,
+  `hist_gradient_boosting`, and `ridge`. All model controls are generated from
+  backend `parameter_schema()`, preserving defaults, bounds, choices, canonical
+  keys, optional values, and advanced fields.
+- Portfolio and risk controls consume the Portfolio Construction, Risk
+  Estimator, and Constraint registries. Equal Weight, Rank Weight, Inverse
+  Volatility, Minimum Variance, Sample Covariance, Ledoit-Wolf, and Max Weight
+  remain backend-owned capabilities.
+- New Run has the fixed five sections Data & Universe, Factor / Modeling,
+  Signal & Selection, Portfolio Construction, and Research Backtest.
+- `pipeline_config_service.py` is the sole detached UI-to-PipelineConfig
+  boundary. Backend config/model/portfolio validators remain the business
+  source of truth; no factor, ranking, weighting, covariance, optimizer, or
+  backtest calculations were added to `app/**`.
+- Added thin RunService and safe ErrorPresenter contracts. RunService calls the
+  existing runner once and returns exact run/experiment identity, status,
+  elapsed time, stage/artifact summaries, or sanitized errors.
+- Added a generic optional `run_created_callback` to `run_pipeline()` so a
+  later failure retains its exact run ID without latest/mtime/glob discovery.
+  The returned summary, CLI, stage order, and quant semantics are unchanged.
+- Session state is limited to current page, draft config, current/selected run
+  IDs, and last status. Results routing requires exact `selected_run_id`.
+- Audited Signal, Holdings, and Research Backtest Artifact file/column sets and
+  all 20 canonical Research Backtest metric keys for P2 Artifact-backed views.
+- ExperimentManager has no exact reader or safe enumeration API; Runs remains a
+  P2 placeholder. DataManager has read-only readiness checks but no full data
+  dashboard metadata API; Data remains a P2 placeholder.
+- P1 focused UI suite: `77 passed`; Gate A/B/C focused regression:
+  `289 passed`; identity cross-stage regression: `116 passed, 2 skipped`.
+- Full pytest: `2993 passed, 4 skipped, 11 warnings`; +28 passed over v0.9.0,
+  unchanged skips/warnings, and no new xfail.
+- Compile/import, Streamlit AppTest, UI purity, protected production diff,
+  dependency drift, and Git hygiene gates passed.
+- No commit, staging, remote Git, dependency installation, merge, rebase,
+  reset, cherry-pick, or tag operation was performed. P2 remains Results,
+  Runs, and Data backed by exact public Artifact/catalog APIs.

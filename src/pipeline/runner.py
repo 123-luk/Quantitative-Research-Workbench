@@ -106,6 +106,7 @@ def run_pipeline(
     config: PipelineConfig,
     *,
     market_client_factory: Callable[[], object] | None = None,
+    run_created_callback: Callable[[Path], None] | None = None,
 ) -> dict[str, Any]:
     """Run the V1 pipeline skeleton and return a concise run summary.
 
@@ -132,6 +133,8 @@ def run_pipeline(
         strategy_name=config.strategy_name,
         stock_pool=config.stock_pool,
     )
+    if run_created_callback is not None:
+        run_created_callback(run_dir)
 
     cache_status = str(data_status["cache_status"])
     missing_ranges = data_status["missing_ranges"]
