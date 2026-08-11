@@ -169,6 +169,20 @@ class ResearchCalendar:
             selected = (formation,)
         return HistoryWindow(selected[0], formation, selected)
 
+    def shift_open_date(self, anchor_date: object, periods: int) -> str:
+        """Return the exact open date ``periods`` positions after an open anchor."""
+        anchor = canonical_date(anchor_date)
+        if type(periods) is not int or periods < 0:
+            raise ResearchCalendarError("periods must be a strict non-negative integer.")
+        try:
+            position = self._open_dates.index(anchor)
+        except ValueError as exc:
+            raise ResearchCalendarError("anchor_date must be a proven open trading day.") from exc
+        target = position + periods
+        if target >= len(self._open_dates):
+            raise ResearchCalendarError("canonical trade calendar has insufficient future open dates.")
+        return self._open_dates[target]
+
     @property
     def open_dates(self) -> tuple[str, ...]:
         return self._open_dates

@@ -3667,3 +3667,44 @@ override，V4-E3 为 CLI + YAML + docs。
   diff, dependency, formatting, and Git hygiene checks passed.
 - Next: P4C3 ResearchInputBuilder plus ForwardReturn / Modeling Panel
   materialization.
+
+## 2026-08-11 V9-P4C3 ResearchInputBuilder 1.0
+
+- Added immutable, serializable `ResearchInputPlan` and strict
+  `ForwardReturnSpec` contracts. The planner composes point-in-time Universe,
+  factor-owned warmup, adjusted-price, forward-label horizon, and trade-calendar
+  requirements without conflating different as-of cutoffs.
+- Added a CURATED-only `ResearchInputBuilder` that resolves every formation's
+  exact Universe snapshot, constructs the existing wide factor input and
+  adjusted-close price compatibility panels, and reuses the existing Factor
+  Research, Forward Return, Modeling Panel, and ML Dataset validators.
+- The existing forward-return formula remains exactly
+  `exit_price / entry_price - 1`. Trading-period entry/exit dates come from the
+  canonical open calendar. Research Backtest remains on provider
+  `pct_chg / 100`; no accounting or Artifact schema changed.
+- Added a label availability sidecar and `TrainingLabelAvailabilityGuard`.
+  Labels become trainable only at `exit_trade_date`, and adversarial tests prove
+  future-realized labels are excluded at an earlier cutoff.
+- Repository audit proved historical `score_panel.parquet` is the Factor
+  Research formation/universe key input. Builder therefore writes exactly
+  `trade_date, ts_code` and never fabricates predictions, scores, ranks, or
+  signals.
+- Added source/config/calculator-aware content identities, exact manifest/hash
+  validation, safe reuse without factor recomputation, staged Parquet reread,
+  and atomic directory publication. Failed builds publish no partial identity
+  and leave an older valid materialization intact.
+- Daily and monthly end-to-end, cutoff, future-perturbation, source-invalidation,
+  atomicity, missing-observation, and real P4B-to-P4C3 integration tests passed:
+  `8 passed in 11.10s`. Repeated P4B preparation made zero provider calls.
+- Focused P4B/P4C1/P4C2/P4C3 plus Modeling, Forward Return, ML, Signal,
+  Holdings, Research Backtest, Portfolio, Risk, Optimizer, and historical-return
+  regression passed: `1545 passed, 2 skipped, 2 warnings in 118.88s`.
+- In-memory compile covered 197 production Python files. Static provider/RAW,
+  latest/mtime/glob/fuzzy, generic-fill, fake-score, protected-quant,
+  dependency, formatting, and Git hygiene checks passed.
+- The single final full-suite invocation passed:
+  `3153 passed, 4 skipped, 11 warnings in 268.11s`, exactly +8 passes with
+  unchanged skips/warnings and no new xfail versus the frozen P4C2 baseline.
+- No dependency, `.env`, commit, staging, remote Git, push, fetch, pull, merge,
+  rebase, reset, cherry-pick, or tag operation was performed. Next: P4D
+  Workbench First-Run Integration.

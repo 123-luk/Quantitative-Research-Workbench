@@ -94,6 +94,10 @@ class CanonicalAdjustedPriceDataSource:
     def adj_factor(self, dates: tuple[str, ...]) -> CanonicalMarketSlice:
         return self._read("adj_factor", dates)
 
+    def load(self, dataset_id: str, dates: tuple[str, ...]) -> CanonicalMarketSlice:
+        """Read another explicit market-snapshot dataset through the same proof boundary."""
+        return self._read(dataset_id, dates)
+
 
 @dataclass(frozen=True)
 class AdjustedPriceRequest:

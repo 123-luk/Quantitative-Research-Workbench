@@ -384,3 +384,13 @@ factor-owned DAILY/MONTHLY metadata, and anchor-free research adjusted OHLC via
 exact `raw * adj_factor`. Research Backtest accounting remains on provider
 `pct_chg / 100`; frequency never implies global monthly resampling. See
 [Adjusted Price and Factor Frequency](docs/21_adjusted_price_factor_frequency.md).
+
+### Research Input Materialization
+
+P4C3 composes Data Layer 2.0, point-in-time Universe, ResearchCalendar, factor
+frequency metadata, and adjusted prices into content-addressed inputs for the
+existing Factor Research and Modeling contracts. It preserves the existing
+forward-return formula, records label realization in an availability sidecar,
+and reuses only hash-validated exact materializations. Data preparation and
+first-run GUI orchestration remain separate. See
+[ResearchInputBuilder 1.0](docs/22_research_input_builder.md).
