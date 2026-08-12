@@ -3798,3 +3798,22 @@ override，V4-E3 为 CLI + YAML + docs。
 - Token boundary: the secret exists only in Streamlit/session or worker memory
   and provider calls. It is absent from task JSON, Pipeline config, Artifacts,
   SQLite, logs, exception messages, Git, and CLI arguments.
+
+## 2026-08-12 Windows One-Click Launcher
+
+- `QuantResearchWorkbench.exe` is the local Windows one-click launcher. Double-
+  click it to start `app\streamlit_app.py` with the project Python environment
+  and open `http://127.0.0.1:8501` in the default browser.
+- The launcher preserves the existing Python/Streamlit path: it runs
+  `python.exe -m streamlit run app\streamlit_app.py`. It first checks
+  `.venv\Scripts\python.exe`, then the workstation environment at
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Repeated clicks reuse a healthy server on port 8501 instead of starting a
+  duplicate. Startup runs without a console window; launch failures display a
+  Windows error dialog and `run_app.ps1` remains available for console details.
+- Rebuild from the repository root with:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows_launcher.ps1`.
+- A non-browser startup verification is available as
+  `.\QuantResearchWorkbench.exe --smoke-test`; it starts the real Streamlit
+  entry on the isolated test port 18501, waits for the health endpoint, stops
+  its child process, and returns a nonzero exit code on failure.
