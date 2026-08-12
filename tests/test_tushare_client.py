@@ -159,6 +159,16 @@ def test_get_suspend_d_delegates_exact_raw_event_scope() -> None:
     ]
 
 
+def test_get_suspend_d_normalizes_provider_no_column_empty_frame() -> None:
+    pro = _FakePro()
+    pro.suspend_frame = pd.DataFrame()
+    result = _client(pro).get_suspend_d(trade_date="20240103")
+    assert result.empty
+    assert tuple(result.columns) == (
+        "ts_code", "trade_date", "suspend_timing", "suspend_type"
+    )
+
+
 def test_provider_exception_is_not_hidden_by_raw_wrapper() -> None:
     class BrokenPro(_FakePro):
         def daily(self, **kwargs: object) -> pd.DataFrame:

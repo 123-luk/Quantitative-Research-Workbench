@@ -10,6 +10,7 @@ from app.components.errors import ErrorPresenter
 from app.i18n import get_locale, t
 from app.services.formatting import format_float, format_percentage
 from app.services.result_service import ResultService, ResultServiceError
+from app.services.ui_metadata_service import display_result_value, display_value, result_setting_label
 from app.services.run_service import SafeRunError
 from src.pipeline.config import PipelineConfig
 
@@ -55,7 +56,7 @@ def render(st: object) -> None:
         ErrorPresenter.render(st, SafeRunError(type(exc).__name__, str(exc), run_id=run_id))
         return
 
-    st.caption(t("results.exact", locale=locale, run_id=bundle.run_id, status=bundle.status or "—"))
+    st.caption(t("results.exact", locale=locale, run_id=bundle.run_id, status=display_value(bundle.status or "—", locale)))
     overview, holdings_tab, returns_tab, config_tab, artifacts_tab = st.tabs(
         tuple(t(key, locale=locale) for key in ("results.overview", "results.holdings", "results.returns", "results.config", "results.artifacts"))
     )
@@ -99,24 +100,24 @@ def render(st: object) -> None:
                 "trade_date", "gross_return", "transaction_cost", "net_return",
                 "turnover", "traded_notional", "is_rebalance",
             )
-            st.dataframe(bundle.daily_returns.loc[:, columns], width="stretch", hide_index=True)
+            daily = bundle.daily_returns.loc[:, columns].copy()
+            daily.columns = [t(f"results.column.{column}", locale=locale) for column in columns]
+            st.dataframe(daily, width="stretch", hide_index=True)
             st.subheader(t("results.monthly", locale=locale))
             st.caption(t("results.monthly_note", locale=locale))
-            st.dataframe(bundle.monthly_returns, width="stretch", hide_index=True)
+            monthly = bundle.monthly_returns.copy()
+            monthly.columns = [t(f"results.column.{column}", locale=locale) for column in monthly.columns]
+            st.dataframe(monthly, width="stretch", hide_index=True)
 
     with config_tab:
         if not bundle.config_summary:
             st.info(t("results.config_missing", locale=locale))
         else:
             summary = pd.DataFrame(
-                [(key, value) for key, value in bundle.config_summary.items()],
+                [(result_setting_label(key, locale), display_result_value(key, value, locale)) for key, value in bundle.config_summary.items()],
                 columns=[t("results.setting", locale=locale), t("results.value", locale=locale)],
             )
             st.dataframe(summary, width="stretch", hide_index=True)
-        if bundle.raw_config is not None:
-            with st.expander(t("task.technical", locale=locale)):
-                st.caption(t("results.raw_config", locale=locale))
-                st.json(dict(bundle.raw_config))
 
     with artifacts_tab:
         if not bundle.artifacts:
@@ -124,11 +125,9 @@ def render(st: object) -> None:
         else:
             st.dataframe(pd.DataFrame([
                 {
-                    t("results.artifact_type", locale=locale): item.artifact_type,
-                    t("results.relative_path", locale=locale): item.relative_path,
+                    t("results.artifact_type", locale=locale): display_value(item.artifact_type, locale),
                     t("results.schema_version", locale=locale): item.schema_version,
-                    t("results.status", locale=locale): item.status,
-                    t("results.upstream", locale=locale): dict(item.upstream),
+                    t("results.status", locale=locale): display_value(item.status, locale),
                 }
                 for item in bundle.artifacts
             ]), width="stretch", hide_index=True)

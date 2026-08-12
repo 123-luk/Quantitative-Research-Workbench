@@ -54,7 +54,7 @@ class _BlockingOrchestrator:
 
 
 def _wait(service: ResearchTaskService, task_id: str, status: str) -> object:
-    deadline = perf_counter() + 5
+    deadline = perf_counter() + 15
     while perf_counter() < deadline:
         task = service.get(task_id)
         if task.status == status:

@@ -20,8 +20,10 @@ from app.services.first_run_service import (
     WorkbenchRunError,
 )
 from app.services.result_service import ResultService
+from app.services.research_date_service import require_valid_research_dates
 from src.data.contracts import ResearchFrequency
 from src.pipeline.config import PipelineConfig
+from src.pipeline.experiment import ExperimentManager
 from src.universe import UniverseSpec
 
 
@@ -105,10 +107,27 @@ class ResearchTask:
     def can_open_results(self) -> bool:
         return self.status == "succeeded" and self.result_ready and bool(self.run_id)
 
+    @property
+    def can_clear(self) -> bool:
+        return not self.active
+
+
+@dataclass(frozen=True)
+class TaskClearResult:
+    task_id: str
+    removed: bool
+    run_id: str | None
+    results_preserved: bool
+
+
+class TaskClearError(RuntimeError):
+    pass
+
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="research-workbench")
 _LOCK = Lock()
 _IO_LOCK = RLock()
+_SUBMIT_LOCK = RLock()
 _ACTIVE: dict[str, Future[object]] = {}
 
 
@@ -123,12 +142,17 @@ class ResearchTaskService:
     ) -> None:
         self.output_root = Path(output_root).resolve()
         self.root = self.output_root / "workbench_tasks"
+        self.hidden_runs_root = self.root / "hidden_runs"
         self._orchestrator_factory = orchestrator_factory or FirstRunOrchestrator
 
     def _path(self, task_id: str) -> Path:
         if not isinstance(task_id, str) or not task_id or any(char not in "0123456789abcdef-" for char in task_id):
             raise ValueError("Invalid task_id.")
-        return self.root / f"{task_id}.json"
+        root = self.root.resolve()
+        path = (root / f"{task_id}.json").resolve()
+        if path.parent != root:
+            raise ValueError("Task path escaped the task storage root.")
+        return path
 
     def _write(self, record: Mapping[str, object]) -> None:
         with _IO_LOCK:
@@ -227,15 +251,20 @@ class ResearchTaskService:
     def submit(self, draft: WorkbenchRunDraft, *, credential: str | None, retry_of: str | None = None) -> ResearchTask:
         if not isinstance(draft, WorkbenchRunDraft):
             raise TypeError("draft must be a WorkbenchRunDraft.")
+        require_valid_research_dates(
+            draft.pipeline_config.backtest_start,
+            draft.pipeline_config.backtest_end,
+        )
         fingerprint = self._fingerprint(draft)
-        for task in self.list_tasks(reconcile_interrupted=False):
-            if task.active:
-                raw = self._read_raw(task.task_id)
-                if raw.get("request_fingerprint") == fingerprint:
-                    return task
-        task_id = str(uuid4())
-        created = _now()
-        record: dict[str, object] = {
+        with _SUBMIT_LOCK:
+            for task in self.list_tasks(reconcile_interrupted=False):
+                if task.active:
+                    raw = self._read_raw(task.task_id)
+                    if raw.get("request_fingerprint") == fingerprint:
+                        return task
+            task_id = str(uuid4())
+            created = _now()
+            record: dict[str, object] = {
             "schema_version": TASK_SCHEMA_VERSION,
             "task_id": task_id,
             "name": _safe_name(draft),
@@ -263,12 +292,12 @@ class ResearchTaskService:
             "research_frequency": draft.research_frequency.value,
             "request_fingerprint": fingerprint,
             "retry_of": retry_of,
-        }
-        self._write(record)
-        future = _EXECUTOR.submit(self._run, task_id, draft, credential)
-        with _LOCK:
-            _ACTIVE[task_id] = future
-        future.add_done_callback(lambda _: self._forget(task_id))
+            }
+            self._write(record)
+            future = _EXECUTOR.submit(self._run, task_id, draft, credential)
+            with _LOCK:
+                _ACTIVE[task_id] = future
+            future.add_done_callback(lambda _: self._forget(task_id))
         return self.get(task_id)
 
     @staticmethod
@@ -286,6 +315,69 @@ class ResearchTaskService:
             ResearchFrequency(str(raw["research_frequency"])),
         )
         return self.submit(draft, credential=credential, retry_of=task_id)
+
+    def clear(self, task_id: str) -> TaskClearResult:
+        """Remove only one terminal task record; exact run artifacts are retained."""
+        try:
+            raw = self._read_raw(task_id)
+        except FileNotFoundError:
+            return TaskClearResult(task_id, False, None, True)
+        task = self._view(raw)
+        if task.active:
+            raise TaskClearError("Active research tasks cannot be cleared.")
+        path = self._path(task_id)
+        with _IO_LOCK:
+            if path.is_symlink():
+                raise TaskClearError("Task record must not be a symbolic link.")
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                return TaskClearResult(task_id, False, task.run_id, True)
+            except OSError as exc:
+                raise TaskClearError("The task record could not be cleared safely.") from exc
+        return TaskClearResult(task_id, True, task.run_id, True)
+
+    def _hidden_run_path(self, run_id: str) -> Path:
+        ExperimentManager(self.output_root).resolve_run_dir(run_id)
+        root = self.hidden_runs_root.resolve()
+        path = (root / f"{run_id}.json").resolve()
+        if path.parent != root:
+            raise ValueError("Hidden-run marker escaped its storage root.")
+        return path
+
+    def hidden_run_ids(self) -> frozenset[str]:
+        if not self.hidden_runs_root.is_dir() or self.hidden_runs_root.is_symlink():
+            return frozenset()
+        result: set[str] = set()
+        for path in self.hidden_runs_root.iterdir():
+            if path.is_symlink() or not path.is_file() or path.suffix != ".json":
+                continue
+            try:
+                self._hidden_run_path(path.stem)
+            except (FileNotFoundError, ValueError):
+                continue
+            result.add(path.stem)
+        return frozenset(result)
+
+    def clear_historical_run(self, run_id: str) -> bool:
+        """Hide one validated historical run record without deleting its files."""
+        path = self._hidden_run_path(run_id)
+        with _IO_LOCK:
+            if path.exists():
+                if path.is_symlink() or not path.is_file():
+                    raise TaskClearError("Historical record marker is unsafe.")
+                return False
+            self.hidden_runs_root.mkdir(parents=True, exist_ok=True)
+            temp = self.hidden_runs_root / f".{path.name}.{uuid4().hex}.tmp"
+            try:
+                temp.write_text(json.dumps({"run_id": run_id, "hidden_at": _now()}), encoding="utf-8")
+                os.replace(temp, path)
+            except OSError as exc:
+                raise TaskClearError("The historical record could not be cleared safely.") from exc
+            finally:
+                if temp.exists():
+                    temp.unlink()
+        return True
 
     def _update_progress(self, task_id: str, event: ProgressEvent) -> None:
         raw = self._read_raw(task_id)

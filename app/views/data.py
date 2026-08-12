@@ -28,8 +28,6 @@ def render(st: object) -> None:
     if not status.ledger_exists:
         st.info(t("data.no_ledger", locale=locale))
     st.caption(t("data.read_only", locale=locale))
-    with st.expander(t("task.technical", locale=locale)):
-        st.markdown(f"`CURATED: {status.curated_root}`  \n`SQLite: {status.ledger_path}`")
 
 
 if __name__ == "__main__":

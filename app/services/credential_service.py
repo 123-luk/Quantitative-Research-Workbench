@@ -16,7 +16,10 @@ class ProviderErrorKind(str, Enum):
     CREDENTIAL_MISSING = "CREDENTIAL_MISSING"
     AUTHENTICATION_INVALID = "AUTHENTICATION_INVALID"
     PERMISSION_INSUFFICIENT = "PERMISSION_INSUFFICIENT"
+    POINTS_INSUFFICIENT = "POINTS_INSUFFICIENT"
+    RATE_LIMITED = "RATE_LIMITED"
     NETWORK_ERROR = "NETWORK_ERROR"
+    RESPONSE_INVALID = "RESPONSE_INVALID"
     PROVIDER_ERROR = "PROVIDER_ERROR"
 
 
@@ -56,12 +59,18 @@ def classify_provider_error(exc: BaseException) -> ProviderErrorKind:
         chain.append(f"{type(current).__name__} {current}")
         current = current.__cause__ or current.__context__
     text = " ".join(chain).lower()
-    if re.search(r"permission|points?|quota|权限|积分", text):
+    if re.search(r"points?|积分", text):
+        return ProviderErrorKind.POINTS_INSUFFICIENT
+    if re.search(r"rate.?limit|too many|frequency|频率|限流", text):
+        return ProviderErrorKind.RATE_LIMITED
+    if re.search(r"permission|quota|权限", text):
         return ProviderErrorKind.PERMISSION_INSUFFICIENT
     if re.search(r"auth|invalid.*token|token.*invalid|credential|认证", text):
         return ProviderErrorKind.AUTHENTICATION_INVALID
     if re.search(r"timeout|connection|network|dns|socket|网络", text):
         return ProviderErrorKind.NETWORK_ERROR
+    if re.search(r"missing required columns|structure|schema|json|decode|结构|字段", text):
+        return ProviderErrorKind.RESPONSE_INVALID
     return ProviderErrorKind.PROVIDER_ERROR
 
 

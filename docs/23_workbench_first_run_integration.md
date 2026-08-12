@@ -116,3 +116,42 @@ Measured first-run synchronous work was `198.56s` in the deterministic Fake Prov
 - Final full pytest: `3172 passed, 4 skipped, 11 warnings, 0 failed in 914.29s`.
 
 Status: UAT-000 through UAT-019 and UAT-021 are fixed in automated coverage. UAT-020 visual polish remains deferred. Real TuShare account-specific authentication/permission/rate-limit copy and subjective page responsiveness still require manual UAT; no real token is persisted or added to test artifacts. `v0.10.0` remains unpublished.
+
+# GUI UAT Follow-up: UAT-009 Reopened and UAT-022 through UAT-025
+
+## Production Evidence and Empty Event Flow
+
+The persisted records for tasks `acb63909-e8c0-44e9-8b11-dda9da834c43` and its retry prove both failed at `download / suspend_d / 2023-11-16`, before a run identity existed. Coverage Ledger fetch events distinguish the original `CanonicalDataError` from two later `ProviderFetchError` events; the latter waited about 30 seconds at the Provider boundary, so completeness normalization was never reached. The worker uses `WorkbenchRuntime.preparation()` and the same registry-driven `DataPreparationService` as the tests; no alternate downloader exists.
+
+The final production path is: `TushareClient.get_suspend_d` converts only an explicit empty, zero-column DataFrame to the endpoint's canonical columns; fetch completeness then permits that empty frame only because `suspend_d.allow_empty_complete` is true; canonical storage intentionally writes no event row; Coverage Ledger records the requested date as COMPLETE with zero rows and a deterministic empty-content hash. Subsequent planning subtracts that COMPLETE unit and makes zero Provider calls. Non-empty malformed frames, timeouts, authentication, permission, points, rate limiting, and other exceptions are never converted to empty success.
+
+## Stable Navigation and Date Contract
+
+All routes use centralized stable page keys and paths. Submit persists one fingerprinted task and switches to the `runs` page; concurrent/repeated clicks reuse an active exact fingerprint. Refresh and rerun read task state and never restart the worker.
+
+`research_date_service.py` owns both UI and service validation. Today is derived from `Asia/Shanghai`; both date controls use that maximum. End must be strictly later than start. Invalid ranges show localized guidance, disable Run, and are rejected again before `ResearchTaskService` creates a directory, JSON record, or future.
+
+## Localized Display and Diagnostics
+
+Canonical model, model-parameter, factor, composition, signal, portfolio, risk, status, stage, result, and error values remain unchanged internally. `ui_metadata_service.py` supplies centralized Chinese and English display metadata to widgets, task summaries, result tables, and technical summaries. The catalogs remain strict equal-key bilingual maps. Chinese ordinary-user surfaces do not show snake_case values, raw config JSON, absolute paths, Provider repr, traceback, or sensitive parameters.
+
+Failure diagnostics distinguish missing/invalid credentials, permission, points, rate limit, network, malformed Provider structure, unexpected ordinary empty data, local canonical/Coverage Ledger inconsistency, and Pipeline failure. The UI shows localized stage, dataset, date range, category, reason, attempted action, and category-specific recovery. Stored provider text is never rendered.
+
+## Task Record Clearing
+
+Clearing targets one validated direct-child `workbench_tasks/<task_id>.json` file. Active `created` or `running` tasks are rejected in the service and disabled in the UI. Terminal failed, cancelled, succeeded, interrupted, or historical task records require a second explicit confirmation. The operation is idempotent and rejects invalid IDs and symlinks.
+
+For successful tasks, clearing removes only the task lifecycle record. The exact run directory, run metadata, index-visible result, and Artifacts are preserved and therefore continue under historical results. For failed/cancelled/incomplete tasks, only their selected task state and safe diagnostic are removed. The operation never traverses into runs, market data, Coverage Ledger, credentials, research inputs, another task, or arbitrary `data/` content.
+
+Legacy run directories without a task record use hide-only clearing: a validated direct-child run identity receives an idempotent marker under `workbench_tasks/hidden_runs`. The legacy run directory and any existing files are not deleted, but the item remains absent from the Research Tasks list after refresh.
+
+## Verification and Remaining Manual UAT
+
+- UAT follow-up service/AppTest group: `21 passed`.
+- TuShare adapter and Data Layer 2.0 preparation: `29 passed`.
+- Existing consolidated GUI UAT: `9 passed`.
+- Workbench shell and first-run integration: `33 passed`.
+- Extended Workbench/config/Pipeline regression: `82 passed`.
+- Existing Windows launcher smoke: exit code `0`; isolated port 18501 released.
+
+Automated status: UAT-009 Reopened and UAT-022 through UAT-025 are fixed. Manual UAT must still confirm the real-account `2023-11-16` zero-event response is recorded COMPLETE, the next run advances beyond that date, Chinese wording is natural at the user's display scale, navigation lands on Research Tasks, and clear-confirm interactions match user expectations. No existing real task record was deleted during diagnosis or tests.

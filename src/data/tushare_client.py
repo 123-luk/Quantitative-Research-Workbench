@@ -178,7 +178,7 @@ class TushareClient:
     ) -> pd.DataFrame:
         """Fetch raw daily suspension/resumption records from TuShare Pro."""
         fields = "ts_code,trade_date,suspend_timing,suspend_type"
-        return self.pro.suspend_d(
+        result = self.pro.suspend_d(
             ts_code=ts_code,
             trade_date=trade_date,
             start_date=start_date,
@@ -186,6 +186,12 @@ class TushareClient:
             suspend_type=suspend_type,
             fields=fields,
         )
+        # TuShare represents a proven zero-event day as an empty DataFrame and
+        # may omit every column. Normalize only that explicit protocol shape;
+        # non-empty malformed responses remain subject to strict validation.
+        if isinstance(result, pd.DataFrame) and result.empty and not len(result.columns):
+            return pd.DataFrame(columns=fields.split(","))
+        return result
 
     def get_daily_basic(
         self,

@@ -3817,3 +3817,45 @@ override，V4-E3 为 CLI + YAML + docs。
   `.\QuantResearchWorkbench.exe --smoke-test`; it starts the real Streamlit
   entry on the isolated test port 18501, waits for the health endpoint, stops
   its child process, and returns a nonzero exit code on failure.
+
+## 2026-08-12 GUI UAT Follow-up: UAT-009 Reopened, UAT-022--UAT-025
+
+- Real evidence: tasks `acb63909-e8c0-44e9-8b11-dda9da834c43` and its retry
+  persisted `download / suspend_d / 2023-11-16 / 0 of 331` with no run ID.
+  Ledger history showed an original `CanonicalDataError`, then two roughly
+  30-second `ProviderFetchError` events. The worker and tests both use
+  `WorkbenchRuntime.preparation()` and the registry `DataPreparationService`;
+  there is no alternate worker download path.
+- TuShare's explicit zero-row/no-column `suspend_d` DataFrame is now normalized
+  at the real adapter boundary before strict completeness. Only the registry
+  event endpoint permits zero rows; it records COMPLETE with a canonical empty
+  hash and is missing-only/offline on rerun. Non-empty missing fields remain a
+  Provider response-structure failure, and local store/Ledger failures remain
+  coverage validation failures.
+- Central `page_path` keys include `runs`; submit navigates to Research Tasks
+  without `KeyError`. Atomic fingerprinted submit protects repeated clicks,
+  reruns, and refreshes from duplicate active tasks.
+- Central display metadata localizes models, all model parameters and choices,
+  factors, composition, signal, portfolio/risk methods, status/stage/errors,
+  result settings, and table columns. Canonical values remain unchanged.
+  Chinese ordinary-user pages omit raw config JSON, absolute paths, snake_case,
+  traceback, Provider repr, and sensitive parameters; English remains complete.
+- Shared `Asia/Shanghai` validation caps both date widgets at business today and
+  requires end strictly after start. Invalid dates disable Run and are rejected
+  by `ResearchTaskService.submit()` before task storage or worker creation.
+- Terminal-task clearing deletes only the selected validated direct-child task
+  JSON after confirmation. Active tasks cannot be cleared. Successful exact
+  runs and Artifacts are preserved as historical results. Clearing is
+  idempotent and never touches shared market data, Coverage Ledger, Token,
+  research inputs, other tasks, or arbitrary user `data/` content.
+- Historical run-only entries use a validated, idempotent hide marker under the
+  task store. Their legacy run directories and any result files are retained;
+  refresh does not re-list the hidden record.
+- Targeted results: follow-up service/AppTest `21 passed`; Provider/Data `29
+  passed`; consolidated GUI UAT `9 passed`; Workbench/first-run `33 passed`;
+  extended Workbench/config/Pipeline `82 passed`; launcher smoke exit `0` with
+  isolated port released. Full pytest was not run.
+- Manual rerun remains required with the user's real TuShare account to prove
+  `2023-11-16` becomes COMPLETE and progress advances, and to review natural
+  Chinese copy, Research Tasks navigation, and clear-confirm UX at the user's
+  display scale. Existing real task records were not modified or deleted.

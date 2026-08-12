@@ -9,6 +9,151 @@ from src.factors.registry import FactorRegistry
 
 
 @dataclass(frozen=True)
+class LocalizedValue:
+    canonical: str
+    zh_name: str
+    en_name: str
+
+    def label(self, locale: str) -> str:
+        return self.zh_name if locale == "zh-CN" else self.en_name
+
+
+DISPLAY_VALUES = {
+    "research_workbench": LocalizedValue("research_workbench", "量化研究工作台", "Research Workbench"),
+    "CUSTOM": LocalizedValue("CUSTOM", "自定义证券池", "Custom securities"),
+    "INDEX": LocalizedValue("INDEX", "指数成分股", "Index constituents"),
+    "ALL_A_SHARES": LocalizedValue("ALL_A_SHARES", "全部 A 股", "All A-shares"),
+    "DAILY": LocalizedValue("DAILY", "日频", "Daily"),
+    "MONTHLY": LocalizedValue("MONTHLY", "月频", "Monthly"),
+    "ridge": LocalizedValue("ridge", "岭回归", "Ridge regression"),
+    "elastic_net": LocalizedValue("elastic_net", "弹性网络回归", "Elastic Net regression"),
+    "hist_gradient_boosting": LocalizedValue("hist_gradient_boosting", "直方图梯度提升回归", "Histogram gradient boosting"),
+    "equal_weight": LocalizedValue("equal_weight", "等权重", "Equal weight"),
+    "rank_weight": LocalizedValue("rank_weight", "排名加权", "Rank weight"),
+    "inverse_volatility": LocalizedValue("inverse_volatility", "波动率倒数加权", "Inverse-volatility weight"),
+    "minimum_variance": LocalizedValue("minimum_variance", "最小方差", "Minimum variance"),
+    "sample_covariance": LocalizedValue("sample_covariance", "样本协方差", "Sample covariance"),
+    "ledoit_wolf": LocalizedValue("ledoit_wolf", "Ledoit-Wolf 收缩协方差", "Ledoit-Wolf shrinkage covariance"),
+    "equal": LocalizedValue("equal", "因子等权合成", "Equal factor composition"),
+    "rolling_ic": LocalizedValue("rolling_ic", "滚动 IC 加权", "Rolling IC weighting"),
+    "rolling_rank_ic": LocalizedValue("rolling_rank_ic", "滚动秩 IC 加权", "Rolling rank-IC weighting"),
+    "none": LocalizedValue("none", "不合成", "No composition"),
+    "descending": LocalizedValue("descending", "得分从高到低", "Highest score first"),
+    "ascending": LocalizedValue("ascending", "得分从低到高", "Lowest score first"),
+    "error": LocalizedValue("error", "证券不足时停止", "Stop when insufficient"),
+    "allow_partial": LocalizedValue("allow_partial", "证券不足时使用可用证券", "Use available securities"),
+    "rolling": LocalizedValue("rolling", "滚动窗口", "Rolling window"),
+    "expanding": LocalizedValue("expanding", "扩展窗口", "Expanding window"),
+    "auto": LocalizedValue("auto", "自动选择", "Automatic"),
+    "cyclic": LocalizedValue("cyclic", "循环更新", "Cyclic"),
+    "random": LocalizedValue("random", "随机更新", "Random"),
+    "squared_error": LocalizedValue("squared_error", "平方误差", "Squared error"),
+    "absolute_error": LocalizedValue("absolute_error", "绝对误差", "Absolute error"),
+    "poisson": LocalizedValue("poisson", "泊松损失", "Poisson loss"),
+    "quantile": LocalizedValue("quantile", "分位数损失", "Quantile loss"),
+    "succeeded": LocalizedValue("succeeded", "已完成", "Completed"),
+    "failed": LocalizedValue("failed", "失败", "Failed"),
+    "valid": LocalizedValue("valid", "校验通过", "Valid"),
+    "signal": LocalizedValue("signal", "交易信号", "Signals"),
+    "holdings": LocalizedValue("holdings", "目标持仓", "Holdings"),
+    "research_backtest": LocalizedValue("research_backtest", "研究回测", "Research backtest"),
+    "ml": LocalizedValue("ml", "机器学习模型", "Machine-learning model"),
+    "higher": LocalizedValue("higher", "数值越高越优", "Higher is preferred"),
+    "lower": LocalizedValue("lower", "数值越低越优", "Lower is preferred"),
+}
+
+
+PARAMETER_NAMES = {
+    "alpha": ("正则化强度 Alpha", "Regularization alpha"), "l1_ratio": ("L1 正则占比", "L1 ratio"),
+    "fit_intercept": ("拟合截距", "Fit intercept"), "solver": ("求解器", "Solver"),
+    "tol": ("收敛容差", "Tolerance"), "max_iter": ("最大迭代次数", "Maximum iterations"),
+    "positive": ("仅允许非负系数", "Positive coefficients"), "random_state": ("随机种子", "Random seed"),
+    "selection": ("坐标更新顺序", "Coordinate selection"), "warm_start": ("热启动", "Warm start"),
+    "loss": ("损失函数", "Loss"), "quantile": ("目标分位数", "Quantile"),
+    "learning_rate": ("学习率", "Learning rate"), "max_leaf_nodes": ("最大叶节点数", "Maximum leaf nodes"),
+    "max_depth": ("最大树深度", "Maximum depth"), "min_samples_leaf": ("叶节点最少样本数", "Minimum samples per leaf"),
+    "l2_regularization": ("L2 正则化强度", "L2 regularization"), "max_features": ("最大特征比例", "Maximum feature fraction"),
+    "max_bins": ("最大分箱数", "Maximum bins"), "early_stopping": ("提前停止", "Early stopping"),
+    "n_iter_no_change": ("无改进容忍轮数", "Iterations without improvement"), "verbose": ("训练日志级别", "Verbosity"),
+}
+
+PARAMETER_HELP_ZH = {
+    "alpha": "控制整体正则化强度，数值越大约束越强。", "l1_ratio": "控制 L1 正则在组合惩罚中的比例。",
+    "fit_intercept": "是否由模型估计截距项。", "solver": "选择岭回归使用的数值求解算法。",
+    "tol": "优化或提前停止使用的最小收敛容差。", "max_iter": "限制模型训练的最大迭代次数。",
+    "positive": "启用后将模型系数限制为非负。", "random_state": "用于可复现随机过程的种子；留空表示不指定。",
+    "selection": "选择弹性网络逐个更新坐标的顺序。", "warm_start": "是否允许估计器复用上一次拟合状态。",
+    "loss": "选择梯度提升模型优化的回归损失。", "quantile": "仅在选择分位数损失时使用，必须介于 0 和 1 之间。",
+    "learning_rate": "控制每轮提升对最终模型的贡献。", "max_leaf_nodes": "限制每棵树的最大叶节点数；留空表示不限制。",
+    "max_depth": "限制每棵树的最大深度；留空表示不限制。", "min_samples_leaf": "每个叶节点所需的最少训练样本数。",
+    "l2_regularization": "对叶节点取值施加 L2 正则约束。", "max_features": "每个节点可考虑的最大特征比例。",
+    "max_bins": "每个特征用于直方图训练的最大分箱数。", "early_stopping": "是否基于外部时间验证集提前停止。",
+    "n_iter_no_change": "验证结果连续多少轮没有改善后停止。", "verbose": "控制模型训练输出的详细程度。",
+}
+
+
+def display_value(value: object, locale: str) -> str:
+    canonical = str(value)
+    item = DISPLAY_VALUES.get(canonical)
+    return item.label(locale) if item else canonical.replace("_", " ").title()
+
+
+def parameter_label(name: str, locale: str, fallback: str) -> str:
+    value = PARAMETER_NAMES.get(name)
+    return (value[0] if locale == "zh-CN" else value[1]) if value else fallback
+
+
+def parameter_help(name: str, locale: str, fallback: str) -> str:
+    return PARAMETER_HELP_ZH.get(name, "模型训练参数。") if locale == "zh-CN" else fallback
+
+
+RESULT_SETTING_LABELS = {
+    "Start Date": ("开始日期", "Start Date"), "End Date": ("结束日期", "End Date"),
+    "Stock Pool": ("证券池", "Stock Pool"), "Factors": ("因子", "Factors"),
+    "Benchmark": ("基准指数", "Benchmark"), "Model": ("模型", "Model"),
+    "Signal Direction": ("信号方向", "Signal Direction"), "Top N": ("入选数量", "Top N"),
+    "Portfolio Method": ("组合方法", "Portfolio Method"), "Risk Estimator": ("风险估计方法", "Risk Estimator"),
+    "Lookback Trading Days": ("回看交易日", "Lookback Trading Days"),
+    "Minimum Observations": ("最少观测数", "Minimum Observations"),
+    "Maximum Weight": ("单只证券最大权重", "Maximum Weight"),
+    "Transaction Cost Bps": ("交易成本（基点）", "Transaction Cost (bps)"),
+    "Annual Risk-Free Rate": ("年化无风险利率", "Annual Risk-Free Rate"),
+    "Annualization Days": ("年化交易日数", "Annualization Days"),
+}
+
+
+def result_setting_label(value: str, locale: str) -> str:
+    names = RESULT_SETTING_LABELS.get(value)
+    return (names[0] if locale == "zh-CN" else names[1]) if names else value
+
+
+def display_config_value(value: object, locale: str) -> object:
+    if isinstance(value, (list, tuple)):
+        return ", ".join(display_value(item, locale) for item in value)
+    if isinstance(value, str):
+        return display_value(value, locale)
+    return value
+
+
+def display_result_value(setting: str, value: object, locale: str) -> object:
+    if setting == "Factors" and isinstance(value, (list, tuple)):
+        return ", ".join(factor_label(str(item), locale) for item in value)
+    if setting == "Stock Pool" and isinstance(value, str):
+        if value.startswith("CUSTOM:"):
+            name = "自定义证券池" if locale == "zh-CN" else "Custom securities"
+            return f"{name} ({value.removeprefix('CUSTOM:')})"
+        if value == "ALL_A_SHARES":
+            return display_value(value, locale)
+    return display_config_value(value, locale)
+
+
+def assert_registry_display_metadata(*, models: tuple[str, ...], portfolios: tuple[str, ...], risks: tuple[str, ...]) -> None:
+    missing = set((*models, *portfolios, *risks)) - set(DISPLAY_VALUES)
+    if missing:
+        raise RuntimeError(f"Missing centralized display metadata: {sorted(missing)!r}")
+
+
+@dataclass(frozen=True)
 class ParameterMetadata:
     key: str
     zh_name: str
@@ -27,6 +172,8 @@ class ParameterMetadata:
 
     def help(self, locale: str) -> str:
         body = self.zh_help if locale == "zh-CN" else self.en_help
+        if locale == "zh-CN":
+            return f"{body} 输入尺度：{self.input_scale}；示例：{self.example}。"
         return f"{body} Input: {self.input_scale}; example: {self.example}."
 
 
@@ -87,7 +234,45 @@ class FactorExplanation:
     availability_lag_days: int
 
 
-def factor_explanations(registry: FactorRegistry, frequency: ResearchFrequency) -> tuple[FactorExplanation, ...]:
+FACTOR_NAMES_ZH = {
+    "momentum_20d": "20 日动量", "volatility_20d": "20 日波动率", "momentum_60d": "60 日动量",
+    "momentum_120d": "120 日动量", "momentum_252_20d": "过去一年动量（跳过近 20 日）",
+    "short_term_reversal_5d": "5 日短期反转", "price_52w_high": "52 周高点比率",
+    "volatility_60d": "60 日波动率", "turnover_mean_20d": "20 日平均换手率",
+    "amihud_20d": "20 日 Amihud 非流动性", "ep_ttm": "滚动市盈率倒数（EP）",
+    "bp": "市净率倒数（BP）", "sp_ttm": "滚动市销率倒数（SP）",
+    "log_total_mv": "总市值对数", "log_circ_mv": "流通市值对数",
+    "debt_to_assets": "资产负债率", "dividend_yield_ttm": "滚动股息率",
+    "gross_margin_ttm": "滚动毛利率", "net_margin_ttm": "滚动净利率",
+    "net_profit_yoy": "净利润同比增长率", "operating_cf_to_assets": "经营现金流资产比",
+    "revenue_yoy": "营业收入同比增长率", "roa_ttm": "滚动总资产收益率（ROA）",
+    "roe_ttm": "滚动净资产收益率（ROE）",
+}
+
+FACTOR_DESCRIPTIONS_ZH = {
+    "momentum_20d": "衡量最近 20 个交易日的价格趋势。", "volatility_20d": "衡量最近 20 个交易日收益率的波动程度。",
+    "momentum_60d": "衡量最近 60 个交易日的价格趋势。", "momentum_120d": "衡量最近 120 个交易日的价格趋势。",
+    "momentum_252_20d": "衡量过去约一年、剔除最近 20 个交易日后的价格趋势。",
+    "short_term_reversal_5d": "衡量最近 5 个交易日价格走势的反向效应。", "price_52w_high": "衡量当前价格接近过去 52 周高点的程度。",
+    "volatility_60d": "衡量最近 60 个交易日收益率的波动程度。", "turnover_mean_20d": "衡量最近 20 个交易日的平均换手水平。",
+    "amihud_20d": "以价格变动相对成交额衡量最近 20 个交易日的非流动性。", "ep_ttm": "以滚动市盈率倒数衡量盈利收益率。",
+    "bp": "以市净率倒数衡量账面价值相对价格。", "sp_ttm": "以滚动市销率倒数衡量销售收入相对价格。",
+    "log_total_mv": "以总市值的自然对数衡量公司规模。", "log_circ_mv": "以流通市值的自然对数衡量可交易规模。",
+    "debt_to_assets": "衡量负债相对资产的比例。", "dividend_yield_ttm": "衡量过去十二个月股息相对价格的收益率。",
+    "gross_margin_ttm": "衡量过去十二个月营业收入的毛利水平。", "net_margin_ttm": "衡量过去十二个月营业收入的净利润水平。",
+    "net_profit_yoy": "衡量净利润相对上年同期的增长。", "operating_cf_to_assets": "衡量经营现金流相对总资产的规模。",
+    "revenue_yoy": "衡量营业收入相对上年同期的增长。", "roa_ttm": "衡量过去十二个月利润相对总资产的回报。",
+    "roe_ttm": "衡量过去十二个月利润相对净资产的回报。",
+}
+
+
+def factor_label(code: str, locale: str) -> str:
+    if locale == "zh-CN":
+        return FACTOR_NAMES_ZH.get(code, code.upper())
+    return code.replace("_", " ").title()
+
+
+def factor_explanations(registry: FactorRegistry, frequency: ResearchFrequency, locale: str = "en") -> tuple[FactorExplanation, ...]:
     rows: list[FactorExplanation] = []
     for metadata in registry.list_metadata():
         try:
@@ -96,8 +281,8 @@ def factor_explanations(registry: FactorRegistry, frequency: ResearchFrequency) 
             continue
         rows.append(FactorExplanation(
             code=metadata.name,
-            name=metadata.name.replace("_", " ").title(),
-            description=metadata.description,
+            name=FACTOR_NAMES_ZH.get(metadata.name, metadata.name.replace("_", " ").title()) if locale == "zh-CN" else metadata.name.replace("_", " ").title(),
+            description=FACTOR_DESCRIPTIONS_ZH.get(metadata.name, metadata.description) if locale == "zh-CN" else metadata.description,
             formula=FACTOR_FORMULAS.get(metadata.name, metadata.description),
             source_fields=metadata.source_fields,
             lookback=metadata.lookback_days,

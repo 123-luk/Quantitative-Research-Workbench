@@ -153,6 +153,21 @@ def test_zero_row_suspend_snapshot_is_complete_and_reused(tmp_path) -> None:
     assert prepared.verify_unit("suspend_d", scope="CN_A", unit="2024-01-02")
 
 
+def test_nonempty_malformed_suspend_snapshot_remains_strict(tmp_path) -> None:
+    class MalformedClient(FakeClient):
+        def get_suspend_d(self, **kwargs: object) -> pd.DataFrame:
+            return pd.DataFrame({"unexpected": ["value"]})
+
+    client = MalformedClient()
+    prepared = service(tmp_path, client, ("2024-01-02",))
+    requirement = DataRequirement.create(
+        "suspend_d", scope="CN_A", required_start="2024-01-02", required_end="2024-01-02"
+    )
+    with pytest.raises(DataUnavailableError):
+        prepared.ensure((requirement,), client=client)
+    assert not prepared.verify_unit("suspend_d", scope="CN_A", unit="2024-01-02")
+
+
 def test_missing_credential_fails_before_provider(tmp_path) -> None:
     client = FakeClient()
     prepared = service(tmp_path, client, ("2024-01-02",))

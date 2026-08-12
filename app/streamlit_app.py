@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.components.navigation import initialize_session_state  # noqa: E402
+from app.components.navigation import initialize_session_state, page_path  # noqa: E402
 from app.i18n import get_locale, set_locale, t  # noqa: E402
 from app.services.credential_service import CredentialService, ProviderErrorKind  # noqa: E402
 
@@ -45,7 +45,10 @@ def _credential_sidebar(locale: str) -> None:
                 ProviderErrorKind.CREDENTIAL_MISSING: "provider.missing",
                 ProviderErrorKind.AUTHENTICATION_INVALID: "provider.auth",
                 ProviderErrorKind.PERMISSION_INSUFFICIENT: "provider.permission",
+                ProviderErrorKind.POINTS_INSUFFICIENT: "provider.points",
+                ProviderErrorKind.RATE_LIMITED: "provider.rate_limited",
                 ProviderErrorKind.NETWORK_ERROR: "provider.network",
+                ProviderErrorKind.RESPONSE_INVALID: "provider.response_invalid",
                 ProviderErrorKind.PROVIDER_ERROR: "provider.error",
             }[result.error_kind]
             st.sidebar.error(t(key, locale=locale))
@@ -69,11 +72,11 @@ def main() -> None:
     _credential_sidebar(locale)
 
     pages = (
-        st.Page("views/overview.py", title=t("nav.overview", locale=locale), icon=":material/home:", url_path="overview", default=True),
-        st.Page("views/new_run.py", title=t("nav.new_run", locale=locale), icon=":material/play_arrow:", url_path="new-run"),
-        st.Page("views/results.py", title=t("nav.results", locale=locale), icon=":material/analytics:", url_path="results"),
-        st.Page("views/runs.py", title=t("nav.runs", locale=locale), icon=":material/history:", url_path="runs"),
-        st.Page("views/data.py", title=t("nav.data", locale=locale), icon=":material/database:", url_path="data"),
+        st.Page(page_path("overview"), title=t("nav.overview", locale=locale), icon=":material/home:", url_path="overview", default=True),
+        st.Page(page_path("new_run"), title=t("nav.new_run", locale=locale), icon=":material/play_arrow:", url_path="new-run"),
+        st.Page(page_path("results"), title=t("nav.results", locale=locale), icon=":material/analytics:", url_path="results"),
+        st.Page(page_path("runs"), title=t("nav.runs", locale=locale), icon=":material/history:", url_path="runs"),
+        st.Page(page_path("data"), title=t("nav.data", locale=locale), icon=":material/database:", url_path="data"),
     )
     st.navigation(pages, position="sidebar").run()
 

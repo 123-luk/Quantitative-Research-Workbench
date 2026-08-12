@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from app.components.navigation import open_results
+from app.components.navigation import open_results, page_path
 from app.i18n import get_locale, t
 from app.services.credential_service import CredentialService
 from app.services.research_task_service import ResearchTaskService
@@ -63,4 +63,4 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None) -> None
 
 if __name__ == "__main__":
     import streamlit as st
-    render(st, navigate=lambda name: st.switch_page({"new_run": "views/new_run.py", "results": "views/results.py", "runs": "views/runs.py", "data": "views/data.py"}[name]))
+    render(st, navigate=lambda name: st.switch_page(page_path(name)))

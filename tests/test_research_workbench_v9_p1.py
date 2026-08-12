@@ -316,7 +316,7 @@ def test_streamlit_five_page_shell_and_registry_driven_new_run() -> None:
         "5. Research Backtest",
     ]
     factors = next(item for item in app.multiselect if item.label == "Factors").options
-    assert "bp" in factors and factors
+    assert "Bp" in factors and factors
     assert len([item for item in app.button if item.label == "Run Research"]) == 1
 
 

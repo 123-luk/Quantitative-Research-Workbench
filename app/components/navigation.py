@@ -6,6 +6,20 @@ from typing import MutableMapping
 
 
 NAVIGATION_ROUTES = ("Overview", "New Run", "Results", "Runs", "Data")
+PAGE_PATHS = {
+    "overview": "views/overview.py",
+    "new_run": "views/new_run.py",
+    "results": "views/results.py",
+    "runs": "views/runs.py",
+    "data": "views/data.py",
+}
+
+
+def page_path(page_key: str) -> str:
+    try:
+        return PAGE_PATHS[page_key]
+    except KeyError as exc:
+        raise ValueError(f"Unknown page key: {page_key!r}") from exc
 
 
 def open_results(state: MutableMapping[str, object], run_id: str) -> None:

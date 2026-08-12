@@ -11,14 +11,15 @@ from typing import Callable
 import pandas as pd
 
 from app.components.forms import ModelControlDescriptor, split_model_parameter_schema
-from app.components.navigation import open_results
+from app.components.navigation import page_path
 from app.i18n import get_locale, t
 from app.services.capability_catalog_service import CapabilityCatalogService
 from app.services.credential_service import CredentialService
 from app.services.first_run_service import FirstRunOrchestrator, WorkbenchErrorCode, WorkbenchRunDraft, WorkbenchRunError, create_workbench_factor_registry
 from app.services.pipeline_config_service import build_pipeline_config
 from app.services.research_task_service import ResearchTaskService
-from app.services.ui_metadata_service import PARAMETERS, dataset_label, dataset_unit, factor_explanations
+from app.services.research_date_service import shanghai_today, validate_research_dates
+from app.services.ui_metadata_service import PARAMETERS, assert_registry_display_metadata, dataset_label, dataset_unit, display_value, factor_explanations, factor_label, parameter_help, parameter_label
 from src.data.contracts import ResearchFrequency
 from src.data.dataset_registry import create_default_dataset_registry
 from src.factors.frequency import FactorFrequencyError
@@ -35,25 +36,23 @@ INDEX_OPTIONS = (
 )
 
 
-def _label(value: object) -> str:
-    return str(value).replace("_", " ").title()
-
-
 def _render_model_control(st: object, locale: str, model_name: str, control: ModelControlDescriptor) -> object:
     key = f"workbench_model_{model_name}_{control.name}"
+    label = parameter_label(control.name, locale, control.label)
+    help_text = parameter_help(control.name, locale, control.help)
     if control.optional:
-        enabled = st.checkbox(f"{t('new.advanced_model', locale=locale)}: {control.label}", value=control.default is not None, key=f"{key}_enabled", help=control.help)
+        enabled = st.checkbox(t("new.enable_parameter", locale=locale, name=label), value=control.default is not None, key=f"{key}_enabled", help=help_text)
         if not enabled:
             return None
     if control.widget == "checkbox":
-        return st.checkbox(control.label, value=bool(control.default), key=key, help=control.help)
+        return st.checkbox(label, value=bool(control.default), key=key, help=help_text)
     if control.widget == "selectbox":
         options = tuple(control.choices or ())
-        return st.selectbox(control.label, options, index=options.index(control.default) if control.default in options else 0, key=key, help=control.help)
+        return st.selectbox(label, options, index=options.index(control.default) if control.default in options else 0, key=key, format_func=lambda value: display_value(value, locale), help=help_text)
     if control.widget == "text_input":
-        return st.text_input(control.label, value=str(control.default), key=key, help=control.help)
+        return st.text_input(label, value=str(control.default), key=key, help=help_text)
     value = control.default if control.default is not None else (0 if control.step is None else control.step)
-    kwargs: dict[str, object] = {"label": control.label, "value": value, "key": key, "help": control.help}
+    kwargs: dict[str, object] = {"label": label, "value": value, "key": key, "help": help_text}
     if control.minimum is not None:
         kwargs["min_value"] = control.minimum
     if control.maximum is not None:
@@ -167,11 +166,18 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     defaults = PipelineConfig.from_yaml("config/config.yaml")
     factor_registry = create_workbench_factor_registry()
     catalog = CapabilityCatalogService(factor_registry=factor_registry)
+    assert_registry_display_metadata(models=catalog.list_model_names(), portfolios=catalog.list_portfolio_methods(), risks=catalog.list_risk_estimators())
 
     st.header(t("new.section.universe", locale=locale))
     left, right = st.columns(2)
-    start = left.date_input(t("new.start", locale=locale), value=date.fromisoformat(defaults.backtest_start), key="workbench_start")
-    end = right.date_input(t("new.end", locale=locale), value=date.fromisoformat(defaults.backtest_end), key="workbench_end")
+    today = shanghai_today()
+    default_start = min(date.fromisoformat(defaults.backtest_start), today)
+    default_end = min(date.fromisoformat(defaults.backtest_end), today)
+    start = left.date_input(t("new.start", locale=locale), value=default_start, max_value=today, key="workbench_start")
+    end = right.date_input(t("new.end", locale=locale), value=default_end, max_value=today, key="workbench_end")
+    date_validation = validate_research_dates(start, end, today=today)
+    if not date_validation.valid:
+        st.error(t(f"new.date_error.{date_validation.code}", locale=locale, today=today.isoformat()))
     universe_options = tuple(item.value for item in UniverseType)
     saved_kind = str(st.session_state.get("workbench_universe_canonical", UniverseType.CUSTOM.value))
     kind = left.selectbox(t("new.universe", locale=locale), universe_options, index=universe_options.index(saved_kind) if saved_kind in universe_options else 0, format_func=lambda value: t({"CUSTOM": "new.custom", "INDEX": "new.index", "ALL_A_SHARES": "new.all"}[value], locale=locale), key=f"workbench_universe_type_{locale}")
@@ -205,27 +211,27 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     st.header(t("new.section.factor", locale=locale))
     factor_names = _supported_factors(research_frequency)
     default_factors = factor_names[: min(2, len(factor_names))]
-    selected_factors = st.multiselect(t("new.factors", locale=locale), factor_names, default=default_factors, key=f"workbench_factors_{frequency}")
+    selected_factors = st.multiselect(t("new.factors", locale=locale), factor_names, default=default_factors, key=f"workbench_factors_{frequency}", format_func=lambda value: factor_label(value, locale))
     with st.expander(t("factor.library", locale=locale)):
         query = st.text_input(t("factor.search", locale=locale), key="factor_metadata_search").strip().lower()
-        for item in factor_explanations(factor_registry, research_frequency):
+        for item in factor_explanations(factor_registry, research_frequency, locale):
             if query and query not in item.code.lower() and query not in item.description.lower():
                 continue
-            st.markdown(f"**{item.name}** (`{item.code}`)")
+            st.markdown(f"**{item.name}**" + (f"（{item.code.upper()}）" if locale == "zh-CN" else f" (`{item.code}`)"))
             st.write(item.description)
             st.code(item.formula)
-            st.caption(f"{t('factor.inputs', locale=locale)}: {', '.join(item.source_fields)} · {t('factor.lookback', locale=locale)}: {item.lookback} {dataset_unit('daily', locale)} · {t('factor.direction', locale=locale)}: {item.direction}")
+            st.caption(f"{t('factor.lookback', locale=locale)}: {item.lookback} {dataset_unit('daily', locale)} · {t('factor.direction', locale=locale)}: {display_value(item.direction, locale)}")
     use_neutralization = st.checkbox(t("new.neutralization", locale=locale), value=False)
     if use_neutralization:
         st.error(t("new.neutralization_unsupported", locale=locale))
-    composition_method = st.selectbox(t("new.composition", locale=locale), ("equal", "rolling_ic", "rolling_rank_ic", "none"))
+    composition_method = st.selectbox(t("new.composition", locale=locale), ("equal", "rolling_ic", "rolling_rank_ic", "none"), format_func=lambda value: display_value(value, locale))
     with st.expander(t("new.advanced_factor", locale=locale)):
         evaluate_components = st.checkbox(t("new.evaluate_components", locale=locale), value=True)
         evaluate_composite = st.checkbox(t("new.evaluate_composite", locale=locale), value=composition_method != "none")
         a, b = st.columns(2)
         forward_entry = int(a.number_input(PARAMETERS["forward_entry_lag_periods"].label(locale), min_value=0, value=1, step=1, help=PARAMETERS["forward_entry_lag_periods"].help(locale)))
         forward_holding = int(b.number_input(PARAMETERS["forward_holding_periods"].label(locale), min_value=1, value=1 if research_frequency is ResearchFrequency.MONTHLY else 5, step=1, help=PARAMETERS["forward_holding_periods"].help(locale)))
-    model_name = st.selectbox(t("new.model", locale=locale), catalog.list_model_names(), format_func=_label)
+    model_name = st.selectbox(t("new.model", locale=locale), catalog.list_model_names(), format_func=lambda value: display_value(value, locale))
     ordinary, advanced = split_model_parameter_schema(catalog.get_model_parameter_schema(model_name))
     model_params = {control.name: _render_model_control(st, locale, model_name, control) for control in ordinary}
     with st.expander(t("new.advanced_model", locale=locale)):
@@ -234,25 +240,25 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     with st.expander(t("new.advanced_walk", locale=locale)):
         train_window_periods = int(st.number_input(t("new.train_window", locale=locale), min_value=1, value=6 if research_frequency is ResearchFrequency.MONTHLY else 20, step=1))
         validation_periods = int(st.number_input(t("new.validation", locale=locale), min_value=1, value=2 if research_frequency is ResearchFrequency.MONTHLY else 5, step=1))
-        window_type = st.selectbox(t("new.window", locale=locale), ("rolling", "expanding"))
+        window_type = st.selectbox(t("new.window", locale=locale), ("rolling", "expanding"), format_func=lambda value: display_value(value, locale))
         retrain_frequency = int(st.number_input(t("new.retrain", locale=locale), min_value=1, value=5, step=1))
         embargo_periods = int(st.number_input(t("new.embargo", locale=locale), min_value=0, value=1, step=1))
 
     st.header(t("new.section.signal", locale=locale))
     a, b, c = st.columns(3)
-    signal_direction = a.selectbox(t("new.direction", locale=locale), ("descending", "ascending"))
+    signal_direction = a.selectbox(t("new.direction", locale=locale), ("descending", "ascending"), format_func=lambda value: display_value(value, locale))
     top_n = int(b.number_input(t("new.top_n", locale=locale), min_value=1, value=10, step=1, help=PARAMETERS["top_n"].help(locale)))
-    insufficient_policy = c.selectbox(t("new.insufficient", locale=locale), ("error", "allow_partial"))
+    insufficient_policy = c.selectbox(t("new.insufficient", locale=locale), ("error", "allow_partial"), format_func=lambda value: display_value(value, locale))
 
     st.header(t("new.section.portfolio", locale=locale))
-    portfolio_method = st.selectbox(t("new.portfolio", locale=locale), catalog.list_portfolio_methods(), format_func=_label)
+    portfolio_method = st.selectbox(t("new.portfolio", locale=locale), catalog.list_portfolio_methods(), format_func=lambda value: display_value(value, locale))
     lookback, minimum, risk_estimator, risk_lookback, risk_minimum = 60, 40, "ledoit_wolf", 120, 80
     if portfolio_method == "inverse_volatility":
         a, b = st.columns(2)
         lookback = int(a.number_input(t("new.lookback_days", locale=locale), min_value=2, value=60, help=PARAMETERS["lookback_trading_days"].help(locale)))
         minimum = int(b.number_input(t("new.min_observations", locale=locale), min_value=2, max_value=lookback, value=min(40, lookback)))
     elif portfolio_method == "minimum_variance":
-        risk_estimator = st.selectbox(t("new.risk_estimator", locale=locale), catalog.list_risk_estimators(), format_func=_label)
+        risk_estimator = st.selectbox(t("new.risk_estimator", locale=locale), catalog.list_risk_estimators(), format_func=lambda value: display_value(value, locale))
         a, b = st.columns(2)
         risk_lookback = int(a.number_input(t("new.risk_lookback", locale=locale), min_value=2, value=120))
         risk_minimum = int(b.number_input(t("new.risk_min", locale=locale), min_value=2, max_value=risk_lookback, value=min(80, risk_lookback)))
@@ -301,9 +307,9 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
             st.dataframe(pd.DataFrame([
                 {t("results.setting", locale=locale): t("new.start", locale=locale), t("results.value", locale=locale): config.backtest_start},
                 {t("results.setting", locale=locale): t("new.end", locale=locale), t("results.value", locale=locale): config.backtest_end},
-                {t("results.setting", locale=locale): t("new.factors", locale=locale), t("results.value", locale=locale): ", ".join(config.selected_factors)},
-                {t("results.setting", locale=locale): t("new.model", locale=locale), t("results.value", locale=locale): model_name},
-                {t("results.setting", locale=locale): t("new.portfolio", locale=locale), t("results.value", locale=locale): portfolio_method},
+                {t("results.setting", locale=locale): t("new.factors", locale=locale), t("results.value", locale=locale): ", ".join(factor_label(value, locale) for value in config.selected_factors)},
+                {t("results.setting", locale=locale): t("new.model", locale=locale), t("results.value", locale=locale): display_value(model_name, locale)},
+                {t("results.setting", locale=locale): t("new.portfolio", locale=locale), t("results.value", locale=locale): display_value(portfolio_method, locale)},
             ]), width="stretch", hide_index=True)
     except Exception as exc:
         st.session_state["draft_config"] = None
@@ -323,7 +329,7 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
 
     # The ResearchTaskService worker, never this Streamlit render path, owns
     # the canonical service.run(draft, ...) call.
-    if st.button(t("new.run", locale=locale), type="primary", disabled=draft is None or use_neutralization):
+    if st.button(t("new.run", locale=locale), type="primary", disabled=draft is None or use_neutralization or not date_validation.valid):
         credential = CredentialService().resolve(st.session_state.get("tushare_session_token")).reveal_for_provider()
         task_service = ResearchTaskService(
             defaults.output_dir,
@@ -340,4 +346,4 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
 
 if __name__ == "__main__":
     import streamlit as st
-    render(st, navigate=lambda name: st.switch_page({"results": "views/results.py"}[name]))
+    render(st, navigate=lambda name: st.switch_page(page_path(name)))

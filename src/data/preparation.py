@@ -31,11 +31,15 @@ class DataUnavailableError(RuntimeError):
         dataset_id: str | None = None,
         units: tuple[str, ...] = (),
         cause: BaseException | None = None,
+        origin: str = "provider",
     ) -> None:
         super().__init__(message)
         self.dataset_id = dataset_id
         self.units = tuple(units)
         self.safe_cause = cause
+        if origin not in {"provider", "local"}:
+            raise ValueError("preparation failure origin is invalid")
+        self.origin = origin
 
 
 @dataclass(frozen=True)
@@ -127,10 +131,12 @@ class DataPreparationService:
             spec = self.registry.get(plan.requirement.dataset_id)
             for task in plan.grouped_fetch_tasks:
                 fetch_id = self.ledger.start_fetch(spec.dataset_id, scope_key(task.scope), task.units, _now())
+                failure_origin = "provider"
                 try:
                     result = self.fetch_registry.fetch(spec, task, client)
                     calls += 1
                     frame = result.frame
+                    failure_origin = "local"
                     self.raw_store.save(spec.dataset_id, fetch_id, frame)
                     self.curated_store.merge(spec, frame, units=task.units, scope=task.scope)
                     records: list[CoverageRecord] = []
@@ -150,10 +156,11 @@ class DataPreparationService:
                         dataset_id=spec.dataset_id,
                         units=task.units,
                         cause=exc,
+                        origin=failure_origin,
                     ) from exc
         final_plans = tuple(self._planner().plan((requirement,))[0] for requirement in normalized)
         if not all(plan.ready for plan in final_plans):
-            raise DataUnavailableError("Data preparation finished without complete required coverage.")
+            raise DataUnavailableError("Data preparation finished without complete required coverage.", origin="local")
         return DataPreparationResult("READY", final_plans, calls, rows_total)
 
     def verify_unit(self, dataset_id: str, *, scope: object, unit: str) -> bool:

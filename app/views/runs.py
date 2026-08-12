@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.components.navigation import open_results
+from app.components.navigation import open_results, page_path
 from app.i18n import get_locale, t
 from app.services.credential_service import CredentialService
-from app.services.research_task_service import ResearchTask, ResearchTaskService
+from app.services.research_task_service import ResearchTask, ResearchTaskService, TaskClearError
 from app.services.run_catalog_service import RunCatalogService
-from app.services.ui_metadata_service import dataset_label
+from app.services.ui_metadata_service import dataset_label, display_value, factor_label
 from src.pipeline.config import PipelineConfig
 
 
@@ -36,29 +36,31 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
     summary = task.config_summary
     with st.container(border=True):
         left, middle, right = st.columns((3, 2, 2))
-        left.subheader(task.name)
+        left.subheader(t("task.display_name", locale=locale, start=summary.get("research_start", "—"), end=summary.get("research_end", "—")))
         left.caption(task.created_at)
         middle.metric(t("runs.status", locale=locale), t(_status_key(task.status), locale=locale))
         middle.caption(f"{t('task.stage', locale=locale)}: {t(f'progress.{task.current_stage}', locale=locale)}")
         right.metric(t("task.elapsed", locale=locale), _elapsed(task.elapsed_seconds))
         right.caption(f"{summary.get('research_start', '—')} – {summary.get('research_end', '—')}")
         st.write(
-            f"{t('task.universe', locale=locale)}: {summary.get('universe_type', '—')} · "
-            f"{t('new.factors', locale=locale)}: {', '.join(summary.get('factors', ())) or '—'} · "
-            f"{t('new.model', locale=locale)}: {summary.get('model') or '—'} · "
-            f"{t('new.portfolio', locale=locale)}: {summary.get('portfolio_method') or '—'}"
+            f"{t('task.universe', locale=locale)}: {display_value(summary.get('universe_type', '—'), locale)} · "
+            f"{t('new.factors', locale=locale)}: {', '.join(factor_label(str(value), locale) for value in summary.get('factors', ())) or '—'} · "
+            f"{t('new.model', locale=locale)}: {display_value(summary.get('model') or '—', locale)} · "
+            f"{t('new.portfolio', locale=locale)}: {display_value(summary.get('portfolio_method') or '—', locale)}"
         )
         if task.progress_total:
             st.progress(min(1.0, (task.progress_completed or 0) / task.progress_total), text=f"{task.progress_completed or 0}/{task.progress_total}")
         elif task.active:
             st.info(t("task.running_help", locale=locale))
         if task.status == "failed":
-            st.error(task.failure_message or t("task.failure_unknown", locale=locale))
+            st.error(t("task.failure_summary", locale=locale))
             st.write(f"{t('task.failed_stage', locale=locale)}: {t(f'progress.{task.failure_stage or task.current_stage}', locale=locale)}")
             if task.failure_dataset:
                 st.write(f"{t('task.failed_dataset', locale=locale)}: {dataset_label(task.failure_dataset, locale)}")
             if task.failure_range:
                 st.write(f"{t('task.failed_range', locale=locale)}: {task.failure_range[0]} – {task.failure_range[1]}")
+            st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{task.failure_code or "INTERNAL_ERROR"}', locale=locale)}")
+            st.write(f"{t('task.reason', locale=locale)}: {t(f'task.reason.{task.failure_code or "INTERNAL_ERROR"}', locale=locale)}")
             st.write(f"{t('task.blocking', locale=locale)}: {t('overview.yes', locale=locale)}")
             st.write(f"{t('task.attempted', locale=locale)}: {t('task.attempted_missing', locale=locale)}")
             st.write(t(f"task.recovery.{task.failure_code or 'INTERNAL_ERROR'}", locale=locale))
@@ -78,14 +80,42 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
             action.button(t("task.open_results", locale=locale), key=f"disabled_{task.task_id}", disabled=True)
             action.caption(t("task.result_not_ready", locale=locale))
         with details.expander(t("task.technical", locale=locale)):
-            st.code(f"task_id: {task.task_id}\nrun_id: {task.run_id or '—'}\nschema_version: 1.0")
+            st.write(f"{t('task.technical_id', locale=locale)}: `{task.task_id}`")
+            st.write(f"{t('task.technical_result', locale=locale)}: {t('overview.yes' if task.run_id else 'overview.no', locale=locale)}")
+            st.write(f"{t('task.technical_completed', locale=locale)}: {', '.join(t(f'progress.{stage}', locale=locale) for stage in task.completed_stages) or '—'}")
+            if task.failure_code:
+                st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{task.failure_code}', locale=locale)}")
+
+        clear_col, clear_help = st.columns((1, 4))
+        clear_requested = st.session_state.get("confirm_clear_task") == task.task_id
+        if clear_col.button(t("task.clear", locale=locale), key=f"clear_{task.task_id}", disabled=not task.can_clear):
+            st.session_state["confirm_clear_task"] = task.task_id
+            st.rerun()
+        if not task.can_clear:
+            clear_help.caption(t("task.clear_active", locale=locale))
+        if clear_requested:
+            message_key = "task.clear_confirm_success" if task.run_id else "task.clear_confirm_record"
+            st.warning(t(message_key, locale=locale))
+            confirm, cancel = st.columns(2)
+            if confirm.button(t("task.clear_confirm", locale=locale), key=f"confirm_clear_{task.task_id}", type="primary"):
+                try:
+                    service.clear(task.task_id)
+                except TaskClearError:
+                    st.error(t("task.clear_failed", locale=locale))
+                else:
+                    st.session_state.pop("confirm_clear_task", None)
+                    st.success(t("task.clear_done", locale=locale))
+                    st.rerun()
+            if cancel.button(t("task.clear_cancel", locale=locale), key=f"cancel_clear_{task.task_id}"):
+                st.session_state.pop("confirm_clear_task", None)
+                st.rerun()
 
 
-def render(st: object, *, navigate=None) -> None:
+def render(st: object, *, navigate=None, service: ResearchTaskService | None = None) -> None:
     locale = get_locale(st.session_state)
     st.title(t("runs.title", locale=locale))
     st.caption(t("runs.subtitle", locale=locale))
-    service = ResearchTaskService(_output_root())
+    service = service or ResearchTaskService(_output_root())
     tasks = service.list_tasks()
     if tasks:
         for task in tasks:
@@ -94,7 +124,8 @@ def render(st: object, *, navigate=None) -> None:
         st.info(t("runs.empty", locale=locale))
 
     historical_ids = {task.run_id for task in tasks if task.run_id}
-    historical = [item for item in RunCatalogService(_output_root()).list_runs() if item.run_id not in historical_ids]
+    hidden_runs = service.hidden_run_ids()
+    historical = [item for item in RunCatalogService(_output_root()).list_runs() if item.run_id not in historical_ids and item.run_id not in hidden_runs]
     if historical:
         with st.expander(t("runs.historical", locale=locale)):
             st.caption(t("runs.historical_help", locale=locale))
@@ -102,9 +133,9 @@ def render(st: object, *, navigate=None) -> None:
                 {
                     t("runs.created", locale=locale): item.created_at or "—",
                     t("runs.status", locale=locale): t("task.status.historical", locale=locale),
-                    t("runs.model", locale=locale): item.model or "—",
-                    t("runs.portfolio", locale=locale): item.portfolio_method or "—",
-                    t("runs.backtest", locale=locale): item.backtest_status,
+                    t("runs.model", locale=locale): display_value(item.model or "—", locale),
+                    t("runs.portfolio", locale=locale): display_value(item.portfolio_method or "—", locale),
+                    t("runs.backtest", locale=locale): t(f"runs.backtest.{item.backtest_status}", locale=locale),
                 }
                 for item in historical
             ]), width="stretch", hide_index=True)
@@ -115,8 +146,27 @@ def render(st: object, *, navigate=None) -> None:
                     open_results(st.session_state, selected)
                     if navigate is not None:
                         navigate("results")
+            historical_run_ids = tuple(item.run_id for item in historical)
+            selected_clear = st.selectbox(t("runs.clear_select", locale=locale), historical_run_ids, key="historical_clear_selection")
+            if st.button(t("task.clear", locale=locale), key="clear_historical"):
+                st.session_state["confirm_clear_historical"] = selected_clear
+                st.rerun()
+            if st.session_state.get("confirm_clear_historical") == selected_clear:
+                st.warning(t("task.clear_confirm_historical", locale=locale))
+                confirm, cancel = st.columns(2)
+                if confirm.button(t("task.clear_confirm", locale=locale), key="confirm_clear_historical"):
+                    try:
+                        service.clear_historical_run(selected_clear)
+                    except TaskClearError:
+                        st.error(t("task.clear_failed", locale=locale))
+                    else:
+                        st.session_state.pop("confirm_clear_historical", None)
+                        st.rerun()
+                if cancel.button(t("task.clear_cancel", locale=locale), key="cancel_clear_historical"):
+                    st.session_state.pop("confirm_clear_historical", None)
+                    st.rerun()
 
 
 if __name__ == "__main__":
     import streamlit as st
-    render(st, navigate=lambda name: st.switch_page({"results": "views/results.py"}[name]))
+    render(st, navigate=lambda name: st.switch_page(page_path(name)))

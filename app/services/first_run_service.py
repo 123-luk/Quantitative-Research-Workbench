@@ -43,14 +43,51 @@ class WorkbenchErrorCode(str, Enum):
     CREDENTIAL_MISSING = "CREDENTIAL_MISSING"
     AUTHENTICATION_INVALID = "AUTHENTICATION_INVALID"
     PERMISSION_INSUFFICIENT = "PERMISSION_INSUFFICIENT"
+    POINTS_INSUFFICIENT = "POINTS_INSUFFICIENT"
     NETWORK_ERROR = "NETWORK_ERROR"
     RATE_LIMITED = "RATE_LIMITED"
     PROVIDER_EMPTY = "PROVIDER_EMPTY"
     PROVIDER_ERROR = "PROVIDER_ERROR"
+    PROVIDER_RESPONSE_INVALID = "PROVIDER_RESPONSE_INVALID"
     DATA_INCOMPLETE = "DATA_INCOMPLETE"
     COVERAGE_VALIDATION = "COVERAGE_VALIDATION"
     UNSUPPORTED = "UNSUPPORTED"
     PIPELINE_ERROR = "PIPELINE_ERROR"
+
+
+def classify_data_unavailable_error(exc: DataUnavailableError) -> WorkbenchErrorCode:
+    """Map one safe preparation failure without exposing provider text."""
+    if exc.origin == "local":
+        return WorkbenchErrorCode.COVERAGE_VALIDATION
+    kind = classify_provider_error(exc.safe_cause or exc)
+    cause_text = " ".join(
+        f"{type(item).__name__} {item}"
+        for item in (exc.safe_cause, getattr(exc.safe_cause, "__cause__", None))
+        if item is not None
+    ).lower()
+    if "empty" in cause_text or "no rows" in cause_text or "returned no" in cause_text:
+        return WorkbenchErrorCode.PROVIDER_EMPTY
+    if isinstance(exc.safe_cause, sqlite3.Error):
+        return WorkbenchErrorCode.COVERAGE_VALIDATION
+    if isinstance(exc.safe_cause, CanonicalDataError):
+        provider_contract_terms = (
+            "missing required columns", "provider result", "requested trade date",
+            "requested scope", "result does not", "snapshot does not match",
+        )
+        return (
+            WorkbenchErrorCode.PROVIDER_RESPONSE_INVALID
+            if any(term in cause_text for term in provider_contract_terms)
+            else WorkbenchErrorCode.COVERAGE_VALIDATION
+        )
+    return {
+        ProviderErrorKind.AUTHENTICATION_INVALID: WorkbenchErrorCode.AUTHENTICATION_INVALID,
+        ProviderErrorKind.PERMISSION_INSUFFICIENT: WorkbenchErrorCode.PERMISSION_INSUFFICIENT,
+        ProviderErrorKind.POINTS_INSUFFICIENT: WorkbenchErrorCode.POINTS_INSUFFICIENT,
+        ProviderErrorKind.RATE_LIMITED: WorkbenchErrorCode.RATE_LIMITED,
+        ProviderErrorKind.NETWORK_ERROR: WorkbenchErrorCode.NETWORK_ERROR,
+        ProviderErrorKind.RESPONSE_INVALID: WorkbenchErrorCode.PROVIDER_RESPONSE_INVALID,
+        ProviderErrorKind.PROVIDER_ERROR: WorkbenchErrorCode.DATA_INCOMPLETE,
+    }[kind]
 
 
 class WorkbenchRunError(RuntimeError):
@@ -489,21 +526,7 @@ class FirstRunOrchestrator:
         except MissingCredentialError as exc:
             raise WorkbenchRunError(WorkbenchErrorCode.CREDENTIAL_MISSING, "download") from None
         except DataUnavailableError as exc:
-            kind = classify_provider_error(exc.safe_cause or exc)
-            cause_text = " ".join(
-                f"{type(item).__name__} {item}" for item in (exc.safe_cause, getattr(exc.safe_cause, "__cause__", None)) if item is not None
-            ).lower()
-            if "rate" in cause_text or "limit" in cause_text or "频率" in cause_text or "限流" in cause_text:
-                code = WorkbenchErrorCode.RATE_LIMITED
-            elif "empty" in cause_text or "no rows" in cause_text or "returned no" in cause_text:
-                code = WorkbenchErrorCode.PROVIDER_EMPTY
-            else:
-                code = {
-                    ProviderErrorKind.AUTHENTICATION_INVALID: WorkbenchErrorCode.AUTHENTICATION_INVALID,
-                    ProviderErrorKind.PERMISSION_INSUFFICIENT: WorkbenchErrorCode.PERMISSION_INSUFFICIENT,
-                    ProviderErrorKind.NETWORK_ERROR: WorkbenchErrorCode.NETWORK_ERROR,
-                    ProviderErrorKind.PROVIDER_ERROR: WorkbenchErrorCode.DATA_INCOMPLETE,
-                }[kind]
+            code = classify_data_unavailable_error(exc)
             missing_range = (exc.units[0], exc.units[-1]) if exc.units else None
             raise WorkbenchRunError(
                 code,
@@ -521,7 +544,10 @@ class FirstRunOrchestrator:
             mapping = {
                 ProviderErrorKind.AUTHENTICATION_INVALID: WorkbenchErrorCode.AUTHENTICATION_INVALID,
                 ProviderErrorKind.PERMISSION_INSUFFICIENT: WorkbenchErrorCode.PERMISSION_INSUFFICIENT,
+                ProviderErrorKind.POINTS_INSUFFICIENT: WorkbenchErrorCode.POINTS_INSUFFICIENT,
+                ProviderErrorKind.RATE_LIMITED: WorkbenchErrorCode.RATE_LIMITED,
                 ProviderErrorKind.NETWORK_ERROR: WorkbenchErrorCode.NETWORK_ERROR,
+                ProviderErrorKind.RESPONSE_INVALID: WorkbenchErrorCode.PROVIDER_RESPONSE_INVALID,
                 ProviderErrorKind.PROVIDER_ERROR: WorkbenchErrorCode.PROVIDER_ERROR,
             }
             raise WorkbenchRunError(mapping[kind], active_stage) from None
