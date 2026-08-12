@@ -22,7 +22,20 @@ class MissingCredentialError(RuntimeError):
 
 
 class DataUnavailableError(RuntimeError):
-    pass
+    """Safe structured preparation failure; provider text is never exposed."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        dataset_id: str | None = None,
+        units: tuple[str, ...] = (),
+        cause: BaseException | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.dataset_id = dataset_id
+        self.units = tuple(units)
+        self.safe_cause = cause
 
 
 @dataclass(frozen=True)
@@ -132,7 +145,12 @@ class DataPreparationService:
                     rows_total += len(frame)
                 except Exception as exc:
                     self.ledger.finish_fetch(fetch_id, status="FAILED", finished_at=_now(), error_type=type(exc).__name__)
-                    raise DataUnavailableError(f"Data preparation failed for dataset {spec.dataset_id!r}.") from exc
+                    raise DataUnavailableError(
+                        f"Data preparation failed for dataset {spec.dataset_id!r}.",
+                        dataset_id=spec.dataset_id,
+                        units=task.units,
+                        cause=exc,
+                    ) from exc
         final_plans = tuple(self._planner().plan((requirement,))[0] for requirement in normalized)
         if not all(plan.ready for plan in final_plans):
             raise DataUnavailableError("Data preparation finished without complete required coverage.")

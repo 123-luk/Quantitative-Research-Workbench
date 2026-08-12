@@ -44,6 +44,8 @@ class WorkbenchErrorCode(str, Enum):
     AUTHENTICATION_INVALID = "AUTHENTICATION_INVALID"
     PERMISSION_INSUFFICIENT = "PERMISSION_INSUFFICIENT"
     NETWORK_ERROR = "NETWORK_ERROR"
+    RATE_LIMITED = "RATE_LIMITED"
+    PROVIDER_EMPTY = "PROVIDER_EMPTY"
     PROVIDER_ERROR = "PROVIDER_ERROR"
     DATA_INCOMPLETE = "DATA_INCOMPLETE"
     COVERAGE_VALIDATION = "COVERAGE_VALIDATION"
@@ -58,12 +60,18 @@ class WorkbenchRunError(RuntimeError):
         stage: str,
         run_id: str | None = None,
         pipeline_error: SafeRunError | None = None,
+        dataset_id: str | None = None,
+        missing_range: tuple[str, str] | None = None,
+        user_message: str | None = None,
     ) -> None:
         super().__init__(f"{code.value} at {stage}")
         self.code = code
         self.stage = stage
         self.run_id = run_id
         self.pipeline_error = pipeline_error
+        self.dataset_id = dataset_id
+        self.missing_range = missing_range
+        self.user_message = user_message or f"{code.value} at {stage}"
 
     def __str__(self) -> str:
         return f"{self.code.value} at {self.stage}"
@@ -113,6 +121,9 @@ class ProgressEvent:
     stage: str
     status: str
     dataset_id: str | None = None
+    completed: int | None = None
+    total: int | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -317,8 +328,8 @@ class WorkbenchRuntime:
             registry=self.registry, ledger=self.ledger, store=self.curated,
             stock_basic_as_of=draft.pipeline_config.backtest_end,
         )
-        def execute(config: PipelineConfig, *, run_created_callback=None):
-            return run_pipeline(config, market_client_factory=lambda: client, run_created_callback=run_created_callback)
+        def execute(config: PipelineConfig, *, run_created_callback=None, stage_callback=None):
+            return run_pipeline(config, market_client_factory=lambda: client, run_created_callback=run_created_callback, stage_callback=stage_callback)
         return RunService(execute, supports_identity_hook=True)
 
 
@@ -330,8 +341,17 @@ class FirstRunOrchestrator:
         self.preview_runtime_factory = preview_runtime_factory or (lambda config: WorkbenchRuntime(config, read_only=True))
 
     @staticmethod
-    def _event(events: list[ProgressEvent], callback: Callable[[ProgressEvent], None] | None, stage: str, status: str) -> None:
-        event = ProgressEvent(stage, status)
+    def _event(
+        events: list[ProgressEvent],
+        callback: Callable[[ProgressEvent], None] | None,
+        stage: str,
+        status: str,
+        *,
+        completed: int | None = None,
+        total: int | None = None,
+        detail: str | None = None,
+    ) -> None:
+        event = ProgressEvent(stage, status, completed=completed, total=total, detail=detail)
         events.append(event)
         if callback is not None:
             callback(event)
@@ -427,9 +447,18 @@ class FirstRunOrchestrator:
             if any(not item.ready for item in local) and not credential:
                 raise WorkbenchRunError(WorkbenchErrorCode.CREDENTIAL_MISSING, "check")
             active_stage = "download"
-            self._event(events, progress, "download", "STARTED" if any(not item.ready for item in local) else "SKIPPED")
+            missing_total = sum(len(item.missing_units) for item in local)
+            self._event(
+                events,
+                progress,
+                "download",
+                "STARTED" if missing_total else "SKIPPED",
+                completed=0 if missing_total else None,
+                total=missing_total or None,
+                detail="Downloading only ledger-missing coverage." if missing_total else "All required coverage is COMPLETE; provider calls are skipped.",
+            )
             prepared = preparation.ensure(requirements, credential)
-            self._event(events, progress, "download", "COMPLETE")
+            self._event(events, progress, "download", "COMPLETE", completed=missing_total or None, total=missing_total or None)
             self._event(events, progress, "build", "STARTED")
             active_stage = "build"
             materialization = runtime.research_builder(draft, plan, calendar).build(plan)
@@ -437,7 +466,10 @@ class FirstRunOrchestrator:
             bound = bind_materialized_inputs(draft.pipeline_config, materialization)
             self._event(events, progress, "pipeline", "STARTED")
             active_stage = "pipeline"
-            outcome = runtime.pipeline_service(draft).run(bound)
+            outcome = runtime.pipeline_service(draft).run(
+                bound,
+                stage_callback=lambda stage, status: self._event(events, progress, stage, status),
+            )
             if not outcome.success or not outcome.run_id:
                 raise WorkbenchRunError(
                     WorkbenchErrorCode.PIPELINE_ERROR,
@@ -456,8 +488,30 @@ class FirstRunOrchestrator:
             raise
         except MissingCredentialError as exc:
             raise WorkbenchRunError(WorkbenchErrorCode.CREDENTIAL_MISSING, "download") from None
-        except DataUnavailableError:
-            raise WorkbenchRunError(WorkbenchErrorCode.DATA_INCOMPLETE, active_stage) from None
+        except DataUnavailableError as exc:
+            kind = classify_provider_error(exc.safe_cause or exc)
+            cause_text = " ".join(
+                f"{type(item).__name__} {item}" for item in (exc.safe_cause, getattr(exc.safe_cause, "__cause__", None)) if item is not None
+            ).lower()
+            if "rate" in cause_text or "limit" in cause_text or "频率" in cause_text or "限流" in cause_text:
+                code = WorkbenchErrorCode.RATE_LIMITED
+            elif "empty" in cause_text or "no rows" in cause_text or "returned no" in cause_text:
+                code = WorkbenchErrorCode.PROVIDER_EMPTY
+            else:
+                code = {
+                    ProviderErrorKind.AUTHENTICATION_INVALID: WorkbenchErrorCode.AUTHENTICATION_INVALID,
+                    ProviderErrorKind.PERMISSION_INSUFFICIENT: WorkbenchErrorCode.PERMISSION_INSUFFICIENT,
+                    ProviderErrorKind.NETWORK_ERROR: WorkbenchErrorCode.NETWORK_ERROR,
+                    ProviderErrorKind.PROVIDER_ERROR: WorkbenchErrorCode.DATA_INCOMPLETE,
+                }[kind]
+            missing_range = (exc.units[0], exc.units[-1]) if exc.units else None
+            raise WorkbenchRunError(
+                code,
+                active_stage,
+                dataset_id=exc.dataset_id,
+                missing_range=missing_range,
+                user_message="Data preparation failed before research calculation started. Review the dataset, missing range, and recommended recovery action.",
+            ) from None
         except (CanonicalDataError, AdjustedPriceError, ResearchInputError):
             raise WorkbenchRunError(WorkbenchErrorCode.COVERAGE_VALIDATION, active_stage) from None
         except Exception as exc:

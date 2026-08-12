@@ -7,6 +7,7 @@ import pandas as pd
 from app.i18n import get_locale, t
 from app.services.credential_service import CredentialService
 from app.services.data_status_service import DataLayer2StatusService
+from app.services.ui_metadata_service import dataset_label, dataset_unit
 
 
 def render(st: object) -> None:
@@ -18,14 +19,17 @@ def render(st: object) -> None:
     columns = st.columns(3)
     columns[0].metric(t("data.provider", locale=locale), "TuShare Pro")
     columns[1].metric(t("overview.credential", locale=locale), t("provider.available" if credential.available else "provider.missing", locale=locale))
-    columns[2].metric(t("data.ledger", locale=locale), "READY" if status.ledger_exists else "N/A")
+    columns[2].metric(t("data.ledger", locale=locale), t("readiness.ready" if status.ledger_exists else "readiness.missing_status", locale=locale))
     st.markdown(f"**{t('data.registry', locale=locale)}**")
-    st.dataframe(pd.DataFrame([{"dataset_id": item.dataset_id, "schema_version": item.schema_version, t("data.complete_units", locale=locale): item.complete_units} for item in status.datasets]), width="stretch", hide_index=True)
-    st.markdown(f"**CURATED:** `{status.curated_root}`")
-    st.markdown(f"**SQLite:** `{status.ledger_path}`")
+    st.dataframe(pd.DataFrame([{
+        t("readiness.dataset", locale=locale): dataset_label(item.dataset_id, locale),
+        t("data.complete_units", locale=locale): f"{item.complete_units} {dataset_unit(item.dataset_id, locale)}",
+    } for item in status.datasets]), width="stretch", hide_index=True)
     if not status.ledger_exists:
         st.info(t("data.no_ledger", locale=locale))
     st.caption(t("data.read_only", locale=locale))
+    with st.expander(t("task.technical", locale=locale)):
+        st.markdown(f"`CURATED: {status.curated_root}`  \n`SQLite: {status.ledger_path}`")
 
 
 if __name__ == "__main__":

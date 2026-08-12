@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import date
+from hashlib import sha256
+import json
 import re
 from typing import Callable
 
@@ -15,6 +17,8 @@ from app.services.capability_catalog_service import CapabilityCatalogService
 from app.services.credential_service import CredentialService
 from app.services.first_run_service import FirstRunOrchestrator, WorkbenchErrorCode, WorkbenchRunDraft, WorkbenchRunError, create_workbench_factor_registry
 from app.services.pipeline_config_service import build_pipeline_config
+from app.services.research_task_service import ResearchTaskService
+from app.services.ui_metadata_service import PARAMETERS, dataset_label, dataset_unit, factor_explanations
 from src.data.contracts import ResearchFrequency
 from src.data.dataset_registry import create_default_dataset_registry
 from src.factors.frequency import FactorFrequencyError
@@ -95,7 +99,49 @@ def _stock_pool_adapter(spec: UniverseSpec) -> str:
     return "CUSTOM:" + ",".join(spec.params["securities"])  # type: ignore[arg-type]
 
 
+def _draft_fingerprint(draft: WorkbenchRunDraft) -> str:
+    payload = {
+        "pipeline_config": draft.pipeline_config.to_dict(),
+        "universe_spec": draft.universe_spec.to_dict(),
+        "research_frequency": draft.research_frequency.value,
+    }
+    return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
+def _render_consolidated_readiness(st: object, locale: str, preview: object) -> None:
+    st.subheader(t("readiness.title", locale=locale))
+    if preview.calendar_bootstrap_required:
+        st.info(t("readiness.calendar_bootstrap", locale=locale))
+    grouped: dict[tuple[str, tuple[tuple[str, str], ...]], list[object]] = {}
+    for item in preview.rows:
+        grouped.setdefault((item.dataset_id, item.scope), []).append(item)
+    rows = []
+    for (dataset_id, scope), items in grouped.items():
+        starts = [item.required_start for item in items]
+        ends = [item.required_end for item in items]
+        missing = tuple(dict.fromkeys(unit for item in items for unit in item.missing_units))
+        statuses = {item.status for item in items}
+        status = "READY" if statuses == {"READY"} else ("PARTIAL" if "READY" in statuses or "PARTIAL" in statuses else "MISSING")
+        rows.append({
+            t("readiness.dataset", locale=locale): dataset_label(dataset_id, locale),
+            t("readiness.scope", locale=locale): t("readiness.market_scope", locale=locale) if not scope or dict(scope) == {"scope": "CN_A"} else t("readiness.specific_scope", locale=locale),
+            t("readiness.range", locale=locale): f"{min(starts)} – {max(ends)}",
+            t("readiness.status", locale=locale): t({"READY": "readiness.ready", "PARTIAL": "readiness.partial", "MISSING": "readiness.missing_status"}[status], locale=locale),
+            t("readiness.missing", locale=locale): f"{len(missing)} {dataset_unit(dataset_id, locale)}",
+            t("readiness.action", locale=locale): t("readiness.reuse" if not missing else "readiness.download", locale=locale),
+            t("readiness.impact", locale=locale): t("readiness.no_impact" if not missing else "readiness.blocks", locale=locale),
+        })
+    if rows:
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    if preview.research_plan is None:
+        st.caption(t("readiness.inputs_wait", locale=locale))
+    else:
+        st.caption(t("readiness.inputs_reusable" if preview.research_inputs_reusable else "readiness.inputs_build", locale=locale))
+
+
 def _render_readiness(st: object, locale: str, preview: object) -> None:
+    _render_consolidated_readiness(st, locale, preview)
+    return
     st.subheader(t("readiness.title", locale=locale))
     if preview.calendar_bootstrap_required:
         st.info(t("readiness.calendar_bootstrap", locale=locale))
@@ -160,6 +206,15 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     factor_names = _supported_factors(research_frequency)
     default_factors = factor_names[: min(2, len(factor_names))]
     selected_factors = st.multiselect(t("new.factors", locale=locale), factor_names, default=default_factors, key=f"workbench_factors_{frequency}")
+    with st.expander(t("factor.library", locale=locale)):
+        query = st.text_input(t("factor.search", locale=locale), key="factor_metadata_search").strip().lower()
+        for item in factor_explanations(factor_registry, research_frequency):
+            if query and query not in item.code.lower() and query not in item.description.lower():
+                continue
+            st.markdown(f"**{item.name}** (`{item.code}`)")
+            st.write(item.description)
+            st.code(item.formula)
+            st.caption(f"{t('factor.inputs', locale=locale)}: {', '.join(item.source_fields)} · {t('factor.lookback', locale=locale)}: {item.lookback} {dataset_unit('daily', locale)} · {t('factor.direction', locale=locale)}: {item.direction}")
     use_neutralization = st.checkbox(t("new.neutralization", locale=locale), value=False)
     if use_neutralization:
         st.error(t("new.neutralization_unsupported", locale=locale))
@@ -168,8 +223,8 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
         evaluate_components = st.checkbox(t("new.evaluate_components", locale=locale), value=True)
         evaluate_composite = st.checkbox(t("new.evaluate_composite", locale=locale), value=composition_method != "none")
         a, b = st.columns(2)
-        forward_entry = int(a.number_input(t("new.forward_entry", locale=locale), min_value=0, value=1, step=1))
-        forward_holding = int(b.number_input(t("new.forward_holding", locale=locale), min_value=1, value=1 if research_frequency is ResearchFrequency.MONTHLY else 5, step=1))
+        forward_entry = int(a.number_input(PARAMETERS["forward_entry_lag_periods"].label(locale), min_value=0, value=1, step=1, help=PARAMETERS["forward_entry_lag_periods"].help(locale)))
+        forward_holding = int(b.number_input(PARAMETERS["forward_holding_periods"].label(locale), min_value=1, value=1 if research_frequency is ResearchFrequency.MONTHLY else 5, step=1, help=PARAMETERS["forward_holding_periods"].help(locale)))
     model_name = st.selectbox(t("new.model", locale=locale), catalog.list_model_names(), format_func=_label)
     ordinary, advanced = split_model_parameter_schema(catalog.get_model_parameter_schema(model_name))
     model_params = {control.name: _render_model_control(st, locale, model_name, control) for control in ordinary}
@@ -186,7 +241,7 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     st.header(t("new.section.signal", locale=locale))
     a, b, c = st.columns(3)
     signal_direction = a.selectbox(t("new.direction", locale=locale), ("descending", "ascending"))
-    top_n = int(b.number_input(t("new.top_n", locale=locale), min_value=1, value=10, step=1))
+    top_n = int(b.number_input(t("new.top_n", locale=locale), min_value=1, value=10, step=1, help=PARAMETERS["top_n"].help(locale)))
     insufficient_policy = c.selectbox(t("new.insufficient", locale=locale), ("error", "allow_partial"))
 
     st.header(t("new.section.portfolio", locale=locale))
@@ -194,7 +249,7 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     lookback, minimum, risk_estimator, risk_lookback, risk_minimum = 60, 40, "ledoit_wolf", 120, 80
     if portfolio_method == "inverse_volatility":
         a, b = st.columns(2)
-        lookback = int(a.number_input(t("new.lookback_days", locale=locale), min_value=2, value=60))
+        lookback = int(a.number_input(t("new.lookback_days", locale=locale), min_value=2, value=60, help=PARAMETERS["lookback_trading_days"].help(locale)))
         minimum = int(b.number_input(t("new.min_observations", locale=locale), min_value=2, max_value=lookback, value=min(40, lookback)))
     elif portfolio_method == "minimum_variance":
         risk_estimator = st.selectbox(t("new.risk_estimator", locale=locale), catalog.list_risk_estimators(), format_func=_label)
@@ -202,7 +257,7 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
         risk_lookback = int(a.number_input(t("new.risk_lookback", locale=locale), min_value=2, value=120))
         risk_minimum = int(b.number_input(t("new.risk_min", locale=locale), min_value=2, max_value=risk_lookback, value=min(80, risk_lookback)))
     max_weight_enabled = st.checkbox(t("new.max_weight", locale=locale), value=False)
-    max_weight_percent = float(st.number_input(t("new.max_weight_pct", locale=locale), min_value=0.01, max_value=100.0, value=20.0)) if max_weight_enabled else 20.0
+    max_weight_percent = float(st.number_input(t("new.max_weight_pct", locale=locale), min_value=0.01, max_value=100.0, value=20.0, help=PARAMETERS["max_weight"].help(locale))) if max_weight_enabled else 20.0
 
     st.header(t("new.section.backtest", locale=locale))
     backtest_enabled = st.checkbox(t("new.backtest_enabled", locale=locale), value=True, key="workbench_backtest")
@@ -211,10 +266,12 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
         a, b = st.columns(2)
         cost_bps = float(a.number_input(t("new.cost_bps", locale=locale), min_value=0.0, value=10.0))
         benchmark = b.text_input(t("new.benchmark", locale=locale), value=benchmark, key="workbench_backtest_benchmark")
-        risk_free = float(st.number_input(t("new.rf", locale=locale), value=0.0, format="%.4f"))
+        risk_free_percent = float(st.number_input(t("new.rf", locale=locale), value=0.0, format="%.4f", help=PARAMETERS["annual_risk_free_rate"].help(locale)))
+        st.caption(t("new.rf_scale", locale=locale))
+        risk_free = risk_free_percent / 100.0
         with st.expander(t("new.section.backtest", locale=locale)):
             annualization_days = int(st.number_input(t("new.annualization", locale=locale), min_value=1, value=252, step=1))
-            initial_nav = float(st.number_input(t("new.initial_nav", locale=locale), min_value=0.01, value=1.0))
+            initial_nav = float(st.number_input(PARAMETERS["initial_nav"].label(locale), min_value=0.01, value=1.0, help=PARAMETERS["initial_nav"].help(locale)))
 
     config = None
     draft = None
@@ -241,45 +298,44 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
         draft = WorkbenchRunDraft(config, universe, research_frequency)
         st.session_state["draft_config"] = config.to_dict()
         with st.expander(t("new.config_preview", locale=locale)):
-            st.json(config.to_dict())
+            st.dataframe(pd.DataFrame([
+                {t("results.setting", locale=locale): t("new.start", locale=locale), t("results.value", locale=locale): config.backtest_start},
+                {t("results.setting", locale=locale): t("new.end", locale=locale), t("results.value", locale=locale): config.backtest_end},
+                {t("results.setting", locale=locale): t("new.factors", locale=locale), t("results.value", locale=locale): ", ".join(config.selected_factors)},
+                {t("results.setting", locale=locale): t("new.model", locale=locale), t("results.value", locale=locale): model_name},
+                {t("results.setting", locale=locale): t("new.portfolio", locale=locale), t("results.value", locale=locale): portfolio_method},
+            ]), width="stretch", hide_index=True)
     except Exception as exc:
         st.session_state["draft_config"] = None
         st.warning(t("new.invalid", locale=locale, message=str(exc)))
 
     service = orchestrator or FirstRunOrchestrator()
-    if draft is not None:
-        try:
-            _render_readiness(st, locale, service.preview(draft))
-        except Exception:
-            st.info(t("readiness.unknown", locale=locale))
+    if draft is not None and st.button(t("readiness.check", locale=locale)):
+        with st.spinner(t("readiness.checking", locale=locale)):
+            try:
+                st.session_state["readiness_preview"] = service.preview(draft)
+                st.session_state["readiness_fingerprint"] = _draft_fingerprint(draft)
+            except Exception:
+                st.session_state["readiness_preview"] = None
+    preview = st.session_state.get("readiness_preview")
+    if preview is not None and draft is not None and st.session_state.get("readiness_fingerprint") == _draft_fingerprint(draft):
+        _render_readiness(st, locale, preview)
 
+    # The ResearchTaskService worker, never this Streamlit render path, owns
+    # the canonical service.run(draft, ...) call.
     if st.button(t("new.run", locale=locale), type="primary", disabled=draft is None or use_neutralization):
-        progress_box = st.status(t("progress.validate", locale=locale), expanded=True)
-        try:
-            credential = CredentialService().resolve(st.session_state.get("tushare_session_token")).reveal_for_provider()
-            result = service.run(draft, credential=credential, progress=lambda event: progress_box.write(t(f"progress.{event.stage}", locale=locale)))
-        except WorkbenchRunError as exc:
-            key = {
-                WorkbenchErrorCode.CREDENTIAL_MISSING: "error.credential_missing",
-                WorkbenchErrorCode.AUTHENTICATION_INVALID: "error.auth",
-                WorkbenchErrorCode.PERMISSION_INSUFFICIENT: "error.permission",
-                WorkbenchErrorCode.NETWORK_ERROR: "error.network",
-                WorkbenchErrorCode.PROVIDER_ERROR: "error.provider",
-                WorkbenchErrorCode.DATA_INCOMPLETE: "error.data_incomplete",
-                WorkbenchErrorCode.COVERAGE_VALIDATION: "error.coverage",
-                WorkbenchErrorCode.UNSUPPORTED: "error.unsupported",
-                WorkbenchErrorCode.PIPELINE_ERROR: "error.pipeline",
-            }[exc.code]
-            progress_box.update(label=t("error.title", locale=locale), state="error")
-            st.error(t(key, locale=locale))
-        else:
-            progress_box.update(label=t("progress.complete", locale=locale), state="complete")
-            st.session_state["last_run_status"] = result.run.status
-            st.session_state["current_run_id"] = result.run.run_id
-            open_results(st.session_state, result.run.run_id)
-            st.success(t("new.success", locale=locale, run_id=result.run.run_id))
-            if navigate is not None:
-                navigate("results")
+        credential = CredentialService().resolve(st.session_state.get("tushare_session_token")).reveal_for_provider()
+        task_service = ResearchTaskService(
+            defaults.output_dir,
+            orchestrator_factory=(lambda: orchestrator) if orchestrator is not None else None,
+        )
+        task = task_service.submit(draft, credential=credential)
+        st.session_state["current_task_id"] = task.task_id
+        st.session_state["last_run_status"] = task.status
+        st.success(t("new.queued", locale=locale))
+        st.info(t("new.background", locale=locale))
+        if navigate is not None:
+            navigate("runs")
 
 
 if __name__ == "__main__":

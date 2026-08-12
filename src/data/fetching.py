@@ -114,6 +114,11 @@ def create_default_fetch_strategy_registry() -> FetchStrategyRegistry:
 
 
 def _base_complete(spec: DatasetSpec, frame: pd.DataFrame) -> pd.DataFrame:
+    if isinstance(frame, pd.DataFrame) and frame.empty and spec.allow_empty_complete:
+        # Event endpoints legitimately prove a zero-row snapshot. TuShare may
+        # represent that response with no columns, so materialize the canonical
+        # empty schema before the ordinary strict normalizer runs.
+        frame = pd.DataFrame(columns=spec.required_fields)
     normalized = normalize_frame(spec, frame)
     if normalized.empty:
         if spec.allow_empty_complete:

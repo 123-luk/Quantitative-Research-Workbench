@@ -55,7 +55,7 @@ def render(st: object) -> None:
         ErrorPresenter.render(st, SafeRunError(type(exc).__name__, str(exc), run_id=run_id))
         return
 
-    st.caption(t("results.exact", locale=locale, run_id=bundle.run_id, status=bundle.status or "N/A"))
+    st.caption(t("results.exact", locale=locale, run_id=bundle.run_id, status=bundle.status or "—"))
     overview, holdings_tab, returns_tab, config_tab, artifacts_tab = st.tabs(
         tuple(t(key, locale=locale) for key in ("results.overview", "results.holdings", "results.returns", "results.config", "results.artifacts"))
     )
@@ -114,7 +114,8 @@ def render(st: object) -> None:
             )
             st.dataframe(summary, width="stretch", hide_index=True)
         if bundle.raw_config is not None:
-            with st.expander(t("results.raw_config", locale=locale)):
+            with st.expander(t("task.technical", locale=locale)):
+                st.caption(t("results.raw_config", locale=locale))
                 st.json(dict(bundle.raw_config))
 
     with artifacts_tab:

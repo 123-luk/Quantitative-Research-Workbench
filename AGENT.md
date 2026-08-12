@@ -3738,3 +3738,63 @@ override，V4-E3 为 CLI + YAML + docs。
 - Data and Overview are read-only and do not fetch or mutate canonical state on
   render. Neutralization continues to fail closed until canonical point-in-time
   exposure materialization exists.
+
+## 2026-08-12 GUI UAT Consolidated Fix
+
+- Phase: GUI UAT Consolidated Fix for `UAT-000` through `UAT-021`; visual-only
+  `UAT-020` remains deferred and `v0.10.0` remains unpublished.
+- Exact failure evidence: runs `20260811_114943_research_workbench_hs300`,
+  `20260811_115619_research_workbench_hs300`, and
+  `20260811_134409_research_workbench_hs300` were created before failure with
+  no `run_info.json` or config snapshot, explaining the old Runs page's `N/A`
+  rows and missing stage/reason metadata.
+- The Coverage Ledger proved that the reported `daily_basic=330` and
+  `index_daily=331` counts were COMPLETE trading-day units, not remaining
+  misses. The blocking fetch event was `suspend_d / 2023-11-16`, failed with
+  `CanonicalDataError` because a legitimate zero-event/no-column provider
+  response was normalized before the registry's `allow_empty_complete` policy.
+- Fixed the empty-event ordering narrowly: only datasets explicitly allowing
+  empty completeness receive the canonical empty schema. All ordinary empty
+  data remains a strict error; ledger completion still follows validated
+  atomic canonical publication.
+- Added safe structured preparation failures covering missing/invalid token,
+  permission/points, rate limiting, network, empty response, data incomplete,
+  coverage validation, provider, and Pipeline failures. Dataset, range, stage,
+  blocking impact, attempted action, and recovery are persisted and localized;
+  provider text, traceback, scope JSON, and Token are excluded.
+- Added schema-versioned, atomic `ResearchTaskService` lifecycle records and a
+  single Windows-compatible background worker. Submit returns immediately,
+  duplicate active configuration clicks reuse one task fingerprint, reruns do
+  not restart work, orphaned tasks become `PROCESS_INTERRUPTED`, and only a
+  succeeded exact run with validated result Artifacts enables View Results.
+- Added observation-only canonical runner callbacks for real Factor, Modeling,
+  ML, Signal, Portfolio/Holdings, and Research Backtest stage boundaries. No
+  quantitative calculation, Pipeline ordering, Artifact schema, adjusted-price
+  logic, or Research Backtest `pct_chg / 100` behavior changed.
+- Reworked Overview into a state-aware start page and Runs into user-facing
+  Research Tasks. Historical incomplete records remain explicitly historical;
+  missing metadata is never invented. Internal paths/config/schema/IDs are
+  collapsed under Technical Details.
+- Data Readiness is explicit, draft-fingerprint-bound, consolidated by dataset
+  and scope, localized, and displays missing counts with units, next action,
+  and research impact. COMPLETE units remain missing-only and identical reruns
+  make zero provider calls.
+- Centralized UI parameter/dataset/factor explanation metadata. Factor formulas
+  and fields were audited against the registry and implementations. Annual
+  risk-free rate is entered as `%/year` and converted once at the UI boundary;
+  initial NAV remains dimensionless.
+- Performance: the deterministic synchronous first-run workload measured
+  `198.56s`; background submit returns in `<0.5s`. Combined five-route AppTest
+  rendering measured `2.42s`. Readiness no longer replans on every widget rerun.
+- Verification: targeted GUI/Run/Data/i18n `85 passed`; data-root-cause
+  regression `58 passed`; extended Workbench/Data/Pipeline/ResearchInput
+  regression `162 passed in 669.71s`; heavy first-run/retry/offline exact-run
+  E2E `1 passed in 204.67s`; GUI exact-run E2E `41 passed in 16.93s`.
+- Final full pytest with the required interpreter:
+  `3172 passed, 4 skipped, 11 warnings, 0 failed in 914.29s`. No skip or xfail
+  was added. UAT-000 through UAT-019 and UAT-021 are fixed in automated
+  coverage; real-account TuShare error copy and subjective responsiveness still
+  require user manual UAT.
+- Token boundary: the secret exists only in Streamlit/session or worker memory
+  and provider calls. It is absent from task JSON, Pipeline config, Artifacts,
+  SQLite, logs, exception messages, Git, and CLI arguments.

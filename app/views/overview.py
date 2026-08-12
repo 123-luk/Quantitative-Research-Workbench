@@ -1,4 +1,4 @@
-"""Localized Workbench overview backed by canonical run and data metadata."""
+"""State-aware Workbench start page with one stable primary action."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from typing import Callable
 from app.components.navigation import open_results
 from app.i18n import get_locale, t
 from app.services.credential_service import CredentialService
-from app.services.data_status_service import DataLayer2StatusService
-from app.services.run_catalog_service import RunCatalogService
+from app.services.research_task_service import ResearchTaskService
 from src.pipeline.config import PipelineConfig
 
 
@@ -19,30 +18,47 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None) -> None
     st.caption(t("overview.subtitle", locale=locale))
     root = Path(__file__).resolve().parents[2]
     output_root = PipelineConfig.from_yaml(root / "config" / "config.yaml").output_dir
-    runs = RunCatalogService(output_root).list_runs()
-    data = DataLayer2StatusService(root / "config" / "config.yaml").get_status()
+    tasks = ResearchTaskService(output_root).list_tasks()
     credential = CredentialService().resolve(st.session_state.get("tushare_session_token"))
-    columns = st.columns(5)
-    columns[0].metric(t("overview.available_runs", locale=locale), len(runs))
-    columns[1].metric(t("overview.successful", locale=locale), sum(str(item.status).lower() in {"success", "completed", "ready"} for item in runs))
-    columns[2].metric(t("overview.unknown", locale=locale), sum(item.status is None for item in runs))
-    columns[3].metric(t("overview.data_ready", locale=locale), sum(item.complete_units for item in data.datasets))
-    columns[4].metric(t("overview.credential", locale=locale), t("provider.available" if credential.available else "provider.missing", locale=locale))
-    canonical = next((item for item in runs if item.created_at is not None), None)
-    if canonical is None:
-        st.info(t("overview.no_runs", locale=locale))
+    active = next((item for item in tasks if item.active), None)
+    recent = tasks[0] if tasks else None
+
+    token_col, task_col, recent_col = st.columns(3)
+    token_col.metric(t("overview.credential", locale=locale), t("provider.available" if credential.available else "provider.missing", locale=locale))
+    task_col.metric(t("overview.active_task", locale=locale), t("overview.yes" if active else "overview.no", locale=locale))
+    recent_col.metric(t("overview.recent_status", locale=locale), t(f"task.status.{recent.status}", locale=locale) if recent else t("overview.never", locale=locale))
+
+    st.subheader(t("overview.next", locale=locale))
+    if active is not None:
+        st.info(t("overview.running", locale=locale))
+        label, target = t("overview.view_progress", locale=locale), "runs"
+    elif recent is None:
+        st.info(t("overview.first", locale=locale))
+        label, target = t("overview.start", locale=locale), "new_run"
+    elif recent.status == "succeeded" and recent.can_open_results:
+        st.success(t("overview.succeeded", locale=locale))
+        label, target = t("overview.view_result", locale=locale), "results"
+    elif recent.status == "failed":
+        st.error(t("overview.failed", locale=locale))
+        label, target = t("overview.view_failure", locale=locale), "runs"
     else:
-        st.markdown(f"**{t('overview.latest', locale=locale)}:** `{canonical.run_id}` — {canonical.created_at}")
-        if st.button(t("overview.open_latest", locale=locale)):
-            open_results(st.session_state, canonical.run_id)
-            if navigate is not None:
-                navigate("results")
-    st.divider()
-    shortcuts = st.columns(4)
-    targets = (("new_run", "overview.shortcut.new"), ("results", "overview.shortcut.results"), ("runs", "overview.shortcut.runs"), ("data", "overview.shortcut.data"))
-    for column, (target, key) in zip(shortcuts, targets):
-        if column.button(t(key, locale=locale), width="stretch") and navigate is not None:
+        st.info(t("overview.continue", locale=locale))
+        label, target = t("overview.start", locale=locale), "new_run"
+
+    disabled = target == "results" and (recent is None or not recent.can_open_results)
+    if st.button(label, type="primary", disabled=disabled, width="stretch"):
+        if target == "results" and recent is not None and recent.run_id:
+            open_results(st.session_state, recent.run_id)
+        if navigate is not None:
             navigate(target)
+    if disabled:
+        st.caption(t("task.result_not_ready", locale=locale))
+
+    st.divider()
+    shortcuts = st.columns(3)
+    for column, (target_name, key) in zip(shortcuts, (("new_run", "overview.shortcut.new"), ("runs", "overview.shortcut.runs"), ("data", "overview.shortcut.data"))):
+        if column.button(t(key, locale=locale), width="stretch") and navigate is not None:
+            navigate(target_name)
 
 
 if __name__ == "__main__":

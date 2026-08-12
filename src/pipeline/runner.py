@@ -107,6 +107,7 @@ def run_pipeline(
     *,
     market_client_factory: Callable[[], object] | None = None,
     run_created_callback: Callable[[Path], None] | None = None,
+    stage_callback: Callable[[str, str], None] | None = None,
 ) -> dict[str, Any]:
     """Run the V1 pipeline skeleton and return a concise run summary.
 
@@ -151,8 +152,13 @@ def run_pipeline(
         "stock_pool": config.stock_pool,
     }
 
+    def stage(name: str, state: str) -> None:
+        if stage_callback is not None:
+            stage_callback(name, state)
+
     factor_research_result = FactorResearchExecutionResult.disabled()
     if config.factor_research.enabled:
+        stage("factor", "STARTED")
         executor = FactorResearchPipelineExecutor(config.factor_research)
         factor_research_result = executor.execute(
             run_dir,
@@ -165,9 +171,11 @@ def run_pipeline(
             },
         )
         summary["factor_research"] = factor_research_result.to_dict()
+        stage("factor", "COMPLETE")
 
     modeling_panel_result = ModelingPanelPipelineResult.disabled()
     if config.modeling_panel.enabled:
+        stage("modeling", "STARTED")
         modeling_executor = ModelingPanelPipelineExecutor(
             config.modeling_panel
         )
@@ -181,9 +189,11 @@ def run_pipeline(
             factor_research_result=research_input,
         )
         summary["modeling_panel"] = modeling_panel_result.as_dict()
+        stage("modeling", "COMPLETE")
 
     ml_result = None
     if config.ml_experiment.enabled:
+        stage("ml", "STARTED")
         if config.modeling_panel.enabled:
             if (
                 not modeling_panel_result.enabled
@@ -213,9 +223,11 @@ def run_pipeline(
                 "enabled ML stage returned no result for Signal handoff."
             )
         summary["ml_experiment"] = ml_result.to_dict()
+        stage("ml", "COMPLETE")
 
     signal_result = None
     if config.signal.enabled:
+        stage("signal", "STARTED")
         signal_executor = SignalPipelineExecutor(config.signal)
         signal_result = signal_executor.execute(
             run_dir,
@@ -228,10 +240,12 @@ def run_pipeline(
                 "enabled Signal stage returned no result for Holdings handoff."
             )
         summary["signal"] = signal_result.as_dict()
+        stage("signal", "COMPLETE")
 
     holdings_result = HoldingsPipelineResult.disabled()
     market_client: object | None = None
     if config.holdings.enabled:
+        stage("portfolio", "STARTED")
         holdings_engine, market_client = _portfolio_engine(
             config.holdings.portfolio_construction.method,
             client_factory,
@@ -245,8 +259,10 @@ def run_pipeline(
             signal_result=signal_result,
         )
         summary["holdings"] = holdings_result.as_dict()
+        stage("portfolio", "COMPLETE")
 
     if config.research_backtest.enabled:
+        stage("research_backtest", "STARTED")
         if market_client is None:
             market_client = client_factory()
         backtest_executor = ResearchBacktestPipelineExecutor(
@@ -264,6 +280,7 @@ def run_pipeline(
             ),
         )
         summary["research_backtest"] = backtest_result.to_dict()
+        stage("research_backtest", "COMPLETE")
 
     experiment_manager.save_config_snapshot(run_dir, config)
     experiment_manager.save_run_info(

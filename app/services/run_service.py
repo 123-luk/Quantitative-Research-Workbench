@@ -44,7 +44,12 @@ class RunService:
         self._runner = run_pipeline if runner is None else runner
         self._supports_identity_hook = runner is None if supports_identity_hook is None else supports_identity_hook
 
-    def run(self, config: PipelineConfig) -> RunOutcome:
+    def run(
+        self,
+        config: PipelineConfig,
+        *,
+        stage_callback: Callable[[str, str], None] | None = None,
+    ) -> RunOutcome:
         if not isinstance(config, PipelineConfig):
             raise TypeError("config must be a validated PipelineConfig.")
         started = perf_counter()
@@ -55,11 +60,13 @@ class RunService:
             exact_run_id = run_dir.name
 
         try:
-            summary = (
-                self._runner(config, run_created_callback=remember_run)
-                if self._supports_identity_hook
-                else self._runner(config)
-            )
+            if self._supports_identity_hook:
+                kwargs: dict[str, object] = {"run_created_callback": remember_run}
+                if stage_callback is not None:
+                    kwargs["stage_callback"] = stage_callback
+                summary = self._runner(config, **kwargs)
+            else:
+                summary = self._runner(config)
             if not isinstance(summary, dict):
                 raise TypeError("run_pipeline must return a summary mapping.")
             run_dir = summary.get("run_dir")

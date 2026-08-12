@@ -69,3 +69,50 @@ Canonical point-in-time neutralization exposure panels are not yet materialized.
 ## Non-goals
 
 This release does not add refresh-all, repair/delete controls, implicit eligibility filters, a provider console, live trading, multi-user authentication, or a shared application database.
+
+# GUI UAT Consolidated Fix
+
+## Confirmed Root Causes
+
+- Runs `20260811_114943_research_workbench_hs300`, `20260811_115619_research_workbench_hs300`, and `20260811_134409_research_workbench_hs300` are exact historical examples of directories created before failure without `run_info.json` or `config_snapshot.yaml`. The old catalog could enumerate them but could not explain their stage, configuration, or failure; the UI rendered a row of `N/A` values and still offered a result action.
+- The Coverage Ledger showed `daily_basic` COMPLETE for 330 trading days and `index_daily` COMPLETE for 331 trading days. Those counts were not remaining missing coverage. The blocking fetch event was `suspend_d` on `2023-11-16`, recorded as `FAILED / CanonicalDataError`.
+- TuShare legitimately returned an empty suspension-event snapshot with no columns. The completeness path normalized required columns before applying `allow_empty_complete`, so the valid zero-event day failed. Provider failures were then wrapped as generic `DataUnavailableError`, causing the GUI to report only stale/incomplete coverage.
+- The New Run page synchronously called the full first-run orchestrator. Streamlit navigation, rerun, progress, failure context, and exact result readiness therefore all depended on one render call remaining alive.
+- Overview and Runs treated canonical run directories as user tasks. They mixed historical partial directories with completed results, used broad `N/A` placeholders, exposed internal identifiers, and did not gate actions by validated result readiness.
+- Readiness preview ran on every render and remained in session after configuration changes, allowing slow controls and stale coverage display.
+
+## Final Run Lifecycle
+
+`ResearchTaskService` creates a schema-versioned task record under `output/workbench_tasks`, writes it through staged JSON plus `os.replace`, and returns immediately. A single background worker owns the existing `FirstRunOrchestrator`; repeated clicks for the same active configuration reuse the same task fingerprint. Task state includes exact task/run identity, user name, timestamps, status, current/completed stages, real N/M data coverage progress, safe configuration summary, failure code/stage/dataset/range, and result readiness. It contains no credential.
+
+The canonical runner accepts an optional observation-only stage callback and reports actual Factor, Modeling, ML, Signal, Portfolio/Holdings, and Research Backtest boundaries without changing stage order or calculations. Streamlit reruns read the atomic task record and never restart work. A process restart marks orphaned active tasks `PROCESS_INTERRUPTED`; if missing data still needs TuShare, the user must re-enter the in-memory token and retry.
+
+Only `succeeded + validated exact Artifact + exact run_id` enables View Results. Failed, created, running, cancelled, and incomplete historical records cannot open results. Historical runs remain read-only and never have missing metadata invented.
+
+## Data Readiness and Recovery
+
+Requirements are consolidated by dataset and scope for display. The main table uses localized dataset names, explicit date ranges, missing counts with units, the system's next action, and research impact. Readiness runs only after an explicit user request and is tied to the exact draft fingerprint.
+
+The `suspend_d` fix is deliberately narrow: only registry datasets declaring `allow_empty_complete=True` may convert a provider zero-row/no-column response into a canonical empty schema. All other empty datasets remain strict failures. COMPLETE ledger coverage remains missing-only and is never re-fetched.
+
+Safe preparation failures preserve a structured dataset and unit range and distinguish missing credentials, invalid authentication, insufficient permission/points, rate limiting, network failure, provider-empty response, coverage validation, and other provider failure. The task page shows failed dataset/range/stage, whether research is blocked, the attempted action, and a recovery step. Provider text, traceback, scope JSON, and credentials are not exposed in the primary UI.
+
+## Information Architecture, Metadata, and Performance
+
+Overview is now a state-aware start page answering credential availability, active research, latest task status, and the next primary action. Research Tasks replaces the developer-oriented run table. Internal paths, raw config, schema, and IDs are collapsed under Technical Details.
+
+`ui_metadata_service.py` centralizes parameter scale/unit/help, localized dataset terminology, and registry-backed factor explanations. Factor formulas were audited against implementations. Annual risk-free rate is entered as `%/year` and divided by 100 exactly once at the UI-to-canonical-config boundary. Initial NAV remains a dimensionless baseline.
+
+Measured first-run synchronous work was `198.56s` in the deterministic Fake Provider E2E. Background submit now returns in under `0.5s` by contract and the page is immediately navigable. Five-route AppTest rendering took `2.42s` for the combined smoke; exact-run Workbench GUI E2E completed `41 passed in 16.93s`. Readiness planning is no longer repeated on every control rerun.
+
+## Verification and UAT Status
+
+- Targeted GUI/Run/Data/i18n: `85 passed`.
+- Data root-cause regression: `58 passed`.
+- Extended Workbench/Data/Pipeline/ResearchInput regression: `162 passed in 669.71s`.
+- Heavy first-run/retry/offline exact-run E2E: `1 passed in 204.67s`; identical second run made zero provider calls.
+- GUI smoke/exact-run E2E: `1 passed in 8.57s`; `41 passed in 16.93s`.
+- Full pytest first run: `3169 passed, 4 skipped, 11 warnings, 3 failed`; all three were legacy UI-label/static compatibility checks and were corrected without reverting the background lifecycle or unit conversion.
+- Final full pytest: `3172 passed, 4 skipped, 11 warnings, 0 failed in 914.29s`.
+
+Status: UAT-000 through UAT-019 and UAT-021 are fixed in automated coverage. UAT-020 visual polish remains deferred. Real TuShare account-specific authentication/permission/rate-limit copy and subjective page responsiveness still require manual UAT; no real token is persisted or added to test artifacts. `v0.10.0` remains unpublished.
