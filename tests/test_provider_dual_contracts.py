@@ -33,6 +33,8 @@ def test_contract_registry_keeps_unknown_rules_and_proxy_claim_separate() -> Non
         "stock_basic", "trade_cal", "daily", "daily_basic", "adj_factor",
         "index_weight", "stk_limit", "suspend_d", "index_daily", "monthly",
     }
+    assert registry.get("tushare_official", "index_daily").doc_id == OFFICIAL_NOT_STATED
+    assert registry.get("tushare_official", "monthly").official_url == OFFICIAL_NOT_STATED
 
 
 def test_proxy_private_sdk_fields_are_fixed_and_incompatibility_is_explicit() -> None:

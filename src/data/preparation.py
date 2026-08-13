@@ -18,6 +18,7 @@ from src.data.coverage_planner import MissingDataPlan, MissingDataPlanner, scope
 from src.data.dataset_registry import DatasetRegistry, create_default_dataset_registry
 from src.data.fetching import FetchStrategyRegistry, create_default_fetch_strategy_registry
 from src.data.tushare_client import TushareClient
+from src.data.provider_quality import validate_quality
 
 
 class MissingCredentialError(RuntimeError):
@@ -260,6 +261,12 @@ class DataPreparationService:
                     calls += 1
                     frame = result.frame
                     failure_origin = "local"
+                    issues = validate_quality(spec, frame)
+                    if issues:
+                        categories = ",".join(sorted({item.category for item in issues}))
+                        raise DataUnavailableError(
+                            f"Provider data quality validation failed: {categories}."
+                        )
                     self.raw_store.save(spec.dataset_id, fetch_id, frame)
                     self.curated_store.merge(spec, frame, units=task.units, scope=task.scope)
                     records: list[CoverageRecord] = []

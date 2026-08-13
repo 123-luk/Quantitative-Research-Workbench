@@ -30,7 +30,7 @@ class ProviderComparison:
 def validate_quality(spec: DatasetSpec, frame: pd.DataFrame) -> tuple[QualityIssue, ...]:
     rows = normalize_frame(spec, frame)
     issues: list[QualityIssue] = []
-    if "ts_code" in rows and not rows["ts_code"].str.match(r"^\d{6}\.(SH|SZ|BJ)$", na=False).all():
+    if spec.dataset_id not in {"index_daily"} and "ts_code" in rows and not rows["ts_code"].str.match(r"^\d{6}\.(SH|SZ|BJ)$", na=False).all():
         issues.append(QualityIssue("INVALID_SECURITY_CODE", "ts_code", None))
     if {"open", "high", "low", "close"}.issubset(rows):
         invalid = (rows["high"] < rows[["open", "close", "low"]].max(axis=1)) | (rows["low"] > rows[["open", "close", "high"]].min(axis=1))

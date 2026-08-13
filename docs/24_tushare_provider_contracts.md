@@ -44,8 +44,8 @@ There are no `pro.query(...)` calls.
 | index_weight | [doc 96](https://tushare.pro/document/2?doc_id=96) | 2000 | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
 | stk_limit | [doc 183](https://tushare.pro/document/2?doc_id=183) | 2000 | OFFICIAL_NOT_STATED | 5800 | OFFICIAL_NOT_STATED |
 | suspend_d | [doc 214](https://tushare.pro/document/2?doc_id=214) | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | irregular |
-| index_daily | [doc 95](https://tushare.pro/document/2?doc_id=95) | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
-| monthly | [doc 145](https://tushare.pro/document/2?doc_id=145) | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
+| index_daily | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
+| monthly | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
 
 General references: [permissions](https://tushare.pro/document/1?doc_id=108),
 [points/rates](https://tushare.pro/document/1?doc_id=290), and

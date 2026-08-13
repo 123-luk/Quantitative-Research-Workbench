@@ -342,9 +342,19 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     # The ResearchTaskService worker, never this Streamlit render path, owns
     # the canonical service.run(draft, ...) call.
     matching_preview = preview is not None and draft is not None and st.session_state.get("readiness_fingerprint") == _draft_fingerprint(draft)
-    preflight_valid = matching_preview and (
+    local_preflight_valid = matching_preview and (
         preview.research_plan is not None or preview.calendar_bootstrap_required
     )
+    missing_datasets = {
+        item.dataset_id for item in preview.rows if item.missing_units
+    } if matching_preview else set()
+    capability = st.session_state.get("provider_capability_report")
+    capability_valid = not missing_datasets or (
+        capability is not None
+        and capability.provider_id == draft.pipeline_config.provider_id
+        and all(capability.status_for(dataset_id) == "AVAILABLE" for dataset_id in missing_datasets)
+    )
+    preflight_valid = local_preflight_valid and capability_valid
     if not preflight_valid and draft is not None:
         st.warning(t("readiness.must_check", locale=locale))
     if st.button(t("new.run", locale=locale), type="primary", disabled=draft is None or use_neutralization or not date_validation.valid or not preflight_valid):

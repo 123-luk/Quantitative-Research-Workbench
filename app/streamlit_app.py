@@ -74,6 +74,7 @@ def _credential_sidebar(locale: str) -> None:
                 report = ProviderCapabilityService().run(
                     selected, credential.reveal_for_provider()  # type: ignore[arg-type]
                 )
+                st.session_state["provider_capability_report"] = report
             st.sidebar.dataframe(
                 [{
                     t("readiness.dataset", locale=locale): item.dataset_id,

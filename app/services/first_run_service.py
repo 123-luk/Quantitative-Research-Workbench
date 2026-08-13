@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
+import json
 from pathlib import Path
 import sqlite3
 from time import perf_counter
@@ -33,6 +34,8 @@ from src.factors.price_volume import register_price_volume_factors
 from src.factors.research_pipeline import FactorResearchConfig, FactorResearchRunner
 from src.factors.valuation import register_valuation_factors
 from src.pipeline.config import PipelineConfig
+from src.pipeline.experiment import ExperimentManager
+from src.data.provider_contracts import ProviderContractRegistry
 from src.pipeline.runner import run_pipeline
 from src.research_data import AdjustedPriceService, CanonicalAdjustedPriceDataSource, ForwardReturnSpec, HistoryRequirement, ResearchCalendar, ResearchInputBuilder, ResearchInputMaterialization, ResearchInputPlan, ResearchInputPlanner, ResearchMaterializationStore, compose_requirements
 from src.research_data.adjusted_prices import AdjustedPriceError
@@ -588,6 +591,28 @@ class FirstRunOrchestrator:
                     outcome.run_id,
                     outcome.error,
                 )
+            run_dir = ExperimentManager(bound.output_dir).resolve_run_dir(outcome.run_id)
+            contracts = ProviderContractRegistry()
+            datasets = sorted({item.dataset_id for item in requirements})
+            provenance = {
+                "provider_id": bound.provider_id,
+                "datasets": [{
+                    "dataset_id": dataset_id,
+                    "endpoint": contracts.get(bound.provider_id, dataset_id).api_name,
+                    "schema_version": runtime.registry.get(dataset_id).schema_version,
+                } for dataset_id in datasets],
+                "coverage_start": min(item.required_start for item in requirements),
+                "coverage_end": max(item.required_end for item in requirements),
+                "quality_conclusion": "canonical and provider quality contracts passed",
+                "degraded": bound.research_backtest.suspension_mode == "STANDARD_ROBUST",
+                "degradation_reason": "unconfirmed missing daily rows freeze trades" if bound.research_backtest.suspension_mode == "STANDARD_ROBUST" else None,
+                "cross_provider_comparison": "NOT_RUN",
+                "point_in_time_rule": "explicit as-of cutoffs and historical index membership",
+            }
+            (run_dir / "data_provenance.json").write_text(
+                json.dumps(provenance, ensure_ascii=False, sort_keys=True, indent=2),
+                encoding="utf-8",
+            )
             self._event(events, progress, "pipeline", "COMPLETE")
             self._event(events, progress, "artifacts", "STARTED")
             active_stage = "artifacts"

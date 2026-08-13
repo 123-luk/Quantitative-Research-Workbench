@@ -31,7 +31,7 @@ class EndpointContract:
     dataset_id: str
     api_name: str
     official_url: str
-    doc_id: int
+    doc_id: int | str
     official_status: OfficialStatus
     minimum_points: int | str
     separate_permission: bool | str
@@ -57,7 +57,7 @@ _DOCS = "https://tushare.pro/document/2?doc_id={}"
 
 def _official(
     dataset: str,
-    doc: int,
+    doc: int | str,
     fields: tuple[str, ...],
     key: tuple[str, ...],
     *,
@@ -75,7 +75,8 @@ def _official(
     status: OfficialStatus = OfficialStatus.AVAILABLE,
 ) -> EndpointContract:
     return EndpointContract(
-        ProviderId.TUSHARE_OFFICIAL.value, dataset, dataset, _DOCS.format(doc), doc,
+        ProviderId.TUSHARE_OFFICIAL.value, dataset, dataset,
+        _DOCS.format(doc) if isinstance(doc, int) else OFFICIAL_NOT_STATED, doc,
         status, points, False, per_minute, per_day, rows, update, query,
         required, optional, fields, fields, key, empty, pit,
         ("NETWORK_ERROR", "RATE_LIMITED"),
@@ -93,8 +94,8 @@ _OFFICIAL = (
     _official("index_weight", 96, ("index_code", "con_code", "trade_date", "weight"), ("index_code", "con_code", "trade_date"), points=2000, rows=OFFICIAL_NOT_STATED, update=OFFICIAL_NOT_STATED, query="one index monthly snapshot window", required=("index_code",), optional=("trade_date", "start_date", "end_date"), pit="use only a constituent snapshot effective on or before formation", dependencies=("historical index universe",)),
     _official("stk_limit", 183, ("trade_date", "ts_code", "pre_close", "up_limit", "down_limit"), ("ts_code", "trade_date"), points=2000, rows=5800, update=OFFICIAL_NOT_STATED, query="one market trade_date", optional=("ts_code", "trade_date", "start_date", "end_date", "fields"), pit="same-date availability OFFICIAL_NOT_STATED", dependencies=("limit-price capability audit",)),
     _official("suspend_d", 214, ("ts_code", "trade_date", "suspend_timing", "suspend_type"), ("ts_code", "trade_date"), points=OFFICIAL_NOT_STATED, rows=OFFICIAL_NOT_STATED, update="irregular", query="one market trade_date", optional=("ts_code", "trade_date", "start_date", "end_date", "suspend_type", "fields"), empty="only a successful, schema-valid zero-row response proves no events for the exact scope", pit="event availability time OFFICIAL_NOT_STATED", dependencies=("strict suspension mode", "standard-mode precise event enrichment"), status=OfficialStatus.DOCUMENTED_BUT_RULES_INCOMPLETE),
-    _official("index_daily", 95, ("ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "change", "pct_chg", "vol", "amount"), ("ts_code", "trade_date"), points=OFFICIAL_NOT_STATED, rows=OFFICIAL_NOT_STATED, update=OFFICIAL_NOT_STATED, query="one index date range", required=("ts_code",), optional=("trade_date", "start_date", "end_date", "fields"), pit="after-market-close data must not be used before availability", dependencies=("benchmark returns",), status=OfficialStatus.DOCUMENTED_BUT_RULES_INCOMPLETE),
-    _official("monthly", 145, ("ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "change", "pct_chg", "vol", "amount"), ("ts_code", "trade_date"), points=OFFICIAL_NOT_STATED, rows=OFFICIAL_NOT_STATED, update=OFFICIAL_NOT_STATED, query="legacy wrapper only; no canonical consumer", optional=("ts_code", "trade_date", "start_date", "end_date", "fields"), dependencies=("legacy TushareClient method",), status=OfficialStatus.DOCUMENTED_BUT_RULES_INCOMPLETE),
+    _official("index_daily", OFFICIAL_NOT_STATED, ("ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "change", "pct_chg", "vol", "amount"), ("ts_code", "trade_date"), points=OFFICIAL_NOT_STATED, rows=OFFICIAL_NOT_STATED, update=OFFICIAL_NOT_STATED, query="one index date range", required=("ts_code",), optional=("trade_date", "start_date", "end_date", "fields"), pit="after-market-close data must not be used before availability", dependencies=("benchmark returns",), status=OfficialStatus.DOCUMENTED_BUT_RULES_INCOMPLETE),
+    _official("monthly", OFFICIAL_NOT_STATED, ("ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "change", "pct_chg", "vol", "amount"), ("ts_code", "trade_date"), points=OFFICIAL_NOT_STATED, rows=OFFICIAL_NOT_STATED, update=OFFICIAL_NOT_STATED, query="legacy wrapper only; no canonical consumer", optional=("ts_code", "trade_date", "start_date", "end_date", "fields"), dependencies=("legacy TushareClient method",), status=OfficialStatus.DOCUMENTED_BUT_RULES_INCOMPLETE),
 )
 
 
