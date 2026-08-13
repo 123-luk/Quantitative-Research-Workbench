@@ -117,7 +117,6 @@ def _base_complete(spec: DatasetSpec, frame: pd.DataFrame) -> pd.DataFrame:
     if (
         isinstance(frame, pd.DataFrame)
         and frame.empty
-        and not len(frame.columns)
         and spec.allow_empty_complete
     ):
         # Event endpoints legitimately prove a zero-row snapshot. TuShare may

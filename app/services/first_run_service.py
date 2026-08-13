@@ -18,6 +18,7 @@ from app.services.result_service import ResultService
 from app.services.run_service import RunOutcome, RunService, SafeRunError
 from src.data import CoverageLedger, PartitionedParquetStore, RawParquetStore
 from src.data.coverage_ledger import CoverageRecord
+from src.data.coverage_planner import scope_key
 from src.data.contracts import DataRequirement, ResearchFrequency, canonical_date
 from src.data.dataset_registry import DatasetRegistry, create_default_dataset_registry
 from src.data.canonical_store import CanonicalDataError
@@ -90,6 +91,34 @@ def classify_data_unavailable_error(exc: DataUnavailableError) -> WorkbenchError
     }[kind]
 
 
+@dataclass(frozen=True)
+class FailureDiagnostic:
+    ledger_status: str | None = None
+    canonical_status: str | None = None
+    consistency_issue: str | None = None
+    repair_action: str | None = None
+    provider_attempts: int | None = None
+    network_category: str | None = None
+
+
+def _network_category(exc: BaseException | None) -> str | None:
+    values: list[str] = []
+    current = exc
+    while current is not None and len(values) < 8:
+        values.append(f"{type(current).__name__} {current}".lower())
+        current = current.__cause__ or current.__context__
+    text = " ".join(values)
+    if "readtimeout" in text or "read timed out" in text or "read timeout" in text:
+        return "READ_TIMEOUT"
+    if "connecttimeout" in text or "connect timed out" in text or "connect timeout" in text:
+        return "CONNECT_TIMEOUT"
+    if "dns" in text or "name resolution" in text or "getaddrinfo" in text:
+        return "DNS_FAILURE"
+    if "connection" in text or "proxy" in text or "socket" in text:
+        return "CONNECTION_FAILURE"
+    return None
+
+
 class WorkbenchRunError(RuntimeError):
     def __init__(
         self,
@@ -100,6 +129,7 @@ class WorkbenchRunError(RuntimeError):
         dataset_id: str | None = None,
         missing_range: tuple[str, str] | None = None,
         user_message: str | None = None,
+        diagnostic: FailureDiagnostic | None = None,
     ) -> None:
         super().__init__(f"{code.value} at {stage}")
         self.code = code
@@ -109,6 +139,7 @@ class WorkbenchRunError(RuntimeError):
         self.dataset_id = dataset_id
         self.missing_range = missing_range
         self.user_message = user_message or f"{code.value} at {stage}"
+        self.diagnostic = diagnostic
 
     def __str__(self) -> str:
         return f"{self.code.value} at {self.stage}"
@@ -485,17 +516,31 @@ class FirstRunOrchestrator:
                 raise WorkbenchRunError(WorkbenchErrorCode.CREDENTIAL_MISSING, "check")
             active_stage = "download"
             missing_total = sum(len(item.missing_units) for item in local)
+            required_total = sum(len(item.required_units) for item in local)
+            complete_total = sum(len(item.complete_units) for item in local)
             self._event(
                 events,
                 progress,
                 "download",
                 "STARTED" if missing_total else "SKIPPED",
-                completed=0 if missing_total else None,
-                total=missing_total or None,
+                completed=complete_total if required_total else None,
+                total=required_total or None,
                 detail="Downloading only ledger-missing coverage." if missing_total else "All required coverage is COMPLETE; provider calls are skipped.",
             )
-            prepared = preparation.ensure(requirements, credential)
-            self._event(events, progress, "download", "COMPLETE", completed=missing_total or None, total=missing_total or None)
+            prepared = preparation.ensure(
+                requirements,
+                credential,
+                progress=lambda dataset_id, unit, completed, total: self._event(
+                    events,
+                    progress,
+                    "download",
+                    "STARTED",
+                    completed=completed,
+                    total=total,
+                    detail=f"{dataset_id} · {unit}",
+                ),
+            )
+            self._event(events, progress, "download", "COMPLETE", completed=required_total or None, total=required_total or None)
             self._event(events, progress, "build", "STARTED")
             active_stage = "build"
             materialization = runtime.research_builder(draft, plan, calendar).build(plan)
@@ -528,12 +573,46 @@ class FirstRunOrchestrator:
         except DataUnavailableError as exc:
             code = classify_data_unavailable_error(exc)
             missing_range = (exc.units[0], exc.units[-1]) if exc.units else None
+            diagnostic = None
+            if exc.dataset_id and exc.units:
+                unit = exc.units[0]
+                scope = exc.scope or (('scope', 'CN_A'),)
+                spec = runtime.registry.get(exc.dataset_id)
+                matching = [
+                    record for record in runtime.ledger.records(exc.dataset_id)
+                    if record.scope_key == scope_key(scope) and record.unit_key == unit
+                ]
+                ledger_status = matching[0].status if len(matching) == 1 else "MISSING"
+                try:
+                    rows = runtime.curated.rows_for_unit(spec, unit=unit, scope=scope)
+                    if len(rows):
+                        canonical_status = f"READABLE_ROWS:{len(rows)}"
+                    elif runtime.curated.has_empty_marker(spec, unit=unit, scope=scope):
+                        canonical_status = "EMPTY_MARKER"
+                    else:
+                        canonical_status = "MISSING"
+                except Exception:
+                    canonical_status = "UNREADABLE"
+                attempts = getattr(exc.safe_cause, "provider_attempts", None)
+                diagnostic = FailureDiagnostic(
+                    ledger_status=ledger_status,
+                    canonical_status=canonical_status,
+                    consistency_issue=(
+                        "ledger/canonical mismatch"
+                        if ledger_status == "COMPLETE" and canonical_status in {"MISSING", "UNREADABLE"}
+                        else None
+                    ),
+                    repair_action="refetch missing unit and publish canonical proof before marking COMPLETE",
+                    provider_attempts=attempts,
+                    network_category=_network_category(exc.safe_cause),
+                )
             raise WorkbenchRunError(
                 code,
                 active_stage,
                 dataset_id=exc.dataset_id,
                 missing_range=missing_range,
                 user_message="Data preparation failed before research calculation started. Review the dataset, missing range, and recommended recovery action.",
+                diagnostic=diagnostic,
             ) from None
         except (CanonicalDataError, AdjustedPriceError, ResearchInputError):
             raise WorkbenchRunError(WorkbenchErrorCode.COVERAGE_VALIDATION, active_stage) from None

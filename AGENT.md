@@ -3859,3 +3859,69 @@ override，V4-E3 为 CLI + YAML + docs。
   `2023-11-16` becomes COMPLETE and progress advances, and to review natural
   Chinese copy, Research Tasks navigation, and clear-confirm UX at the user's
   display scale. Existing real task records were not modified or deleted.
+
+## 2026-08-13 GUI UAT Second Follow-up: UAT-009 and UAT-026--UAT-029
+
+- UAT-009 is reopened and remains unresolved in real-provider UAT. Read-only
+  inspection found no `suspend_d / 2023-11-16` COMPLETE record, canonical
+  partition, zero-row file, manifest, or empty marker. Five persisted fetch
+  events failed, so there is no evidence from which to manufacture an
+  empty-day completion. The same date blocked tasks
+  `27840ee4-d685-4a69-a50a-d011b597906d` and
+  `73b16e6a-593d-4974-a86f-69e600125066`.
+- Empty event completeness now requires a schema- and scope-bound JSON marker
+  under the canonical root. It is staged, fsynced, and atomically replaced
+  before the Coverage Ledger transaction records COMPLETE. Planning, calendar
+  resolution, first-run, and retry all use the same verifier: row count,
+  schema version, content hash, readable canonical data, and an exact marker
+  for a zero-row event must agree. A legacy COMPLETE record without proof is
+  idempotently replanned as one missing unit; non-empty malformed data still
+  fails strictly. No global data or ledger reset is used.
+- The repeated `2023-11-16` requirement is valid warm-up. A research start of
+  `2024-01-01` resolves its first open formation to `2024-01-02`; the default
+  ML split needs 20 training + 5 validation + 1 embargo + 1 entry-lag + 5
+  holding + 1 current period = 33 trading periods. The inclusive 33-period
+  window starts on `2023-11-16`; this is not a global missing-range leak.
+- Task `c51ac40b-0189-4bde-bed6-c58986be671b` failed during planning because
+  the dividend-yield factor required provider-native `dv_ttm`, while the
+  `daily_basic` registry/client contract exposed only `dv_ratio`. Schema 1.1
+  now requests and stores numeric `dv_ttm`. Existing schema 1.0 units remain
+  reusable for requirements that do not need `dv_ttm`; dividend requirements
+  target only the affected units for upgrade.
+- Task `c84081fc-701c-43e9-85f3-24d25690e3c2` was a genuine read timeout on
+  `daily_basic / 2026-01-14` after prior dates had completed. Its displayed
+  `0/2345` was a task-progress publication defect, not loss of the data-layer
+  checkpoint. The progress denominator is now every actual required coverage
+  unit for the task; the numerator is every unit whose local proof verifies,
+  including reusable checkpoints, plus each newly persisted unit. Updates are
+  atomically stored after validation and never decrease on refresh or failure.
+- UAT-026 uses UTC for persistence and converts presentation to
+  `Asia/Shanghai`: Chinese `YYYY-MM-DD HH:MM:SS`, English the same with `CST`;
+  microseconds, `T`, and raw offsets are hidden. Durations are natural Chinese
+  (`11 分 0 秒`) or English (`11 min 0 s`). Chinese task diagnostics translate
+  data-provider and coverage-record terminology and do not render raw internal
+  status/action strings.
+- UAT-027 uses Streamlit 1.58's local `st.fragment(run_every="3s")` only while
+  a task is active. It rereads atomic JSON without submitting a task or
+  starting a worker. On succeeded, failed, or cancelled state it performs one
+  app-scope rerun and the fragment is no longer installed; button and
+  confirmation session keys remain stable.
+- UAT-029 retries only transient connection/read timeout, DNS, proxy, socket,
+  and network failures, at most three total attempts. Delays before attempts 2
+  and 3 are 0.5 and 1.0 seconds with a 0.9--1.1 jitter multiplier. Token,
+  authentication, permission/points, rate limit/frequency, schema, and response
+  structure failures are not retried. Retry replans verified completeness and
+  resumes at the first missing unit without concurrent duplicate requests.
+- Real service/worker validation created task
+  `21b2d569-7109-4317-b0fe-79ce538b2f99`. It reused 229 of 264 verified units,
+  attempted only `stock_basic / 2024-01-30` three times, and after 170.10s
+  persisted `NETWORK_ERROR / READ_TIMEOUT`, attempts `3`, progress `229/264`,
+  no `run_id`, and no result readiness. The workstation's normal network route
+  repeatedly timed out at the external TuShare boundary. Therefore UAT-028's
+  real-success gate is not met: no real task produced a readable exact run and
+  Artifact in this round. UAT-026, UAT-027, and UAT-029 are implemented and
+  covered; UAT-009 and UAT-028 remain blocked pending provider availability.
+- Verification: second-follow-up plus GUI/Data/Research Input integration
+  `85 passed in 21.78s`; two heavy offline service-to-exact-run tests `2 passed
+  in 398.91s`. No skip/xfail was added. Existing user task records, `data/`,
+  `-m`, caches, and build output were not deleted or mass-rewritten.

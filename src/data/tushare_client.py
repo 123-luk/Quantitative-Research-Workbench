@@ -189,7 +189,7 @@ class TushareClient:
         # TuShare represents a proven zero-event day as an empty DataFrame and
         # may omit every column. Normalize only that explicit protocol shape;
         # non-empty malformed responses remain subject to strict validation.
-        if isinstance(result, pd.DataFrame) and result.empty and not len(result.columns):
+        if isinstance(result, pd.DataFrame) and result.empty:
             return pd.DataFrame(columns=fields.split(","))
         return result
 
@@ -203,7 +203,7 @@ class TushareClient:
         """Fetch daily valuation and liquidity indicators from TuShare Pro."""
         fields = (
             "ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pe_ttm,"
-            "pb,ps,ps_ttm,dv_ratio,total_mv,circ_mv"
+            "pb,ps,ps_ttm,dv_ratio,dv_ttm,total_mv,circ_mv"
         )
         return self.pro.daily_basic(
             ts_code=ts_code,

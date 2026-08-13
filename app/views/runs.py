@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -24,12 +26,54 @@ def _status_key(status: str) -> str:
     return f"task.status.{status}" if status in {"created", "running", "succeeded", "failed", "cancelled"} else "task.status.historical"
 
 
-def _elapsed(value: float | None) -> str:
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+
+def _display_time(value: str | None, locale: str) -> str:
+    if not value:
+        return "—"
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        local = parsed.astimezone(_SHANGHAI)
+    except (TypeError, ValueError, OverflowError):
+        return "—"
+    if locale == "zh-CN":
+        return local.strftime("%Y-%m-%d %H:%M:%S")
+    return local.strftime("%Y-%m-%d %H:%M:%S CST")
+
+
+def _elapsed(value: float | None, locale: str) -> str:
     if value is None:
         return "—"
     if value < 60:
-        return f"{value:.1f} s"
-    return f"{int(value // 60)} min {int(value % 60)} s"
+        return f"{value:.1f} 秒" if locale == "zh-CN" else f"{value:.1f} s"
+    minutes, seconds = int(value // 60), int(value % 60)
+    return f"{minutes} 分 {seconds} 秒" if locale == "zh-CN" else f"{minutes} min {seconds} s"
+
+
+def _progress_detail(value: str | None, locale: str) -> str | None:
+    if not value:
+        return None
+    fixed = {
+        "Downloading only ledger-missing coverage.": "task.progress_preparing",
+        "All required coverage is COMPLETE; provider calls are skipped.": "task.progress_ready",
+    }
+    if value in fixed:
+        return t(fixed[value], locale=locale)
+    dataset_id, separator, unit = value.partition(" · ")
+    if separator and dataset_id and unit:
+        return f"{dataset_label(dataset_id, locale)} · {unit}"
+    return value
+
+
+def _diagnostic_value(kind: str, value: str, locale: str) -> str:
+    if kind == "canonical_status" and value.startswith("READABLE_ROWS:"):
+        return t("task.canonical.READABLE_ROWS", locale=locale, rows=value.partition(":")[2])
+    key = f"task.{kind}.{value}"
+    translated = t(key, locale=locale)
+    return value if translated == f"〔{key}〕" else translated
 
 
 def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTaskService, navigate: object) -> None:
@@ -37,10 +81,10 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
     with st.container(border=True):
         left, middle, right = st.columns((3, 2, 2))
         left.subheader(t("task.display_name", locale=locale, start=summary.get("research_start", "—"), end=summary.get("research_end", "—")))
-        left.caption(task.created_at)
+        left.caption(_display_time(task.created_at, locale))
         middle.metric(t("runs.status", locale=locale), t(_status_key(task.status), locale=locale))
         middle.caption(f"{t('task.stage', locale=locale)}: {t(f'progress.{task.current_stage}', locale=locale)}")
-        right.metric(t("task.elapsed", locale=locale), _elapsed(task.elapsed_seconds))
+        right.metric(t("task.elapsed", locale=locale), _elapsed(task.elapsed_seconds, locale))
         right.caption(f"{summary.get('research_start', '—')} – {summary.get('research_end', '—')}")
         st.write(
             f"{t('task.universe', locale=locale)}: {display_value(summary.get('universe_type', '—'), locale)} · "
@@ -50,6 +94,8 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
         )
         if task.progress_total:
             st.progress(min(1.0, (task.progress_completed or 0) / task.progress_total), text=f"{task.progress_completed or 0}/{task.progress_total}")
+            if task.progress_detail:
+                st.caption(_progress_detail(task.progress_detail, locale))
         elif task.active:
             st.info(t("task.running_help", locale=locale))
         if task.status == "failed":
@@ -58,7 +104,19 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
             if task.failure_dataset:
                 st.write(f"{t('task.failed_dataset', locale=locale)}: {dataset_label(task.failure_dataset, locale)}")
             if task.failure_range:
-                st.write(f"{t('task.failed_range', locale=locale)}: {task.failure_range[0]} – {task.failure_range[1]}")
+                st.write(f"{t('task.failed_range', locale=locale)}: {task.failure_range[0]} — {task.failure_range[1]}")
+            if task.ledger_status:
+                st.write(f"{t('task.ledger_status', locale=locale)}: {_diagnostic_value('ledger', task.ledger_status, locale)}")
+            if task.canonical_status:
+                st.write(f"{t('task.canonical_status', locale=locale)}: {_diagnostic_value('canonical_status', task.canonical_status, locale)}")
+            if task.consistency_issue:
+                st.write(f"{t('task.consistency_issue', locale=locale)}: {_diagnostic_value('consistency', task.consistency_issue, locale)}")
+            if task.repair_action:
+                st.write(f"{t('task.repair_action', locale=locale)}: {_diagnostic_value('repair', task.repair_action, locale)}")
+            if task.provider_attempts is not None:
+                st.write(f"{t('task.provider_attempts', locale=locale)}: {task.provider_attempts}")
+            if task.network_category:
+                st.write(f"{t('task.network_category', locale=locale)}: {t(f'task.network.{task.network_category}', locale=locale)}")
             st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{task.failure_code or "INTERNAL_ERROR"}', locale=locale)}")
             st.write(f"{t('task.reason', locale=locale)}: {t(f'task.reason.{task.failure_code or "INTERNAL_ERROR"}', locale=locale)}")
             st.write(f"{t('task.blocking', locale=locale)}: {t('overview.yes', locale=locale)}")
@@ -116,12 +174,26 @@ def render(st: object, *, navigate=None, service: ResearchTaskService | None = N
     st.title(t("runs.title", locale=locale))
     st.caption(t("runs.subtitle", locale=locale))
     service = service or ResearchTaskService(_output_root())
-    tasks = service.list_tasks()
-    if tasks:
-        for task in tasks:
-            _task_card(st, task, locale, service, navigate)
+    def render_tasks() -> tuple[ResearchTask, ...]:
+        tasks = service.list_tasks()
+        if tasks:
+            for task in tasks:
+                _task_card(st, task, locale, service, navigate)
+        else:
+            st.info(t("runs.empty", locale=locale))
+        return tasks
+
+    initial_tasks = service.list_tasks()
+    if any(task.active for task in initial_tasks) and callable(getattr(st, "fragment", None)):
+        @st.fragment(run_every="3s")
+        def live_tasks() -> tuple[ResearchTask, ...]:
+            current = render_tasks()
+            if not any(task.active for task in current):
+                st.rerun(scope="app")
+            return current
+        tasks = live_tasks()
     else:
-        st.info(t("runs.empty", locale=locale))
+        tasks = render_tasks()
 
     historical_ids = {task.run_id for task in tasks if task.run_id}
     hidden_runs = service.hidden_run_ids()
@@ -131,7 +203,7 @@ def render(st: object, *, navigate=None, service: ResearchTaskService | None = N
             st.caption(t("runs.historical_help", locale=locale))
             st.dataframe(pd.DataFrame([
                 {
-                    t("runs.created", locale=locale): item.created_at or "—",
+                    t("runs.created", locale=locale): _display_time(item.created_at, locale),
                     t("runs.status", locale=locale): t("task.status.historical", locale=locale),
                     t("runs.model", locale=locale): display_value(item.model or "—", locale),
                     t("runs.portfolio", locale=locale): display_value(item.portfolio_method or "—", locale),

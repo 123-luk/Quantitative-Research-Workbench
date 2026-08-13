@@ -97,6 +97,12 @@ class ResearchTask:
     finished_at: str | None
     elapsed_seconds: float | None
     retry_of: str | None
+    ledger_status: str | None = None
+    canonical_status: str | None = None
+    consistency_issue: str | None = None
+    repair_action: str | None = None
+    provider_attempts: int | None = None
+    network_category: str | None = None
     historical: bool = False
 
     @property
@@ -179,12 +185,16 @@ class ResearchTaskService:
 
     @staticmethod
     def _view(value: Mapping[str, object]) -> ResearchTask:
+        status = str(value["status"])
+        elapsed = float(value["elapsed_seconds"]) if isinstance(value.get("elapsed_seconds"), (int, float)) else None
+        if status in ACTIVE_STATUSES:
+            elapsed = _elapsed(value.get("started_at") if isinstance(value.get("started_at"), str) else None)
         return ResearchTask(
             task_id=str(value["task_id"]),
             name=str(value.get("name") or "Historical research task"),
             created_at=str(value["created_at"]),
             updated_at=str(value["updated_at"]),
-            status=str(value["status"]),
+            status=status,
             current_stage=str(value.get("current_stage") or "created"),
             completed_stages=tuple(str(item) for item in value.get("completed_stages", ())),
             progress_completed=value.get("progress_completed") if type(value.get("progress_completed")) is int else None,
@@ -200,8 +210,14 @@ class ResearchTaskService:
             config_summary=value.get("config_summary") if isinstance(value.get("config_summary"), Mapping) else {},
             started_at=value.get("started_at") if isinstance(value.get("started_at"), str) else None,
             finished_at=value.get("finished_at") if isinstance(value.get("finished_at"), str) else None,
-            elapsed_seconds=float(value["elapsed_seconds"]) if isinstance(value.get("elapsed_seconds"), (int, float)) else None,
+            elapsed_seconds=elapsed,
             retry_of=value.get("retry_of") if isinstance(value.get("retry_of"), str) else None,
+            ledger_status=value.get("ledger_status") if isinstance(value.get("ledger_status"), str) else None,
+            canonical_status=value.get("canonical_status") if isinstance(value.get("canonical_status"), str) else None,
+            consistency_issue=value.get("consistency_issue") if isinstance(value.get("consistency_issue"), str) else None,
+            repair_action=value.get("repair_action") if isinstance(value.get("repair_action"), str) else None,
+            provider_attempts=value.get("provider_attempts") if type(value.get("provider_attempts")) is int else None,
+            network_category=value.get("network_category") if isinstance(value.get("network_category"), str) else None,
         )
 
     def get(self, task_id: str) -> ResearchTask:
@@ -384,13 +400,21 @@ class ResearchTaskService:
         completed = list(raw.get("completed_stages", ()))
         if event.status in {"COMPLETE", "SKIPPED"} and event.stage not in completed:
             completed.append(event.stage)
+        previous_completed = raw.get("progress_completed")
+        previous_total = raw.get("progress_total")
+        next_completed = event.completed if type(event.completed) is int else previous_completed
+        next_total = event.total if type(event.total) is int else previous_total
+        if type(previous_completed) is int and type(next_completed) is int:
+            next_completed = max(previous_completed, next_completed)
+        if type(previous_total) is int and type(next_total) is int:
+            next_total = max(previous_total, next_total)
         raw.update({
             "status": "running",
             "current_stage": event.stage,
             "completed_stages": completed,
-            "progress_completed": event.completed,
-            "progress_total": event.total,
-            "progress_detail": event.detail,
+            "progress_completed": next_completed,
+            "progress_total": next_total,
+            "progress_detail": event.detail if event.detail is not None else raw.get("progress_detail"),
             "updated_at": _now(),
         })
         self._write(raw)
@@ -436,6 +460,12 @@ class ResearchTaskService:
                 "failure_message": exc.user_message,
                 "failure_dataset": exc.dataset_id,
                 "failure_range": list(exc.missing_range) if exc.missing_range else None,
+                "ledger_status": exc.diagnostic.ledger_status if exc.diagnostic else None,
+                "canonical_status": exc.diagnostic.canonical_status if exc.diagnostic else None,
+                "consistency_issue": exc.diagnostic.consistency_issue if exc.diagnostic else None,
+                "repair_action": exc.diagnostic.repair_action if exc.diagnostic else None,
+                "provider_attempts": exc.diagnostic.provider_attempts if exc.diagnostic else None,
+                "network_category": exc.diagnostic.network_category if exc.diagnostic else None,
                 "updated_at": finished,
                 "finished_at": finished,
                 "elapsed_seconds": _elapsed(started, finished),

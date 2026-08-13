@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -20,7 +21,7 @@ class CanonicalDataError(ValueError):
 _NUMERIC_FIELDS = {
     "open", "high", "low", "close", "pre_close", "change", "pct_chg",
     "vol", "amount", "turnover_rate", "volume_ratio", "pe", "pe_ttm",
-    "pb", "ps", "ps_ttm", "dv_ratio", "total_mv", "circ_mv",
+    "pb", "ps", "ps_ttm", "dv_ratio", "dv_ttm", "total_mv", "circ_mv",
     "adj_factor", "weight", "is_open",
 }
 
@@ -93,9 +94,16 @@ def merge_canonical(spec: DatasetSpec, existing: pd.DataFrame, incoming: pd.Data
         if isinstance(old, pd.DataFrame) or isinstance(new, pd.DataFrame):
             raise CanonicalDataError("canonical store contains duplicate primary keys.")
         if not old.equals(new):
+            if spec.dataset_id == "daily_basic" and pd.isna(old.get("dv_ttm")) and not pd.isna(new.get("dv_ttm")):
+                shared = [name for name in spec.required_fields if name != "dv_ttm"]
+                if not old.loc[shared].equals(new.loc[shared]):
+                    raise CanonicalDataError("conflicting existing primary-key payload.")
+                left_indexed.loc[key, "dv_ttm"] = new["dv_ttm"]
+                continue
             raise CanonicalDataError("conflicting existing primary-key payload.")
     novel = right_indexed.loc[~right_indexed.index.isin(left_indexed.index)].reset_index(drop=True)
-    return normalize_frame(spec, pd.concat([left, novel], ignore_index=True))
+    updated_left = left_indexed.reset_index(drop=True)
+    return normalize_frame(spec, pd.concat([updated_left, novel], ignore_index=True))
 
 
 class PartitionedParquetStore:
@@ -122,10 +130,67 @@ class PartitionedParquetStore:
             parts.append(Path(f"snapshot={unit}"))
         return Path(*parts) / "data.parquet"
 
+    def empty_marker_path(self, spec: DatasetSpec, *, unit: str, scope: tuple[tuple[str, str], ...]) -> Path:
+        """Return the exact durable proof path for one valid empty unit."""
+        scope_digest = sha256(
+            json.dumps(dict(scope), sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:16]
+        safe_unit = unit.replace("/", "_").replace("\\", "_")
+        return self.root / ".empty" / spec.dataset_id / scope_digest / f"{safe_unit}.json"
+
+    def write_empty_marker(self, spec: DatasetSpec, *, unit: str, scope: tuple[tuple[str, str], ...]) -> Path:
+        """Atomically persist a schema-bound proof for a provider-confirmed empty unit."""
+        if not spec.allow_empty_complete:
+            raise CanonicalDataError(f"{spec.dataset_id} does not permit empty completeness.")
+        target = self.empty_marker_path(spec, unit=unit, scope=scope)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "dataset_id": spec.dataset_id,
+            "scope": dict(scope),
+            "unit": unit,
+            "schema_version": spec.schema_version,
+            "required_fields": list(spec.required_fields),
+        }
+        descriptor, raw_path = tempfile.mkstemp(prefix=f".{target.stem}.", suffix=".tmp", dir=target.parent)
+        os.close(descriptor)
+        temp = Path(raw_path)
+        try:
+            temp.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            with temp.open("r+b") as handle:
+                os.fsync(handle.fileno())
+            os.replace(temp, target)
+        finally:
+            temp.unlink(missing_ok=True)
+        return target
+
+    def has_empty_marker(self, spec: DatasetSpec, *, unit: str, scope: tuple[tuple[str, str], ...]) -> bool:
+        path = self.empty_marker_path(spec, unit=unit, scope=scope)
+        try:
+            if path.is_symlink() or not path.is_file():
+                return False
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return False
+        return value == {
+            "dataset_id": spec.dataset_id,
+            "scope": dict(scope),
+            "unit": unit,
+            "schema_version": spec.schema_version,
+            "required_fields": list(spec.required_fields),
+        }
+
     def load_partition(self, path: Path, spec: DatasetSpec) -> pd.DataFrame:
         if not path.exists():
             return pd.DataFrame(columns=spec.required_fields)
-        return normalize_frame(spec, pd.read_parquet(path, engine=self.engine))
+        frame = pd.read_parquet(path, engine=self.engine)
+        # daily_basic 1.1 added the provider-native dv_ttm column. Older local
+        # partitions remain readable for targeted, missing-only repair, but the
+        # ledger schema/hash check prevents them from being treated as 1.1
+        # COMPLETE until every required unit is fetched and rewritten.
+        if spec.dataset_id == "daily_basic" and "dv_ttm" not in frame.columns:
+            frame = frame.copy()
+            frame["dv_ttm"] = pd.NA
+        return normalize_frame(spec, frame)
 
     def _write_temp(self, frame: pd.DataFrame, target: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)

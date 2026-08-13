@@ -155,3 +155,71 @@ Legacy run directories without a task record use hide-only clearing: a validated
 - Existing Windows launcher smoke: exit code `0`; isolated port 18501 released.
 
 Automated status: UAT-009 Reopened and UAT-022 through UAT-025 are fixed. Manual UAT must still confirm the real-account `2023-11-16` zero-event response is recorded COMPLETE, the next run advances beyond that date, Chinese wording is natural at the user's display scale, navigation lands on Research Tasks, and clear-confirm interactions match user expectations. No existing real task record was deleted during diagnosis or tests.
+
+# GUI UAT Second Follow-up: UAT-009 and UAT-026 through UAT-029
+
+## Durable completeness and targeted migration
+
+A ledger row alone is no longer sufficient proof of COMPLETE. Every planned
+unit is verified against readable canonical data, the current schema, row count,
+and content hash. An allowed zero-row event additionally needs an exact,
+schema-bound, scope-bound empty marker. The marker is written atomically before
+the ledger transaction; a write failure cannot leave a new COMPLETE row.
+Legacy COMPLETE rows with missing or damaged proof are treated as that one
+missing unit and safely refetched. Ordinary empty datasets and non-empty rows
+with missing fields still fail closed.
+
+`daily_basic` schema 1.1 adds the provider-native numeric `dv_ttm` required by
+the dividend-yield factor. Schema 1.0 partitions remain usable for factors that
+do not request `dv_ttm`; only dividend-dependent units require an upgrade. This
+fixes the former planning-only failure where the factor requirement was outside
+the registered dataset schema.
+
+The `2023-11-16` suspension date is a real warm-up boundary. The requested
+`2024-01-01` start becomes the first open formation `2024-01-02`. The default
+ML requirement totals 33 inclusive trading periods: 20 training, 5 validation,
+1 embargo, 1 entry lag, 5 holding periods, and 1 current period. The 33rd date
+is `2023-11-16`.
+
+## Display, progress, polling, and retry contract
+
+Task timestamps remain timezone-aware UTC at rest. The UI displays them in
+`Asia/Shanghai` as `YYYY-MM-DD HH:MM:SS` in Chinese and the same value plus
+`CST` in English. Durations use localized seconds/minutes. Corrupt historical
+timestamps render a safe em dash.
+
+The data-progress denominator is the count of all actual required coverage
+units across the task. The numerator is verified reusable units plus units
+whose canonical proof and ledger update have just completed. Progress is
+atomically persisted, monotonic, and retained through refresh and terminal
+failure. The detail identifies the localized current dataset and exact unit.
+
+While any task is active, the task region uses a local Streamlit fragment at a
+three-second interval. Each tick only rereads atomic task JSON. It does not
+submit work, invoke buttons, or reset session confirmation state. When the last
+task becomes succeeded, failed, or cancelled, one app rerun removes the timed
+fragment and polling stops.
+
+Transient connection/read timeouts, DNS, proxy, socket, and network failures
+receive at most three total attempts. The two backoffs are 0.5 and 1.0 seconds,
+each multiplied by light 0.9--1.1 jitter. Token/authentication, permission,
+points, rate limiting/frequency, schema, and response-structure errors are
+deterministic and are not retried. A retry always replans verified completion,
+so it resumes at the first missing unit and does not redownload checkpoints.
+
+## Real-provider status
+
+The real task `21b2d569-7109-4317-b0fe-79ce538b2f99` exercised
+`ResearchTaskService -> worker -> planner -> ledger/canonical verification ->
+TuShare`. It resumed at `229/264`, requested only `stock_basic / 2024-01-30`,
+and exhausted three roughly 30-second reads. Its terminal record is
+`NETWORK_ERROR / READ_TIMEOUT`, attempts `3`, elapsed `170.10s`, with no
+`run_id` and Results correctly disabled. The external endpoint remained
+unavailable on the workstation's normal network route.
+
+Consequently UAT-026, UAT-027, and UAT-029 are implemented, but UAT-009 remains
+unresolved because `suspend_d / 2023-11-16` still has no provider-confirmed
+canonical or empty-marker proof. UAT-028 also remains unresolved because this
+round produced no real successful exact run or readable Artifact. These items
+must not be marked fixed until a normal provider response allows an unmodified
+real task to finish and the Results page to open it.

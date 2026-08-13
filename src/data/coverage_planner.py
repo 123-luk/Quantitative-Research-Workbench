@@ -39,10 +39,12 @@ class MissingDataPlan:
 
 
 class MissingDataPlanner:
-    def __init__(self, registry: DatasetRegistry, ledger: CoverageLedger, *, open_dates: Callable[[str, str], Iterable[object]] | None = None) -> None:
+    def __init__(self, registry: DatasetRegistry, ledger: CoverageLedger, *, open_dates: Callable[[str, str], Iterable[object]] | None = None, unit_verifier: Callable[[str, tuple[tuple[str, str], ...], str, tuple[str, ...]], bool] | None = None, complete_units_resolver: Callable[[str, tuple[tuple[str, str], ...], tuple[str, ...], tuple[str, ...]], frozenset[str]] | None = None) -> None:
         self.registry = registry
         self.ledger = ledger
         self.open_dates = open_dates
+        self.unit_verifier = unit_verifier
+        self.complete_units_resolver = complete_units_resolver
 
     def _units(self, requirement: DataRequirement, spec: DatasetSpec) -> tuple[str, ...]:
         start = date.fromisoformat(requirement.required_start)
@@ -92,7 +94,17 @@ class MissingDataPlanner:
             if requirement.required_fields and not set(requirement.required_fields).issubset(spec.required_fields):
                 raise ValueError(f"Requirement fields are outside dataset {spec.dataset_id!r} schema.")
             required = self._units(requirement, spec)
-            complete_set = self.ledger.complete_units(spec.dataset_id, scope_key(requirement.scope), required)
+            if self.complete_units_resolver is not None:
+                complete_set = self.complete_units_resolver(
+                    spec.dataset_id, requirement.scope, required, requirement.required_fields
+                )
+            else:
+                complete_set = self.ledger.complete_units(spec.dataset_id, scope_key(requirement.scope), required)
+            if self.unit_verifier is not None and self.complete_units_resolver is None:
+                complete_set = frozenset(
+                    unit for unit in complete_set
+                    if self.unit_verifier(spec.dataset_id, requirement.scope, unit, requirement.required_fields)
+                )
             complete = tuple(item for item in required if item in complete_set)
             missing = tuple(item for item in required if item not in complete_set)
             plans.append(MissingDataPlan(requirement, required, complete, missing, self._tasks(requirement, spec, missing, required)))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from types import MappingProxyType
 from typing import Mapping, Protocol
@@ -80,13 +80,21 @@ class CanonicalAdjustedPriceDataSource:
         for unit in units:
             rows = self.store.rows_for_unit(spec, unit=unit, scope=self.scope)
             record = records[unit]
-            if len(rows) != record.row_count or content_hash(spec, rows) != record.content_hash:
+            hash_spec = (
+                replace(spec, required_fields=tuple(field for field in spec.required_fields if field != "dv_ttm"), schema_version="1.0")
+                if dataset_id == "daily_basic" and record.schema_version == "1.0"
+                else spec
+            )
+            hash_rows = rows.loc[:, list(hash_spec.required_fields)]
+            if len(rows) != record.row_count or content_hash(hash_spec, hash_rows) != record.content_hash:
                 raise AdjustedPriceDataUnavailable(f"Canonical {dataset_id} integrity check failed for {unit}.")
             frames.append(rows)
             identities.append(f"{unit}:{record.content_hash}")
         frame = normalize_frame(spec, pd.concat(frames, ignore_index=True))
         digest = sha256("|".join(identities).encode("utf-8")).hexdigest()
-        return CanonicalMarketSlice(frame, dataset_id, spec.schema_version, f"{dataset_id}:{spec.schema_version}:{digest}")
+        versions = {records[unit].schema_version for unit in units}
+        schema_version = spec.schema_version if len(versions) != 1 else next(iter(versions))
+        return CanonicalMarketSlice(frame, dataset_id, schema_version, f"{dataset_id}:{schema_version}:{digest}")
 
     def daily(self, dates: tuple[str, ...]) -> CanonicalMarketSlice:
         return self._read("daily", dates)
