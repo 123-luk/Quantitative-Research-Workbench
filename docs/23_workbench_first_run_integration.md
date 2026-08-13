@@ -223,3 +223,18 @@ canonical or empty-marker proof. UAT-028 also remains unresolved because this
 round produced no real successful exact run or readable Artifact. These items
 must not be marked fixed until a normal provider response allows an unmodified
 real task to finish and the Results page to open it.
+
+# 2026-08-13 TuShare Provider Audit and UAT-030
+
+The Workbench now has explicit `tushare_official` and `tushare_proxy` providers,
+separate in-memory token fields and isolated provider data roots. Task schema
+1.1 migrates 1.0 records in memory and supplies formal optional diagnostics
+without rewriting historical tasks. Missing noncritical diagnostics render as
+“暂无信息”; retry is disabled during submission.
+
+Dependency readiness is mandatory before task submission and shows provider,
+endpoint and official points/rules. Suspension handling is explicitly
+`STANDARD_ROBUST` or `STRICT_EVENT` and never silently changes. See
+`docs/24_tushare_provider_contracts.md` for contracts, dependency and quality
+policy. UAT-030 is implemented but needs packaged-app recheck. UAT-009 and
+UAT-028 remain open. No real task was retried by automation.

@@ -17,6 +17,7 @@ from app.services.credential_service import ProviderErrorKind, classify_provider
 from app.services.result_service import ResultService
 from app.services.run_service import RunOutcome, RunService, SafeRunError
 from src.data import CoverageLedger, PartitionedParquetStore, RawParquetStore
+from src.data.provider_registry import ProviderClientFactory, ProviderId
 from src.data.coverage_ledger import CoverageRecord
 from src.data.coverage_planner import scope_key
 from src.data.contracts import DataRequirement, ResearchFrequency, canonical_date
@@ -170,6 +171,9 @@ class ReadinessRow:
     missing_units: tuple[str, ...]
     status: str
     action: str
+    endpoint: str = ""
+    official_minimum_points: int | str = "OFFICIAL_NOT_STATED"
+    provider_id: str = "tushare_official"
 
 
 @dataclass(frozen=True)
@@ -208,8 +212,15 @@ class FirstRunResult:
 class ReadOnlyCoverageLedger:
     """Coverage query adapter that never creates or mutates SQLite state."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, provider_id: str = "tushare_official") -> None:
         self.path = Path(path)
+        self.provider_id = provider_id
+
+    def _has_provider_column(self) -> bool:
+        if not self.path.is_file():
+            return False
+        with self._connect() as connection:
+            return "provider_id" in {row[1] for row in connection.execute("PRAGMA table_info(coverage_units)")}
 
     def _connect(self) -> sqlite3.Connection:
         if not self.path.is_file():
@@ -224,17 +235,25 @@ class ReadOnlyCoverageLedger:
             return frozenset()
         placeholders = ",".join("?" for _ in values)
         with self._connect() as connection:
-            rows = connection.execute(f"SELECT unit_key FROM coverage_units WHERE dataset_id=? AND scope_key=? AND status='COMPLETE' AND unit_key IN ({placeholders})", (dataset_id, scope_value, *values)).fetchall()
+            provider_clause = "provider_id=? AND " if self._has_provider_column() else ""
+            params = (self.provider_id, dataset_id, scope_value, *values) if provider_clause else (dataset_id, scope_value, *values)
+            rows = connection.execute(f"SELECT unit_key FROM coverage_units WHERE {provider_clause}dataset_id=? AND scope_key=? AND status='COMPLETE' AND unit_key IN ({placeholders})", params).fetchall()
         return frozenset(str(row["unit_key"]) for row in rows)
 
     def records(self, dataset_id: str | None = None) -> tuple[CoverageRecord, ...]:
         if not self.path.is_file():
             return ()
-        sql, params = "SELECT * FROM coverage_units", ()
+        has_provider = self._has_provider_column()
+        sql, params = ("SELECT * FROM coverage_units WHERE provider_id=?", (self.provider_id,)) if has_provider else ("SELECT * FROM coverage_units", ())
         if dataset_id is not None:
-            sql, params = sql + " WHERE dataset_id=?", (dataset_id,)
+            sql, params = (sql + (" AND dataset_id=?" if has_provider else " WHERE dataset_id=?"), (*params, dataset_id))
         with self._connect() as connection:
-            return tuple(CoverageRecord(**dict(row)) for row in connection.execute(sql + " ORDER BY dataset_id,scope_key,unit_key", params))
+            values = []
+            for row in connection.execute(sql + " ORDER BY dataset_id,scope_key,unit_key", params):
+                item = dict(row)
+                item.setdefault("provider_id", self.provider_id)
+                values.append(CoverageRecord(**item))
+            return tuple(values)
 
 
 def create_workbench_factor_registry() -> FactorRegistry:
@@ -315,9 +334,10 @@ def _pipeline_requirements(draft: WorkbenchRunDraft, plan: ResearchInputPlan, ca
     if config.research_backtest.enabled:
         requirements.extend((
             DataRequirement.create("stock_basic", scope=STOCK_BASIC_SCOPE, required_start=end, required_end=end, required_fields=("ts_code", "list_status", "list_date", "delist_date"), reason="existing Research Backtest security lifecycle", as_of_cutoff=end),
-            DataRequirement.create("suspend_d", scope="CN_A", required_start=plan.formation_dates[0], required_end=end, required_fields=("ts_code", "trade_date", "suspend_type"), reason="existing Research Backtest suspension status", as_of_cutoff=end),
             DataRequirement.create("index_daily", scope={"index_code": config.research_backtest.benchmark.benchmark_code}, required_start=plan.formation_dates[0], required_end=end, required_fields=("ts_code", "trade_date", "pct_chg"), reason="existing Research Backtest benchmark returns", as_of_cutoff=end),
         ))
+        if config.research_backtest.suspension_mode == "STRICT_EVENT":
+            requirements.append(DataRequirement.create("suspend_d", scope="CN_A", required_start=plan.formation_dates[0], required_end=end, required_fields=("ts_code", "trade_date", "suspend_type"), reason="strict Research Backtest suspension-event evidence", as_of_cutoff=end))
     return tuple(requirements)
 
 
@@ -352,14 +372,20 @@ class WorkbenchRuntime:
         data_root = Path(config.data_root)
         if not data_root.is_absolute():
             data_root = self.project_root / data_root
-        self.data_root = data_root.resolve()
+        base_data_root = data_root.resolve()
+        self.provider_id = ProviderId(config.provider_id).value
+        self.data_root = (
+            base_data_root
+            if self.provider_id == ProviderId.TUSHARE_OFFICIAL.value
+            else base_data_root / "providers" / self.provider_id
+        )
         self.registry = create_default_dataset_registry()
         self.factor_registry = factor_registry or create_workbench_factor_registry()
         ledger_path = self.data_root / "metadata" / "catalog.sqlite"
-        self.ledger = ReadOnlyCoverageLedger(ledger_path) if read_only else CoverageLedger(ledger_path)
-        self.curated = PartitionedParquetStore(self.data_root / "curated", engine="pyarrow")
-        self.raw = RawParquetStore(self.data_root / "raw", engine="pyarrow")
-        self.client_factory = client_factory
+        self.ledger = ReadOnlyCoverageLedger(ledger_path, provider_id=self.provider_id) if read_only else CoverageLedger(ledger_path, provider_id=self.provider_id)
+        self.curated = PartitionedParquetStore(self.data_root / "curated", engine="pyarrow", provider_id=self.provider_id)
+        self.raw = RawParquetStore(self.data_root / "raw", engine="pyarrow", provider_id=self.provider_id)
+        self.client_factory = client_factory or (lambda token: ProviderClientFactory().create(self.provider_id, token))
 
     def preparation(self, *, open_dates: Callable[[str, str], Iterable[object]] | None = None) -> DataPreparationService:
         return DataPreparationService(registry=self.registry, ledger=self.ledger, curated_store=self.curated, raw_store=self.raw, open_dates=open_dates, client_factory=self.client_factory)
@@ -425,13 +451,16 @@ class FirstRunOrchestrator:
             callback(event)
 
     @staticmethod
-    def _rows(plans: Iterable[object]) -> tuple[ReadinessRow, ...]:
+    def _rows(plans: Iterable[object], provider_id: str = "tushare_official") -> tuple[ReadinessRow, ...]:
+        from src.data.provider_contracts import ProviderContractRegistry
+        contracts = ProviderContractRegistry()
         rows = []
         for item in plans:
             missing = tuple(item.missing_units)
             complete = len(item.complete_units)
             status = "READY" if not missing else ("PARTIAL" if complete else "MISSING")
-            rows.append(ReadinessRow(item.requirement.dataset_id, item.requirement.scope, item.requirement.required_start, item.requirement.required_end, len(item.required_units), missing, status, "REUSE_LOCAL" if not missing else "DOWNLOAD_MISSING"))
+            contract = contracts.get(provider_id, item.requirement.dataset_id)
+            rows.append(ReadinessRow(item.requirement.dataset_id, item.requirement.scope, item.requirement.required_start, item.requirement.required_end, len(item.required_units), missing, status, "REUSE_LOCAL" if not missing else "DOWNLOAD_MISSING", contract.api_name, contract.minimum_points, provider_id))
         return tuple(rows)
 
     def _plan(self, draft: WorkbenchRunDraft, runtime: WorkbenchRuntime, calendar: ResearchCalendar) -> ResearchInputPlan:
@@ -475,7 +504,7 @@ class FirstRunOrchestrator:
         bootstrap_service = runtime.preparation()
         calendar_plan = bootstrap_service.inspect((bootstrap,))[0]
         if not calendar_plan.ready:
-            return DataReadinessPreview(self._rows((calendar_plan,)), None, False, True)
+            return DataReadinessPreview(self._rows((calendar_plan,), runtime.provider_id), None, False, True)
         calendar = _read_calendar(runtime, bootstrap)
         plan = self._plan(draft, runtime, calendar)
         resolver = CuratedTradingCalendarResolver(runtime.registry, runtime.ledger, runtime.curated, scope={"exchange": "SSE"})
@@ -485,7 +514,7 @@ class FirstRunOrchestrator:
         reusable = False
         if all(item.ready for item in missing):
             reusable = runtime.research_builder(draft, plan, calendar).inspect(plan).reusable
-        return DataReadinessPreview(self._rows(missing), plan, reusable)
+        return DataReadinessPreview(self._rows(missing, runtime.provider_id), plan, reusable)
 
     def run(self, draft: WorkbenchRunDraft, *, credential: str | None, progress: Callable[[ProgressEvent], None] | None = None) -> FirstRunResult:
         started = perf_counter()

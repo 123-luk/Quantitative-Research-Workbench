@@ -27,7 +27,8 @@ from src.pipeline.experiment import ExperimentManager
 from src.universe import UniverseSpec
 
 
-TASK_SCHEMA_VERSION = "1.0"
+TASK_SCHEMA_VERSION = "1.1"
+LEGACY_TASK_SCHEMA_VERSIONS = frozenset({"1.0"})
 ACTIVE_STATUSES = frozenset({"created", "running"})
 TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 
@@ -97,6 +98,7 @@ class ResearchTask:
     finished_at: str | None
     elapsed_seconds: float | None
     retry_of: str | None
+    provider_id: str = "tushare_official"
     ledger_status: str | None = None
     canonical_status: str | None = None
     consistency_issue: str | None = None
@@ -179,9 +181,23 @@ class ResearchTaskService:
             if path.is_symlink() or not path.is_file():
                 raise FileNotFoundError(task_id)
             value = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(value, dict) or value.get("schema_version") != TASK_SCHEMA_VERSION:
+        if not isinstance(value, dict) or value.get("schema_version") not in {TASK_SCHEMA_VERSION, *LEGACY_TASK_SCHEMA_VERSIONS}:
             raise ValueError("Unsupported task record schema.")
+        if value.get("schema_version") in LEGACY_TASK_SCHEMA_VERSIONS:
+            value = self._migrate_legacy(value)
         return value
+
+    @staticmethod
+    def _migrate_legacy(value: Mapping[str, object]) -> dict[str, object]:
+        """Return an in-memory 1.1 view; historical files are never bulk-rewritten."""
+        migrated = dict(value)
+        migrated["schema_version"] = TASK_SCHEMA_VERSION
+        config = migrated.get("pipeline_config")
+        provider_id = config.get("provider_id") if isinstance(config, Mapping) else None
+        migrated["provider_id"] = provider_id if provider_id in {"tushare_official", "tushare_proxy"} else "tushare_official"
+        for name in ("ledger_status", "canonical_status", "consistency_issue", "repair_action", "provider_attempts", "network_category"):
+            migrated.setdefault(name, None)
+        return migrated
 
     @staticmethod
     def _view(value: Mapping[str, object]) -> ResearchTask:
@@ -212,6 +228,7 @@ class ResearchTaskService:
             finished_at=value.get("finished_at") if isinstance(value.get("finished_at"), str) else None,
             elapsed_seconds=elapsed,
             retry_of=value.get("retry_of") if isinstance(value.get("retry_of"), str) else None,
+            provider_id=value.get("provider_id") if value.get("provider_id") in {"tushare_official", "tushare_proxy"} else "tushare_official",
             ledger_status=value.get("ledger_status") if isinstance(value.get("ledger_status"), str) else None,
             canonical_status=value.get("canonical_status") if isinstance(value.get("canonical_status"), str) else None,
             consistency_issue=value.get("consistency_issue") if isinstance(value.get("consistency_issue"), str) else None,
@@ -308,6 +325,13 @@ class ResearchTaskService:
             "research_frequency": draft.research_frequency.value,
             "request_fingerprint": fingerprint,
             "retry_of": retry_of,
+            "provider_id": draft.pipeline_config.provider_id,
+            "ledger_status": None,
+            "canonical_status": None,
+            "consistency_issue": None,
+            "repair_action": None,
+            "provider_attempts": None,
+            "network_category": None,
             }
             self._write(record)
             future = _EXECUTOR.submit(self._run, task_id, draft, credential)

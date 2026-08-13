@@ -259,11 +259,21 @@ class ResearchBacktestPipelineExecutor:
             lifecycle = TushareSecurityLifecycleAdapter(self.client).load(
                 list_statuses=("L", "D", "P")
             )
-            suspensions = TushareSecuritySuspensionAdapter(self.client).load(
-                ts_codes=codes,
-                start_date=evaluation_start,
-                end_date=end,
-            )
+            if self.config.suspension_mode == "STRICT_EVENT":
+                suspensions = TushareSecuritySuspensionAdapter(self.client).load(
+                    ts_codes=codes,
+                    start_date=evaluation_start,
+                    end_date=end,
+                )
+            else:
+                try:
+                    suspensions = TushareSecuritySuspensionAdapter(self.client).load(
+                        ts_codes=codes,
+                        start_date=evaluation_start,
+                        end_date=end,
+                    )
+                except (TypeError, ValueError, OSError):
+                    suspensions = pd.DataFrame(columns=("trade_date", "ts_code", "suspend_type", "suspend_timing"))
             security_status = build_security_status(
                 ts_codes=codes,
                 evaluation_dates=evaluation_dates,
@@ -272,7 +282,14 @@ class ResearchBacktestPipelineExecutor:
                 security_returns=security_returns,
                 trading_calendar=calendar,
             )
-            rebalances = RebalanceAccountingEngine(calendar).run(
+            if self.config.suspension_mode == "STANDARD_ROBUST":
+                missing = security_status.loc[security_status["status"].eq("UNKNOWN_MISSING")]
+                fractions = missing.groupby("trade_date").size().div(max(1, len(codes)))
+                if not fractions.empty and float(fractions.max()) > self.config.max_unexplained_missing_fraction:
+                    raise ResearchBacktestPipelineExecutionError(
+                        "unexplained missing daily rows exceed the configured market-wide quality threshold."
+                    )
+            rebalances = RebalanceAccountingEngine(calendar, self.config.suspension_mode).run(
                 holdings=holdings,
                 security_returns=security_returns,
                 security_status=security_status,
@@ -281,6 +298,7 @@ class ResearchBacktestPipelineExecutor:
                 calendar,
                 self.config.portfolio,
                 self.config.transaction_cost,
+                self.config.suspension_mode,
             ).run(
                 rebalances=rebalances,
                 security_returns=security_returns,

@@ -9,7 +9,7 @@ import re
 from typing import Callable
 
 from src.data.credentials import CredentialProvider, EnvironmentCredentialProvider
-from src.data.tushare_client import TushareClient
+from src.data.provider_registry import ProviderClientFactory, ProviderId
 
 
 class ProviderErrorKind(str, Enum):
@@ -79,27 +79,32 @@ class CredentialService:
         self,
         *,
         environment: CredentialProvider | None = None,
-        client_factory: Callable[[str], object] | None = None,
+        client_factory: Callable[..., object] | None = None,
     ) -> None:
         root = Path(__file__).resolve().parents[2]
         self.environment = environment or EnvironmentCredentialProvider(root)
-        self.client_factory = client_factory or (lambda token: TushareClient(token))
+        self.client_factory = client_factory or (lambda provider_id, token: ProviderClientFactory().create(provider_id, token))
 
-    def resolve(self, session_token: object = None) -> ResolvedCredential:
+    def resolve(self, session_token: object = None, *, provider_id: str = "tushare_official") -> ResolvedCredential:
+        provider = ProviderId(provider_id)
         if isinstance(session_token, str) and session_token.strip():
             return ResolvedCredential(session_token, "session")
-        value = self.environment.tushare_token()
+        value = self.environment.tushare_token() if provider is ProviderId.TUSHARE_OFFICIAL else None
         if value:
             return ResolvedCredential(value, "environment")
         return ResolvedCredential(None, "none")
 
-    def test_connection(self, session_token: object = None) -> ConnectionResult:
-        credential = self.resolve(session_token)
+    def test_connection(self, session_token: object = None, *, provider_id: str = "tushare_official") -> ConnectionResult:
+        credential = self.resolve(session_token, provider_id=provider_id)
         token = credential.reveal_for_provider()
         if token is None:
             return ConnectionResult(False, ProviderErrorKind.CREDENTIAL_MISSING)
         try:
-            client = self.client_factory(token)
+            try:
+                client = self.client_factory(provider_id, token)
+            except TypeError:
+                # Backward-compatible injection point for existing unit tests.
+                client = self.client_factory(token)
             method = getattr(client, "get_trade_cal")
             method(start_date="20240102", end_date="20240102")
         except Exception as exc:

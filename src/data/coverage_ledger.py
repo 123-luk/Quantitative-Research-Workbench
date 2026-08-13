@@ -22,11 +22,13 @@ class CoverageRecord:
     content_hash: str
     request_fingerprint: str
     completed_at: str
+    provider_id: str = "tushare_official"
 
 
 class CoverageLedger:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, provider_id: str = "tushare_official") -> None:
         self.path = Path(path)
+        self.provider_id = provider_id
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
@@ -43,7 +45,7 @@ class CoverageLedger:
                     unit_key TEXT NOT NULL, status TEXT NOT NULL,
                     row_count INTEGER NOT NULL, schema_version TEXT NOT NULL,
                     content_hash TEXT NOT NULL, request_fingerprint TEXT NOT NULL,
-                    completed_at TEXT NOT NULL,
+                    completed_at TEXT NOT NULL, provider_id TEXT NOT NULL DEFAULT 'tushare_official',
                     PRIMARY KEY (dataset_id, scope_key, unit_key),
                     CHECK (status IN ('COMPLETE','PARTIAL','FAILED')),
                     CHECK (row_count >= 0)
@@ -53,11 +55,17 @@ class CoverageLedger:
                     scope_key TEXT NOT NULL, requested_units TEXT NOT NULL,
                     started_at TEXT NOT NULL, finished_at TEXT,
                     status TEXT NOT NULL, rows INTEGER NOT NULL DEFAULT 0,
-                    error_type TEXT,
+                    error_type TEXT, provider_id TEXT NOT NULL DEFAULT 'tushare_official',
                     CHECK (status IN ('STARTED','COMPLETE','FAILED')),
                     CHECK (rows >= 0)
                 );
             """)
+            coverage_columns = {row[1] for row in connection.execute("PRAGMA table_info(coverage_units)")}
+            if "provider_id" not in coverage_columns:
+                connection.execute("ALTER TABLE coverage_units ADD COLUMN provider_id TEXT NOT NULL DEFAULT 'tushare_official'")
+            fetch_columns = {row[1] for row in connection.execute("PRAGMA table_info(fetch_events)")}
+            if "provider_id" not in fetch_columns:
+                connection.execute("ALTER TABLE fetch_events ADD COLUMN provider_id TEXT NOT NULL DEFAULT 'tushare_official'")
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -78,15 +86,15 @@ class CoverageLedger:
             return frozenset()
         placeholders = ",".join("?" for _ in values)
         with self._connect() as connection:
-            rows = connection.execute(f"SELECT unit_key FROM coverage_units WHERE dataset_id=? AND scope_key=? AND status='COMPLETE' AND unit_key IN ({placeholders})", (dataset_id, scope_key, *values)).fetchall()
+            rows = connection.execute(f"SELECT unit_key FROM coverage_units WHERE provider_id=? AND dataset_id=? AND scope_key=? AND status='COMPLETE' AND unit_key IN ({placeholders})", (self.provider_id, dataset_id, scope_key, *values)).fetchall()
         return frozenset(row["unit_key"] for row in rows)
 
     def records(self, dataset_id: str | None = None) -> tuple[CoverageRecord, ...]:
-        sql = "SELECT * FROM coverage_units"
-        params: tuple[str, ...] = ()
+        sql = "SELECT * FROM coverage_units WHERE provider_id=?"
+        params: tuple[str, ...] = (self.provider_id,)
         if dataset_id is not None:
-            sql += " WHERE dataset_id=?"
-            params = (dataset_id,)
+            sql += " AND dataset_id=?"
+            params = (self.provider_id, dataset_id)
         sql += " ORDER BY dataset_id, scope_key, unit_key"
         with self._connect() as connection:
             return tuple(CoverageRecord(**dict(row)) for row in connection.execute(sql, params))
@@ -99,10 +107,12 @@ class CoverageLedger:
         target = self._connect() if owner else connection
         assert target is not None
         try:
-            target.executemany("""INSERT INTO coverage_units VALUES (?,?,?,?,?,?,?,?,?)
+            normalized = [record if record.provider_id == self.provider_id else CoverageRecord(**{**record.__dict__, "provider_id": self.provider_id}) for record in values]
+            target.executemany("""INSERT INTO coverage_units(dataset_id,scope_key,unit_key,status,row_count,schema_version,content_hash,request_fingerprint,completed_at,provider_id) VALUES (?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(dataset_id,scope_key,unit_key) DO UPDATE SET
                 status=excluded.status,row_count=excluded.row_count,schema_version=excluded.schema_version,
-                content_hash=excluded.content_hash,request_fingerprint=excluded.request_fingerprint,completed_at=excluded.completed_at""", [tuple(record.__dict__.values()) for record in values])
+                content_hash=excluded.content_hash,request_fingerprint=excluded.request_fingerprint,completed_at=excluded.completed_at,
+                provider_id=excluded.provider_id""", [tuple(record.__dict__.values()) for record in normalized])
             if owner:
                 target.commit()
         except Exception:
@@ -116,7 +126,7 @@ class CoverageLedger:
     def start_fetch(self, dataset_id: str, scope_key: str, units: Iterable[str], started_at: str) -> str:
         fetch_id = uuid4().hex
         with self._connect() as connection:
-            connection.execute("INSERT INTO fetch_events(fetch_id,dataset_id,scope_key,requested_units,started_at,status) VALUES (?,?,?,?,?,'STARTED')", (fetch_id, dataset_id, scope_key, json.dumps(tuple(units)), started_at))
+            connection.execute("INSERT INTO fetch_events(fetch_id,dataset_id,scope_key,requested_units,started_at,status,provider_id) VALUES (?,?,?,?,?,'STARTED',?)", (fetch_id, dataset_id, scope_key, json.dumps(tuple(units)), started_at, self.provider_id))
         return fetch_id
 
     def finish_fetch(self, fetch_id: str, *, status: str, finished_at: str, rows: int = 0, error_type: str | None = None) -> None:
@@ -129,4 +139,4 @@ class CoverageLedger:
 
     def fetch_events(self) -> tuple[dict[str, object], ...]:
         with self._connect() as connection:
-            return tuple(dict(row) for row in connection.execute("SELECT * FROM fetch_events ORDER BY started_at, fetch_id"))
+            return tuple(dict(row) for row in connection.execute("SELECT * FROM fetch_events WHERE provider_id=? ORDER BY started_at, fetch_id", (self.provider_id,)))

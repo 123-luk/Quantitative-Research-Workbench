@@ -19,7 +19,9 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None) -> None
     root = Path(__file__).resolve().parents[2]
     output_root = PipelineConfig.from_yaml(root / "config" / "config.yaml").output_dir
     tasks = ResearchTaskService(output_root).list_tasks()
-    credential = CredentialService().resolve(st.session_state.get("tushare_session_token"))
+    provider_id = st.session_state.get("selected_provider_id", "tushare_official")
+    token_key = "tushare_official_session_token" if provider_id == "tushare_official" else "tushare_proxy_session_token"
+    credential = CredentialService().resolve(st.session_state.get(token_key), provider_id=provider_id)
     active = next((item for item in tasks if item.active), None)
     recent = tasks[0] if tasks else None
 

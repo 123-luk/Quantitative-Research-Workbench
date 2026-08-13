@@ -107,9 +107,10 @@ def merge_canonical(spec: DatasetSpec, existing: pd.DataFrame, incoming: pd.Data
 
 
 class PartitionedParquetStore:
-    def __init__(self, root: str | Path, *, engine: str = "pyarrow") -> None:
+    def __init__(self, root: str | Path, *, engine: str = "pyarrow", provider_id: str = "tushare_official") -> None:
         self.root = Path(root)
         self.engine = engine
+        self.provider_id = provider_id
 
     @staticmethod
     def _entity(scope: tuple[tuple[str, str], ...]) -> str:
@@ -145,6 +146,7 @@ class PartitionedParquetStore:
         target = self.empty_marker_path(spec, unit=unit, scope=scope)
         target.parent.mkdir(parents=True, exist_ok=True)
         payload = {
+            "provider_id": self.provider_id,
             "dataset_id": spec.dataset_id,
             "scope": dict(scope),
             "unit": unit,
@@ -172,6 +174,7 @@ class PartitionedParquetStore:
         except (OSError, ValueError, json.JSONDecodeError):
             return False
         return value == {
+            "provider_id": self.provider_id,
             "dataset_id": spec.dataset_id,
             "scope": dict(scope),
             "unit": unit,
@@ -231,6 +234,24 @@ class PartitionedParquetStore:
                 if content_hash(spec, verified) != content_hash(spec, merged):
                     raise CanonicalDataError("temporary Parquet verification failed.")
                 os.replace(temp, target)
+                manifest = target.with_suffix(target.suffix + ".manifest.json")
+                descriptor, raw_manifest = tempfile.mkstemp(
+                    prefix=f".{manifest.stem}.", suffix=".tmp", dir=manifest.parent
+                )
+                os.close(descriptor)
+                manifest_temp = Path(raw_manifest)
+                manifest_temp.write_text(json.dumps({
+                    "provider_id": self.provider_id,
+                    "dataset_id": spec.dataset_id,
+                    "schema_version": spec.schema_version,
+                    "content_hash": content_hash(spec, verified),
+                }, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+                try:
+                    with manifest_temp.open("r+b") as handle:
+                        os.fsync(handle.fileno())
+                    os.replace(manifest_temp, manifest)
+                finally:
+                    manifest_temp.unlink(missing_ok=True)
             finally:
                 temp.unlink(missing_ok=True)
             paths.append(target)
@@ -246,12 +267,13 @@ class PartitionedParquetStore:
 
 
 class RawParquetStore:
-    def __init__(self, root: str | Path, *, engine: str = "pyarrow") -> None:
+    def __init__(self, root: str | Path, *, engine: str = "pyarrow", provider_id: str = "tushare_official") -> None:
         self.root = Path(root)
         self.engine = engine
+        self.provider_id = provider_id
 
     def save(self, dataset_id: str, fetch_id: str, frame: pd.DataFrame) -> Path:
-        target = self.root / "tushare" / dataset_id / f"{fetch_id}.parquet"
+        target = self.root / self.provider_id / dataset_id / f"{fetch_id}.parquet"
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             raise FileExistsError("raw fetch identity already exists.")

@@ -3925,3 +3925,29 @@ override，V4-E3 为 CLI + YAML + docs。
   `85 passed in 21.78s`; two heavy offline service-to-exact-run tests `2 passed
   in 398.91s`. No skip/xfail was added. Existing user task records, `data/`,
   `-m`, caches, and build output were not deleted or mass-rewritten.
+
+## 2026-08-13 TuShare dual-provider audit
+
+- Official document URLs and unknown-rule policy are recorded in
+  `docs/24_tushare_provider_contracts.md`. The official site timed out from this
+  development network. Obsolete suspension `doc_id=31` does not retire current
+  `suspend_d` at `doc_id=214`.
+- Real wrappers are `stock_basic`, `trade_cal`, `index_weight`, `monthly`,
+  `daily`, `index_daily`, `suspend_d`, `daily_basic`, and `adj_factor`;
+  `stk_limit` is capability-only. There are no `pro.query` calls.
+- Providers are `tushare_official` and `tushare_proxy`, with no failover or
+  mixing. Proxy uses fixed HTTPS `https://tuaremax.top` and isolated storage.
+  Ledger, canonical manifest, empty marker, task, exact run and provenance carry
+  provider identity.
+- Runtime TuShare 1.4.29 is pinned. Private SDK fields exist only in the proxy
+  adapter. A true 1.4.24 runtime probe remains UAT.
+- Tokens are masked, session/process-only and provider-specific; only official
+  may resolve the environment credential.
+- `STANDARD_ROBUST` freezes unavailable trades and verified holding value;
+  `STRICT_EVENT` requires `suspend_d`. More than 20% unexplained daily missing
+  blocks standard mode.
+- Task schema 1.1 migrates 1.0 in memory and formally contains diagnostics.
+  UAT-030 is implemented but requires EXE recheck. UAT-009 and UAT-028 stay open.
+- Targeted results: 70 provider/backtest tests and 177 artifact/config tests
+  passed. A broader GUI group reached 34 passes before a long AppTest was
+  interrupted and is not claimed as a completed pass.

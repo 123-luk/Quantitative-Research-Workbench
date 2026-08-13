@@ -431,10 +431,24 @@ class ResearchBacktestPipelineConfig:
     benchmark: BenchmarkConfig | None = None
     performance: PerformanceConfig | None = None
     artifact_subdir: str = "research_backtest"
+    suspension_mode: str = "STRICT_EVENT"
+    max_unexplained_missing_fraction: float = 0.20
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
             raise ResearchBacktestConfigError("enabled must be a bool.")
+        if self.suspension_mode not in {"STANDARD_ROBUST", "STRICT_EVENT"}:
+            raise ResearchBacktestConfigError(
+                "suspension_mode must be STANDARD_ROBUST or STRICT_EVENT."
+            )
+        if (
+            isinstance(self.max_unexplained_missing_fraction, bool)
+            or not isinstance(self.max_unexplained_missing_fraction, (int, float))
+            or not 0.0 <= float(self.max_unexplained_missing_fraction) <= 1.0
+        ):
+            raise ResearchBacktestConfigError(
+                "max_unexplained_missing_fraction must be in [0, 1]."
+            )
         source = BacktestSourceConfig.from_dict(self.source)
         schedule = BacktestScheduleConfig.from_dict(self.schedule)
         return_alignment = ReturnAlignmentConfig.from_dict(self.return_alignment)
@@ -501,6 +515,8 @@ class ResearchBacktestPipelineConfig:
                     "benchmark",
                     "performance",
                     "artifact_subdir",
+                    "suspension_mode",
+                    "max_unexplained_missing_fraction",
                 }
             ),
             "research_backtest",
@@ -534,5 +550,7 @@ class ResearchBacktestPipelineConfig:
                 None if self.performance is None else self.performance.to_dict()
             ),
             "artifact_subdir": self.artifact_subdir,
+            "suspension_mode": self.suspension_mode,
+            "max_unexplained_missing_fraction": float(self.max_unexplained_missing_fraction),
         }
         return deepcopy(result)

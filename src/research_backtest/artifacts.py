@@ -602,7 +602,12 @@ def _validate_lineage(value: object) -> tuple[dict[str, object], pd.DataFrame]:
     return data, frame
 
 
-def _holdings_match(rebalances: pd.DataFrame, holdings: pd.DataFrame) -> None:
+def _holdings_match(
+    rebalances: pd.DataFrame,
+    holdings: pd.DataFrame,
+    *,
+    suspension_mode: str = "STRICT_EVENT",
+) -> None:
     target = rebalances.loc[
         :, ["holdings_trade_date", "ts_code", "target_weight"]
     ].rename(columns={"holdings_trade_date": "trade_date"})
@@ -619,6 +624,14 @@ def _holdings_match(rebalances: pd.DataFrame, holdings: pd.DataFrame) -> None:
     extra_values = target_index.loc[extra, "target_weight"].to_numpy(
         dtype=np.float64
     )
+    if suspension_mode == "STANDARD_ROBUST":
+        if missing:
+            raise ResearchBacktestArtifactValidationError(
+                "standard-mode rebalances omit upstream holdings keys."
+            )
+        # Standard mode may freeze an unavailable holding or suppress a new buy.
+        # The complete rebalance/cash invariants remain validated separately.
+        return
     if (
         len(missing)
         or bool((np.abs(extra_values) > WEIGHT_TOLERANCE).any())
@@ -886,7 +899,11 @@ class ResearchBacktestArtifactStore:
             lineage, holdings = _validate_lineage(audit_data["upstream_holdings"])
             if lineage != audit_data["upstream_holdings"]:
                 raise ResearchBacktestArtifactValidationError("lineage differs.")
-            _holdings_match(rebalances, holdings)
+            _holdings_match(
+                rebalances,
+                holdings,
+                suspension_mode=config.suspension_mode,
+            )
             _cross_validate(
                 rebalances,
                 daily,
@@ -964,7 +981,11 @@ class ResearchBacktestArtifactStore:
                 "result metadata differs from config."
             )
         lineage, holdings = _lineage(holdings_artifact_dir)
-        _holdings_match(rebalance_frame, holdings)
+        _holdings_match(
+            rebalance_frame,
+            holdings,
+            suspension_mode=config_value.suspension_mode,
+        )
         _cross_validate(
             rebalance_frame,
             daily_frame,

@@ -137,6 +137,7 @@ def build_research_backtest_ui_config(
     annual_risk_free_rate: float = SUGGESTED_ANNUAL_RISK_FREE_RATE,
     annualization_days: int = 252,
     initial_nav: float = 1.0,
+    suspension_mode: str = "STRICT_EVENT",
 ) -> ResearchBacktestPipelineConfig:
     """Map the narrow ordinary-UI surface onto canonical V6 config classes."""
     if not enabled:
@@ -153,6 +154,7 @@ def build_research_backtest_ui_config(
             annual_risk_free_rate=annual_risk_free_rate,
             annualization_days=annualization_days,
         ),
+        suspension_mode=suspension_mode,
     )
 
 
@@ -375,6 +377,7 @@ def build_pipeline_config(
             "strategy_name": str(state.get("strategy_name", "research_workbench")),
             "selected_factors": list(factors),
             "top_n": _required(state, "top_n"),
+            "provider_id": str(state.get("provider_id", source.provider_id)),
         }
     )
 
@@ -505,5 +508,6 @@ def build_pipeline_config(
         annual_risk_free_rate=float(state.get("annual_risk_free_rate", 0.0)),
         annualization_days=state.get("annualization_days", 252),  # type: ignore[arg-type]
         initial_nav=float(state.get("initial_nav", 1.0)),
+        suspension_mode=str(state.get("suspension_mode", "STRICT_EVENT")),
     ).to_dict()
     return PipelineConfig.from_dict(values)

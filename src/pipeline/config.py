@@ -42,6 +42,7 @@ class PipelineConfig:
     output_dir: str
     parquet_engine: str
     required_datasets: list[str]
+    provider_id: str = "tushare_official"
 
     factor_research: FactorResearchPipelineConfig = field(
         default_factory=FactorResearchPipelineConfig
@@ -62,6 +63,8 @@ class PipelineConfig:
         """Normalize dates and validate the backtest range."""
         self.backtest_start = normalize_date(self.backtest_start)
         self.backtest_end = normalize_date(self.backtest_end)
+        if self.provider_id not in {"tushare_official", "tushare_proxy"}:
+            raise ValueError("provider_id must be tushare_official or tushare_proxy.")
         if isinstance(self.factor_research, Mapping):
             self.factor_research = FactorResearchPipelineConfig.from_dict(
                 self.factor_research
@@ -177,6 +180,7 @@ class PipelineConfig:
                 "required_datasets",
                 ["daily", "daily_basic", "adj_factor"],
             ),
+            "provider_id": data.get("provider_id", "tushare_official"),
             "factor_research": merged.get("factor_research", {}),
             "ml_experiment": merged.get("ml_experiment"),
             "signal": merged.get("signal"),

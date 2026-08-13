@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from collections.abc import Callable
+import json
 from typing import Any
 
 from src.data.data_manager import DataManager
@@ -294,6 +295,7 @@ def run_pipeline(
             "required_end_date": required_end_date,
             "cache_status": cache_status,
             "missing_ranges": missing_ranges,
+            "provider_id": config.provider_id,
         },
     )
     experiment_manager.save_metrics(
@@ -303,6 +305,27 @@ def run_pipeline(
             "metrics_ready": False,
             "message": "Pipeline skeleton has not run strategy, model, or backtest metrics.",
         },
+    )
+
+    provenance = {
+        "provider_id": config.provider_id,
+        "datasets": list(config.required_datasets),
+        "schema_source": "DatasetRegistry",
+        "coverage_start": required_start_date,
+        "coverage_end": required_end_date,
+        "quality_conclusion": "canonical contracts validated before pipeline execution",
+        "degraded": config.research_backtest.suspension_mode == "STANDARD_ROBUST",
+        "degradation_reason": (
+            "missing daily rows are classified as unconfirmed unavailability; trades are frozen"
+            if config.research_backtest.suspension_mode == "STANDARD_ROBUST"
+            else None
+        ),
+        "cross_provider_comparison": "NOT_RUN_UNLESS_BOTH_PROVIDERS_WERE_EXPLICITLY_PROBED",
+        "point_in_time_rule": "formation-date dependencies only; same-day after-close values are not assumed available early",
+    }
+    (Path(run_dir) / "data_provenance.json").write_text(
+        json.dumps(provenance, ensure_ascii=False, sort_keys=True, indent=2),
+        encoding="utf-8",
     )
 
     return summary

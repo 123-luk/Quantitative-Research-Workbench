@@ -15,7 +15,9 @@ def render(st: object) -> None:
     st.title(t("data.title", locale=locale))
     st.caption(t("data.subtitle", locale=locale))
     status = DataLayer2StatusService().get_status()
-    credential = CredentialService().resolve(st.session_state.get("tushare_session_token"))
+    provider_id = st.session_state.get("selected_provider_id", "tushare_official")
+    token_key = "tushare_official_session_token" if provider_id == "tushare_official" else "tushare_proxy_session_token"
+    credential = CredentialService().resolve(st.session_state.get(token_key), provider_id=provider_id)
     columns = st.columns(3)
     columns[0].metric(t("data.provider", locale=locale), "TuShare Pro")
     columns[1].metric(t("overview.credential", locale=locale), t("provider.available" if credential.available else "provider.missing", locale=locale))

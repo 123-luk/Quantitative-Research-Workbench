@@ -153,6 +153,9 @@ def _render_readiness(st: object, locale: str, preview: object) -> None:
             t("readiness.status", locale=locale): t({"READY": "readiness.ready", "PARTIAL": "readiness.partial", "MISSING": "readiness.missing_status"}.get(item.status, "readiness.unknown"), locale=locale),
             t("readiness.missing", locale=locale): len(item.missing_units),
             t("readiness.action", locale=locale): t("readiness.reuse" if item.action == "REUSE_LOCAL" else "readiness.download", locale=locale),
+            t("readiness.provider", locale=locale): item.provider_id,
+            t("readiness.endpoint", locale=locale): item.endpoint,
+            t("readiness.points", locale=locale): item.official_minimum_points,
         })
     if rows:
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
@@ -268,12 +271,19 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
     st.header(t("new.section.backtest", locale=locale))
     backtest_enabled = st.checkbox(t("new.backtest_enabled", locale=locale), value=True, key="workbench_backtest")
     cost_bps, risk_free, annualization_days, initial_nav = 10.0, 0.0, 252, 1.0
+    suspension_mode = "STRICT_EVENT"
     if backtest_enabled:
         a, b = st.columns(2)
         cost_bps = float(a.number_input(t("new.cost_bps", locale=locale), min_value=0.0, value=10.0))
         benchmark = b.text_input(t("new.benchmark", locale=locale), value=benchmark, key="workbench_backtest_benchmark")
         risk_free_percent = float(st.number_input(t("new.rf", locale=locale), value=0.0, format="%.4f", help=PARAMETERS["annual_risk_free_rate"].help(locale)))
         st.caption(t("new.rf_scale", locale=locale))
+        suspension_mode = st.radio(
+            t("new.suspension_mode", locale=locale),
+            ("STANDARD_ROBUST", "STRICT_EVENT"),
+            format_func=lambda value: t(f"new.suspension_mode.{value}", locale=locale),
+            help=t("new.suspension_mode_help", locale=locale),
+        )
         risk_free = risk_free_percent / 100.0
         with st.expander(t("new.section.backtest", locale=locale)):
             annualization_days = int(st.number_input(t("new.annualization", locale=locale), min_value=1, value=252, step=1))
@@ -299,6 +309,8 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
             "research_backtest_enabled": backtest_enabled, "transaction_cost_bps": cost_bps,
             "research_backtest_benchmark": benchmark, "annual_risk_free_rate": risk_free,
             "annualization_days": annualization_days, "initial_nav": initial_nav,
+            "suspension_mode": suspension_mode,
+            "provider_id": st.session_state.get("selected_provider_id", "tushare_official"),
         }
         config = build_pipeline_config(state, catalog=catalog, base_config=defaults)
         draft = WorkbenchRunDraft(config, universe, research_frequency)
@@ -329,8 +341,16 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
 
     # The ResearchTaskService worker, never this Streamlit render path, owns
     # the canonical service.run(draft, ...) call.
-    if st.button(t("new.run", locale=locale), type="primary", disabled=draft is None or use_neutralization or not date_validation.valid):
-        credential = CredentialService().resolve(st.session_state.get("tushare_session_token")).reveal_for_provider()
+    matching_preview = preview is not None and draft is not None and st.session_state.get("readiness_fingerprint") == _draft_fingerprint(draft)
+    preflight_valid = matching_preview and (
+        preview.research_plan is not None or preview.calendar_bootstrap_required
+    )
+    if not preflight_valid and draft is not None:
+        st.warning(t("readiness.must_check", locale=locale))
+    if st.button(t("new.run", locale=locale), type="primary", disabled=draft is None or use_neutralization or not date_validation.valid or not preflight_valid):
+        provider_id = draft.pipeline_config.provider_id
+        token_key = "tushare_official_session_token" if provider_id == "tushare_official" else "tushare_proxy_session_token"
+        credential = CredentialService().resolve(st.session_state.get(token_key), provider_id=provider_id).reveal_for_provider()
         task_service = ResearchTaskService(
             defaults.output_dir,
             orchestrator_factory=(lambda: orchestrator) if orchestrator is not None else None,

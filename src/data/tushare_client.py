@@ -19,6 +19,7 @@ class TushareClient:
     """Lazy TuShare Pro client initialized from environment configuration."""
 
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    provider_id = "tushare_official"
 
     def __init__(
         self,
@@ -37,9 +38,14 @@ class TushareClient:
                 "configure the supported environment credential source."
             )
         try:
-            self.pro: Any = ts.pro_api(resolved)
+            pro: Any = ts.pro_api(resolved)
         except Exception:
             raise RuntimeError("TuShare client initialization failed.") from None
+        self.pro = self._configure_client(pro, resolved)
+
+    def _configure_client(self, pro: object, token: str) -> object:
+        """Official client hook; intentionally leaves the SDK endpoint unchanged."""
+        return pro
 
     def get_stock_basic(self, list_status: str = "L") -> pd.DataFrame:
         """Fetch stock lifecycle basics for one explicit listing status."""
@@ -227,6 +233,22 @@ class TushareClient:
             start_date=start_date,
             end_date=end_date,
             fields="ts_code,trade_date,adj_factor",
+        )
+
+    def get_stk_limit(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch daily price-limit bands for capability and quality checks."""
+        return self.pro.stk_limit(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields="trade_date,ts_code,pre_close,up_limit,down_limit",
         )
 
     @staticmethod

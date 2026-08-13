@@ -78,6 +78,7 @@ def _diagnostic_value(kind: str, value: str, locale: str) -> str:
 
 def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTaskService, navigate: object) -> None:
     summary = task.config_summary
+    unavailable = t("task.diagnostic_unavailable", locale=locale)
     with st.container(border=True):
         left, middle, right = st.columns((3, 2, 2))
         left.subheader(t("task.display_name", locale=locale, start=summary.get("research_start", "—"), end=summary.get("research_end", "—")))
@@ -105,20 +106,17 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
                 st.write(f"{t('task.failed_dataset', locale=locale)}: {dataset_label(task.failure_dataset, locale)}")
             if task.failure_range:
                 st.write(f"{t('task.failed_range', locale=locale)}: {task.failure_range[0]} — {task.failure_range[1]}")
-            if task.ledger_status:
-                st.write(f"{t('task.ledger_status', locale=locale)}: {_diagnostic_value('ledger', task.ledger_status, locale)}")
-            if task.canonical_status:
-                st.write(f"{t('task.canonical_status', locale=locale)}: {_diagnostic_value('canonical_status', task.canonical_status, locale)}")
-            if task.consistency_issue:
-                st.write(f"{t('task.consistency_issue', locale=locale)}: {_diagnostic_value('consistency', task.consistency_issue, locale)}")
-            if task.repair_action:
-                st.write(f"{t('task.repair_action', locale=locale)}: {_diagnostic_value('repair', task.repair_action, locale)}")
+            st.write(f"{t('task.ledger_status', locale=locale)}: {_diagnostic_value('ledger', task.ledger_status, locale) if task.ledger_status else unavailable}")
+            st.write(f"{t('task.canonical_status', locale=locale)}: {_diagnostic_value('canonical_status', task.canonical_status, locale) if task.canonical_status else unavailable}")
+            st.write(f"{t('task.consistency_issue', locale=locale)}: {_diagnostic_value('consistency', task.consistency_issue, locale) if task.consistency_issue else unavailable}")
+            st.write(f"{t('task.repair_action', locale=locale)}: {_diagnostic_value('repair', task.repair_action, locale) if task.repair_action else unavailable}")
             if task.provider_attempts is not None:
                 st.write(f"{t('task.provider_attempts', locale=locale)}: {task.provider_attempts}")
             if task.network_category:
                 st.write(f"{t('task.network_category', locale=locale)}: {t(f'task.network.{task.network_category}', locale=locale)}")
-            st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{task.failure_code or "INTERNAL_ERROR"}', locale=locale)}")
-            st.write(f"{t('task.reason', locale=locale)}: {t(f'task.reason.{task.failure_code or "INTERNAL_ERROR"}', locale=locale)}")
+            failure_code = task.failure_code or "INTERNAL_ERROR"
+            st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{failure_code}', locale=locale)}")
+            st.write(f"{t('task.reason', locale=locale)}: {t(f'task.reason.{failure_code}', locale=locale)}")
             st.write(f"{t('task.blocking', locale=locale)}: {t('overview.yes', locale=locale)}")
             st.write(f"{t('task.attempted', locale=locale)}: {t('task.attempted_missing', locale=locale)}")
             st.write(t(f"task.recovery.{task.failure_code or 'INTERNAL_ERROR'}", locale=locale))
@@ -129,10 +127,17 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
                 if navigate is not None:
                     navigate("results")
         elif task.status == "failed":
-            if action.button(t("task.retry", locale=locale), key=f"retry_{task.task_id}"):
-                credential = CredentialService().resolve(st.session_state.get("tushare_session_token")).reveal_for_provider()
-                retried = service.retry(task.task_id, credential=credential)
-                st.session_state["current_task_id"] = retried.task_id
+            retry_key = f"retrying_{task.task_id}"
+            retrying = st.session_state.get(retry_key) is True
+            if action.button(t("task.retry", locale=locale), key=f"retry_{task.task_id}", disabled=retrying):
+                st.session_state[retry_key] = True
+                token_key = "tushare_official_session_token" if task.provider_id == "tushare_official" else "tushare_proxy_session_token"
+                credential = CredentialService().resolve(st.session_state.get(token_key), provider_id=task.provider_id).reveal_for_provider()
+                try:
+                    retried = service.retry(task.task_id, credential=credential)
+                    st.session_state["current_task_id"] = retried.task_id
+                finally:
+                    st.session_state.pop(retry_key, None)
                 st.rerun()
         else:
             action.button(t("task.open_results", locale=locale), key=f"disabled_{task.task_id}", disabled=True)

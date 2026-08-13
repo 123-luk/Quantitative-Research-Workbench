@@ -185,9 +185,8 @@ class DataPreparationService:
                 self.retry_sleep(delay)
         raise AssertionError("unreachable retry state")
 
-    @staticmethod
-    def _fingerprint(dataset_id: str, task_scope: tuple[tuple[str, str], ...], units: tuple[str, ...]) -> str:
-        payload = json.dumps({"dataset_id": dataset_id, "scope": task_scope, "units": units}, sort_keys=True, separators=(",", ":"))
+    def _fingerprint(self, dataset_id: str, task_scope: tuple[tuple[str, str], ...], units: tuple[str, ...]) -> str:
+        payload = json.dumps({"provider_id": self.ledger.provider_id, "dataset_id": dataset_id, "scope": task_scope, "units": units}, sort_keys=True, separators=(",", ":"))
         return sha256(payload.encode("utf-8")).hexdigest()
 
     def _planner(self) -> MissingDataPlanner:
@@ -270,7 +269,7 @@ class DataPreparationService:
                             raise DataUnavailableError(f"Canonical unit {spec.dataset_id}/{unit} is empty after merge.")
                         if unit_rows.empty:
                             self.curated_store.write_empty_marker(spec, unit=unit, scope=task.scope)
-                        records.append(CoverageRecord(spec.dataset_id, scope_key(task.scope), unit, "COMPLETE", len(unit_rows), spec.schema_version, content_hash(spec, unit_rows), self._fingerprint(spec.dataset_id, task.scope, task.units), _now()))
+                        records.append(CoverageRecord(spec.dataset_id, scope_key(task.scope), unit, "COMPLETE", len(unit_rows), spec.schema_version, content_hash(spec, unit_rows), self._fingerprint(spec.dataset_id, task.scope, task.units), _now(), self.ledger.provider_id))
                     with self.ledger.transaction() as connection:
                         self.ledger.mark_complete(records, connection)
                         connection.execute("UPDATE fetch_events SET finished_at=?,status='COMPLETE',rows=?,error_type=NULL WHERE fetch_id=?", (_now(), len(frame), fetch_id))

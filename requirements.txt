@@ -8,7 +8,7 @@ matplotlib
 openpyxl
 pyyaml
 python-dotenv
-tushare
+tushare==1.4.29
 streamlit
 plotly
 pytest
