@@ -148,6 +148,23 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
             st.write(f"{t('task.technical_completed', locale=locale)}: {', '.join(t(f'progress.{stage}', locale=locale) for stage in task.completed_stages) or '—'}")
             if task.failure_code:
                 st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{task.failure_code}', locale=locale)}")
+            transaction_details = (
+                ("transaction_fetch_id", task.transaction_fetch_id),
+                ("transaction_state", task.transaction_state),
+                ("transaction_operation", task.transaction_operation),
+                ("transaction_error_code", task.transaction_error_code),
+                ("transaction_exception_type", task.transaction_exception_type),
+                ("transaction_cause_type", task.transaction_cause_type),
+                ("transaction_message", task.transaction_message),
+                ("transaction_rows", task.transaction_rows),
+                (
+                    "transaction_fields",
+                    ", ".join(task.transaction_fields) if task.transaction_fields else None,
+                ),
+            )
+            for name, value in transaction_details:
+                if value is not None:
+                    st.write(f"{t(f'task.{name}', locale=locale)}: {value}")
 
         clear_col, clear_help = st.columns((1, 4))
         clear_requested = st.session_state.get("confirm_clear_task") == task.task_id

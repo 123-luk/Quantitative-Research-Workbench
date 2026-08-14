@@ -27,8 +27,8 @@ from src.pipeline.experiment import ExperimentManager
 from src.universe import UniverseSpec
 
 
-TASK_SCHEMA_VERSION = "1.1"
-LEGACY_TASK_SCHEMA_VERSIONS = frozenset({"1.0"})
+TASK_SCHEMA_VERSION = "1.2"
+LEGACY_TASK_SCHEMA_VERSIONS = frozenset({"1.0", "1.1"})
 ACTIVE_STATUSES = frozenset({"created", "running"})
 TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 
@@ -105,6 +105,15 @@ class ResearchTask:
     repair_action: str | None = None
     provider_attempts: int | None = None
     network_category: str | None = None
+    transaction_fetch_id: str | None = None
+    transaction_state: str | None = None
+    transaction_operation: str | None = None
+    transaction_error_code: str | None = None
+    transaction_exception_type: str | None = None
+    transaction_cause_type: str | None = None
+    transaction_message: str | None = None
+    transaction_rows: int | None = None
+    transaction_fields: tuple[str, ...] = ()
     historical: bool = False
 
     @property
@@ -189,7 +198,7 @@ class ResearchTaskService:
 
     @staticmethod
     def _migrate_legacy(value: Mapping[str, object]) -> dict[str, object]:
-        """Return an in-memory 1.1 view; historical files are never bulk-rewritten."""
+        """Return an in-memory 1.2 view; historical files are never bulk-rewritten."""
         migrated = dict(value)
         migrated["schema_version"] = TASK_SCHEMA_VERSION
         config = migrated.get("pipeline_config")
@@ -197,6 +206,13 @@ class ResearchTaskService:
         migrated["provider_id"] = provider_id if provider_id in {"tushare_official", "tushare_proxy"} else "tushare_official"
         for name in ("ledger_status", "canonical_status", "consistency_issue", "repair_action", "provider_attempts", "network_category"):
             migrated.setdefault(name, None)
+        for name in (
+            "transaction_fetch_id", "transaction_state", "transaction_operation",
+            "transaction_error_code", "transaction_exception_type",
+            "transaction_cause_type", "transaction_message", "transaction_rows",
+        ):
+            migrated.setdefault(name, None)
+        migrated.setdefault("transaction_fields", [])
         return migrated
 
     @staticmethod
@@ -235,6 +251,22 @@ class ResearchTaskService:
             repair_action=value.get("repair_action") if isinstance(value.get("repair_action"), str) else None,
             provider_attempts=value.get("provider_attempts") if type(value.get("provider_attempts")) is int else None,
             network_category=value.get("network_category") if isinstance(value.get("network_category"), str) else None,
+            transaction_fetch_id=value.get("transaction_fetch_id") if isinstance(value.get("transaction_fetch_id"), str) else None,
+            transaction_state=value.get("transaction_state") if isinstance(value.get("transaction_state"), str) else None,
+            transaction_operation=value.get("transaction_operation") if isinstance(value.get("transaction_operation"), str) else None,
+            transaction_error_code=value.get("transaction_error_code") if isinstance(value.get("transaction_error_code"), str) else None,
+            transaction_exception_type=value.get("transaction_exception_type") if isinstance(value.get("transaction_exception_type"), str) else None,
+            transaction_cause_type=value.get("transaction_cause_type") if isinstance(value.get("transaction_cause_type"), str) else None,
+            transaction_message=value.get("transaction_message") if isinstance(value.get("transaction_message"), str) else None,
+            transaction_rows=value.get("transaction_rows") if type(value.get("transaction_rows")) is int else None,
+            transaction_fields=(
+                tuple(
+                    str(item) for item in value.get("transaction_fields", ())
+                    if isinstance(item, str)
+                )
+                if isinstance(value.get("transaction_fields"), (list, tuple))
+                else ()
+            ),
         )
 
     def get(self, task_id: str) -> ResearchTask:
@@ -332,6 +364,15 @@ class ResearchTaskService:
             "repair_action": None,
             "provider_attempts": None,
             "network_category": None,
+            "transaction_fetch_id": None,
+            "transaction_state": None,
+            "transaction_operation": None,
+            "transaction_error_code": None,
+            "transaction_exception_type": None,
+            "transaction_cause_type": None,
+            "transaction_message": None,
+            "transaction_rows": None,
+            "transaction_fields": [],
             }
             self._write(record)
             future = _EXECUTOR.submit(self._run, task_id, draft, credential)
@@ -499,6 +540,15 @@ class ResearchTaskService:
                 "repair_action": exc.diagnostic.repair_action if exc.diagnostic else None,
                 "provider_attempts": exc.diagnostic.provider_attempts if exc.diagnostic else None,
                 "network_category": exc.diagnostic.network_category if exc.diagnostic else None,
+                "transaction_fetch_id": exc.diagnostic.transaction_fetch_id if exc.diagnostic else None,
+                "transaction_state": exc.diagnostic.transaction_state if exc.diagnostic else None,
+                "transaction_operation": exc.diagnostic.transaction_operation if exc.diagnostic else None,
+                "transaction_error_code": exc.diagnostic.transaction_error_code if exc.diagnostic else None,
+                "transaction_exception_type": exc.diagnostic.transaction_exception_type if exc.diagnostic else None,
+                "transaction_cause_type": exc.diagnostic.transaction_cause_type if exc.diagnostic else None,
+                "transaction_message": exc.diagnostic.transaction_message if exc.diagnostic else None,
+                "transaction_rows": exc.diagnostic.transaction_rows if exc.diagnostic else None,
+                "transaction_fields": list(exc.diagnostic.transaction_fields) if exc.diagnostic else [],
                 "updated_at": finished,
                 "finished_at": finished,
                 "elapsed_seconds": _elapsed(started, finished),

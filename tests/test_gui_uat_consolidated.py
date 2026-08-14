@@ -92,7 +92,7 @@ def test_task_record_is_atomic_json_and_never_persists_token(tmp_path: Path) -> 
     assert len([path for path in paths if path.suffix == ".json"]) == 1
     payload = (tmp_path / "output" / "workbench_tasks" / f"{task.task_id}.json").read_text(encoding="utf-8")
     assert secret not in payload
-    assert json.loads(payload)["schema_version"] == "1.1"
+    assert json.loads(payload)["schema_version"] == "1.2"
     gate.set()
 
 

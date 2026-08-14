@@ -9,12 +9,15 @@ from importlib.metadata import PackageNotFoundError, version
 import json
 import random
 import re
+import sqlite3
 from time import sleep
 from typing import Callable, Iterable, Mapping
 
+import pandas as pd
+
 from src.data.canonical_store import PartitionedParquetStore, RawParquetStore, content_hash
 from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, CoverageKind, DataRequirement, DatasetSpec
-from src.data.coverage_ledger import CoverageLedger, CoverageRecord
+from src.data.coverage_ledger import CoverageLedger, CoverageRecord, coverage_identity_key
 from src.data.coverage_planner import FetchTask, MissingDataPlan, MissingDataPlanner, coalesce_coverage_requirements, scope_key
 from src.data.dataset_registry import DatasetRegistry, create_default_dataset_registry
 from src.data.fetching import FetchStrategyRegistry, create_default_fetch_strategy_registry, provider_request_parameters
@@ -81,6 +84,58 @@ def _fresh_global_snapshot(completed_at: str) -> bool:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+
+
+class _DiagnosticProviderClient:
+    """Transparent provider wrapper that records only token-free call metadata."""
+
+    def __init__(
+        self,
+        client: object,
+        *,
+        attempt: int,
+        record: Callable[..., None],
+    ) -> None:
+        self._client = client
+        self._attempt = attempt
+        self._record = record
+
+    def __getattr__(self, name: str) -> object:
+        target = getattr(self._client, name)
+        if not callable(target) or not name.startswith("get_"):
+            return target
+
+        def invoke(*args: object, **kwargs: object) -> object:
+            endpoint = name[4:]
+            status = kwargs.get("list_status")
+            operation = f"PROVIDER_CALL:{endpoint}"
+            if status in {"L", "D", "P", "G"}:
+                operation += f":list_status={status}"
+            self._record(
+                "FETCH_STARTED", operation=operation, attempt=self._attempt,
+            )
+            try:
+                response = target(*args, **kwargs)
+            except Exception as exc:
+                self._record(
+                    "FETCH_FAILED", operation=operation, attempt=self._attempt,
+                    error_code="PROVIDER_CALL_FAILED",
+                    exception_type=type(exc).__name__,
+                    exception_cause_type=(
+                        type(exc.__cause__).__name__ if exc.__cause__ is not None else None
+                    ),
+                    safe_message="Provider call did not complete.",
+                )
+                raise
+            rows = len(response) if isinstance(response, pd.DataFrame) else None
+            fields = tuple(str(field) for field in response.columns) if isinstance(response, pd.DataFrame) else ()
+            self._record(
+                "FETCH_SUCCEEDED", operation=operation, attempt=self._attempt,
+                rows=rows, fields=fields,
+            )
+            return response
+
+        return invoke
 
 
 class CuratedTradingCalendarResolver:
@@ -229,10 +284,50 @@ class DataPreparationService:
         transient = r"connect|timeout|timed out|dns|socket|proxy|network|网络|连接|超时"
         return not re.search(deterministic, text) and bool(re.search(transient, text))
 
-    def _fetch_with_retry(self, spec: object, task: object, client: object) -> object:
+    def _record_transition(
+        self,
+        fetch_id: str,
+        spec: DatasetSpec,
+        task: FetchTask,
+        state: str,
+        *,
+        endpoint: str,
+        connection: sqlite3.Connection | None = None,
+        **details: object,
+    ) -> None:
+        """Best-effort diagnostics must never replace the underlying failure."""
+        try:
+            self.ledger.record_transition(
+                fetch_id, spec.dataset_id, scope_key(task.scope), task.units,
+                state=state, occurred_at=_now(), endpoint=endpoint,
+                connection=connection, **details,
+            )
+        except sqlite3.Error:
+            pass
+
+    def _fetch_with_retry(
+        self,
+        spec: DatasetSpec,
+        task: FetchTask,
+        client: object,
+        *,
+        fetch_id: str,
+        endpoint: str,
+    ) -> tuple[object, int]:
         for attempt in range(1, self.network_attempts + 1):
             try:
-                return self.fetch_registry.fetch(spec, task, client)  # type: ignore[arg-type]
+                self._record_transition(
+                    fetch_id, spec, task, "FETCH_STARTED", endpoint=endpoint,
+                    operation="FETCH_ATTEMPT", attempt=attempt,
+                )
+                diagnostic_client = _DiagnosticProviderClient(
+                    client,
+                    attempt=attempt,
+                    record=lambda state, **details: self._record_transition(
+                        fetch_id, spec, task, state, endpoint=endpoint, **details
+                    ),
+                )
+                return self.fetch_registry.fetch(spec, task, diagnostic_client), attempt
             except Exception as exc:
                 if attempt >= self.network_attempts or not self._transient_network_failure(exc):
                     setattr(exc, "provider_attempts", attempt)
@@ -317,19 +412,46 @@ class DataPreparationService:
                     contract_version=contract.contract_version,
                 )
                 failure_origin = "provider"
+                failure_operation = "FETCH"
+                failure_code: str | None = None
+                safe_message: str | None = None
+                observed_rows: int | None = None
+                observed_fields: tuple[str, ...] = ()
                 try:
-                    result = self._fetch_with_retry(spec, task, client)
+                    result, successful_attempt = self._fetch_with_retry(
+                        spec, task, client, fetch_id=fetch_id,
+                        endpoint=contract.api_name,
+                    )
                     calls += 1
                     frame = result.frame
+                    observed_rows = len(frame)
+                    observed_fields = tuple(str(field) for field in frame.columns)
+                    self._record_transition(
+                        fetch_id, spec, task, "FETCH_SUCCEEDED",
+                        endpoint=contract.api_name, operation="FETCH_MERGED",
+                        attempt=successful_attempt, rows=observed_rows,
+                        fields=observed_fields, schema_version=spec.schema_version,
+                    )
                     retrieved_at = _now()
                     failure_origin = "local"
+                    failure_operation = "QUALITY_VALIDATION"
                     issues = validate_quality(spec, frame)
                     if issues:
                         categories = ",".join(sorted({item.category for item in issues}))
+                        failure_code = "QUALITY_VALIDATION_FAILED"
+                        safe_message = categories
                         raise DataUnavailableError(
                             f"Provider data quality validation failed: {categories}."
                         )
+                    failure_operation = "RAW_STAGE"
                     raw_path = self.raw_store.save(spec.dataset_id, fetch_id, frame)
+                    self._record_transition(
+                        fetch_id, spec, task, "RAW_STAGED",
+                        endpoint=contract.api_name, operation="RAW_ATOMIC_REPLACE",
+                        rows=observed_rows, fields=observed_fields,
+                        schema_version=spec.schema_version,
+                        artifact_reference=str(raw_path),
+                    )
                     provenance = {
                         "endpoint": contract.api_name,
                         "contract_version": contract.contract_version,
@@ -342,11 +464,26 @@ class DataPreparationService:
                         "raw_reference": str(raw_path),
                         "sdk_version": _sdk_version(client),
                         "quality_conclusion": "PASSED",
+                        "coverage_identities": [
+                            json.loads(coverage_identity_key(
+                                spec.dataset_id, scope_key(task.scope), unit
+                            ))
+                            for unit in task.units
+                        ],
                     }
+                    failure_operation = "CANONICAL_PUBLISH"
                     canonical_paths = self.curated_store.merge(
                         spec, frame, units=task.units, scope=task.scope,
                         provenance=provenance,
+                        transition=lambda state, operation, path, rows, fields: self._record_transition(
+                            fetch_id, spec, task, state,
+                            endpoint=contract.api_name, operation=operation,
+                            rows=rows, fields=fields,
+                            schema_version=spec.schema_version,
+                            artifact_reference=str(path),
+                        ),
                     )
+                    failure_operation = "CANONICAL_READBACK"
                     records: list[CoverageRecord] = []
                     for unit in task.units:
                         unit_rows = self.curated_store.rows_for_unit(spec, unit=unit, scope=task.scope)
@@ -355,6 +492,7 @@ class DataPreparationService:
                         if unit_rows.empty:
                             self.curated_store.write_empty_marker(spec, unit=unit, scope=task.scope)
                         records.append(CoverageRecord(spec.dataset_id, scope_key(task.scope), unit, "COMPLETE", len(unit_rows), spec.schema_version, content_hash(spec, unit_rows), self._fingerprint(spec.dataset_id, task.scope, task.units), _now(), self.ledger.provider_id))
+                    failure_operation = "LEDGER_COMMIT"
                     with self.ledger.transaction() as connection:
                         self.ledger.mark_complete(records, connection)
                         canonical_hash = (
@@ -371,12 +509,47 @@ class DataPreparationService:
                             manifest_reference=json.dumps(manifests),
                             sdk_version=_sdk_version(client), quality_conclusion="PASSED",
                         )
+                        self._record_transition(
+                            fetch_id, spec, task, "LEDGER_COMMITTED",
+                            endpoint=contract.api_name, operation="COVERAGE_AND_FETCH_EVENT",
+                            rows=observed_rows, fields=observed_fields,
+                            schema_version=spec.schema_version,
+                            connection=connection,
+                        )
+                    failure_operation = "READBACK"
+                    verified = _verified_complete_units(
+                        self.registry, self.ledger, self.curated_store,
+                        spec.dataset_id, task.scope, task.units,
+                        plan.requirement.required_fields,
+                    )
+                    if any(unit not in verified for unit in task.units):
+                        raise DataUnavailableError(
+                            "Committed coverage failed canonical readback verification."
+                        )
+                    self._record_transition(
+                        fetch_id, spec, task, "READBACK_VERIFIED",
+                        endpoint=contract.api_name, operation="CANONICAL_AND_LEDGER",
+                        rows=observed_rows, fields=observed_fields,
+                        schema_version=spec.schema_version,
+                    )
                     rows_total += len(frame)
                     for unit in task.units:
                         completed_units += 1
                         if progress is not None:
                             progress(spec.dataset_id, unit, completed_units, total_units)
                 except Exception as exc:
+                    self._record_transition(
+                        fetch_id, spec, task, "FETCH_FAILED",
+                        endpoint=contract.api_name, operation=failure_operation,
+                        rows=observed_rows, fields=observed_fields,
+                        schema_version=spec.schema_version,
+                        error_code=failure_code or f"{failure_operation}_FAILED",
+                        exception_type=type(exc).__name__,
+                        exception_cause_type=(
+                            type(exc.__cause__).__name__ if exc.__cause__ is not None else None
+                        ),
+                        safe_message=safe_message or "Coverage transaction did not complete.",
+                    )
                     self.ledger.finish_fetch(fetch_id, status="FAILED", finished_at=_now(), error_type=type(exc).__name__)
                     raise DataUnavailableError(
                         f"Data preparation failed for dataset {spec.dataset_id!r}.",

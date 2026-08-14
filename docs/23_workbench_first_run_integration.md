@@ -238,3 +238,28 @@ endpoint and official points/rules. Suspension handling is explicitly
 `docs/24_tushare_provider_contracts.md` for contracts, dependency and quality
 policy. UAT-030 is implemented but needs packaged-app recheck. UAT-009 and
 UAT-028 remain open. No real task was retried by automation.
+
+# UAT-032 reopened: diagnostic-only follow-up
+
+UAT-032 is open again. The two real proxy tasks
+`e463823c-96ca-408e-ac61-2f16f8db738d` and
+`4b311baa-7867-4330-b87b-e64716bf59a7` did use the corrected
+`stock_basic / GLOBAL` planner and fetch identity, but both stopped after the
+four-call fetch/normalization/merge path and before raw staging. Read-only
+ledger/filesystem evidence identifies the quality-validation gate and the only
+applicable safe category, `INVALID_SECURITY_CODE`, but the old records do not
+contain per-status rows/fields or the offending value. A complete payload root
+cause is therefore not claimed.
+
+Coverage transaction diagnostics now persist the safe state chain through
+provider calls, raw, canonical/manifest, ledger, and readback. Task schema 1.2
+surfaces the final state and safe exception metadata in GUI technical details,
+while reading 1.0/1.1 records in memory without rewriting them. The registry-
+driven offline audit covered all eight registered datasets and five current
+coverage granularities; it found no other functional identity split. Future
+manifests explicitly include normalized coverage identities as provenance.
+
+Targeted node-ID results: `10 passed in 4.40s` and `3 passed in 5.99s`. No real
+provider call, token, task retry, EXE, Streamlit/AppTest, full pytest, test
+directory, or exact-run group was executed. The user should manually retry only
+one failed task once. UAT-032, UAT-009, and UAT-028 remain open.

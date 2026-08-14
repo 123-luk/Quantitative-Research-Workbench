@@ -3996,3 +3996,51 @@ override，V4-E3 为 CLI + YAML + docs。
   Streamlit/AppTest, complete pytest, or 398-second exact-run test was run.
   Manual packaged-app UAT is still required. UAT-009 and UAT-028 remain open;
   offline checks do not close them.
+
+## 2026-08-14 UAT-032 reopened: coverage transaction diagnostics
+
+- Commit `ec26791cabc4eb990d8217e008b8cbce861f589c` fixed the fictitious dated
+  planner semantics but did not pass real-provider UAT. Read-only investigation
+  covered tasks `e463823c-96ca-408e-ac61-2f16f8db738d` (432/433) and
+  `4b311baa-7867-4330-b87b-e64716bf59a7` (491/492). Both are distinct retry
+  children, use task schema 1.1 and provider `tushare_proxy`, and have no run ID.
+- Their proxy ledger events are `306f9953629044d59510b2297fa54af8`
+  and `5ee09f43065246c8bb97cf51d84f4a40`. Planner and fetch agree on dataset
+  `stock_basic`, scope `CN_STOCK_REFERENCE`, unit `GLOBAL`, endpoint
+  `stock_basic`, schema 1.2, contract 1.1, and L/D/P/G token-free requests.
+  No proxy stock_basic coverage row, raw, canonical, manifest, empty marker, or
+  temp file exists. Official-provider dated stock data is unrelated and isolated.
+- The first demonstrated deviation is the merged-response quality gate before
+  raw staging. Control flow plus persisted `DataUnavailableError` excludes a
+  provider-call/normalization exception; raw absence excludes the later empty-
+  canonical branch. `stock_basic` has only one applicable quality category,
+  `INVALID_SECURITY_CODE`. The old events do not retain per-status row counts,
+  fields, offending values, or call timestamps, so this round does not claim a
+  complete payload root cause and does not change provider or quality behavior.
+- Added diagnostic-only `coverage_transitions` rows for each normalized unit:
+  PLANNED, fetch attempt and provider subcall start/success/failure, raw staged,
+  canonical temp validated, canonical/manifest committed, ledger committed, and
+  readback verified. Metadata is limited to provider/endpoint/identity, attempt,
+  row/field/schema data, safe error code, exception and direct cause types, safe
+  summary, and artifact reference. Token, headers, sensitive URL parameters, and
+  arbitrary provider exception text are never persisted.
+- Task schema 1.2 migrates 1.0/1.1 only in memory and copies the latest safe
+  transition into GUI technical details. Historical real task JSON was not
+  rewritten. Future manifests explicitly include the same normalized coverage
+  identities as provenance; legacy manifests/data remain untouched.
+- A registry-driven offline audit covered all eight registered datasets and five
+  registered granularities. Planner, fetch task, partition path, transition/
+  ledger, manifest provenance, and readback use the same dataset/scope/unit
+  identity. No additional functional identity split was found; the missing
+  explicit identity in old manifests was an audit-provenance gap only.
+- Exact node-ID commands: the three nodes in
+  `tests/test_coverage_transaction_diagnostics.py` (`10 passed in 4.40s`), and
+  `test_four_status_snapshot_has_no_date_calls_and_persists_provenance`,
+  `test_task_1_0_read_migration_is_in_memory_and_adds_formal_diagnostics`, and
+  `test_task_record_is_atomic_json_and_never_persists_token`
+  (`3 passed in 5.99s`). A one-time in-memory `compile()` check of all ten changed
+  Python files also passed without writing bytecode.
+- No real provider call, Token, real task retry/mutation, EXE, Streamlit/AppTest,
+  complete pytest, test directory, or long exact-run group was executed. UAT-032
+  remains open; the user should manually retry exactly one failed task once.
+  UAT-009 and UAT-028 remain open.

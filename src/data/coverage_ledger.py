@@ -25,6 +25,53 @@ class CoverageRecord:
     provider_id: str = "tushare_official"
 
 
+@dataclass(frozen=True)
+class CoverageTransition:
+    transition_id: int
+    fetch_id: str
+    dataset_id: str
+    scope_key: str
+    unit_key: str
+    coverage_identity: str
+    provider_id: str
+    endpoint: str | None
+    state: str
+    operation: str | None
+    occurred_at: str
+    attempt: int | None
+    rows: int | None
+    fields: str
+    schema_version: str | None
+    error_code: str | None
+    exception_type: str | None
+    exception_cause_type: str | None
+    safe_message: str | None
+    artifact_reference: str | None
+
+
+_TRANSITION_STATES = frozenset({
+    "PLANNED", "FETCH_STARTED", "FETCH_SUCCEEDED", "FETCH_FAILED",
+    "RAW_STAGED", "CANONICAL_VALIDATED", "CANONICAL_COMMITTED",
+    "LEDGER_COMMITTED", "READBACK_VERIFIED",
+})
+
+
+def coverage_identity_key(dataset_id: str, scope_value: str, unit: str) -> str:
+    """Return the one canonical, provider-neutral identity used in diagnostics."""
+    try:
+        scope = json.loads(scope_value)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("scope_key must be canonical JSON.") from exc
+    if not isinstance(scope, dict):
+        raise ValueError("scope_key must encode a JSON object.")
+    return json.dumps(
+        {"dataset_id": dataset_id, "scope": scope, "unit": unit},
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
 class CoverageLedger:
     def __init__(self, path: str | Path, *, provider_id: str = "tushare_official") -> None:
         self.path = Path(path)
@@ -64,6 +111,26 @@ class CoverageLedger:
                     CHECK (status IN ('STARTED','COMPLETE','FAILED')),
                     CHECK (rows >= 0)
                 );
+                CREATE TABLE IF NOT EXISTS coverage_transitions (
+                    transition_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fetch_id TEXT NOT NULL, dataset_id TEXT NOT NULL,
+                    scope_key TEXT NOT NULL, unit_key TEXT NOT NULL,
+                    coverage_identity TEXT NOT NULL, provider_id TEXT NOT NULL,
+                    endpoint TEXT, state TEXT NOT NULL, operation TEXT,
+                    occurred_at TEXT NOT NULL, attempt INTEGER, rows INTEGER,
+                    fields TEXT NOT NULL DEFAULT '[]', schema_version TEXT,
+                    error_code TEXT, exception_type TEXT, exception_cause_type TEXT,
+                    safe_message TEXT, artifact_reference TEXT,
+                    CHECK (state IN (
+                        'PLANNED','FETCH_STARTED','FETCH_SUCCEEDED','FETCH_FAILED',
+                        'RAW_STAGED','CANONICAL_VALIDATED','CANONICAL_COMMITTED',
+                        'LEDGER_COMMITTED','READBACK_VERIFIED'
+                    )),
+                    CHECK (attempt IS NULL OR attempt >= 1),
+                    CHECK (rows IS NULL OR rows >= 0)
+                );
+                CREATE INDEX IF NOT EXISTS idx_coverage_transitions_identity
+                    ON coverage_transitions(provider_id,dataset_id,scope_key,unit_key,transition_id);
             """)
             coverage_columns = {row[1] for row in connection.execute("PRAGMA table_info(coverage_units)")}
             if "provider_id" not in coverage_columns:
@@ -141,6 +208,7 @@ class CoverageLedger:
 
     def start_fetch(self, dataset_id: str, scope_key: str, units: Iterable[str], started_at: str, *, endpoint: str | None = None, request_parameters: Iterable[object] = (), contract_version: str | None = None) -> str:
         fetch_id = uuid4().hex
+        requested_units = tuple(units)
         parameters = tuple(request_parameters)
         statuses = tuple(
             str(item["list_status"])
@@ -152,11 +220,76 @@ class CoverageLedger:
                 fetch_id,dataset_id,scope_key,requested_units,started_at,status,provider_id,
                 endpoint,request_parameters,requested_statuses,contract_version
                 ) VALUES (?,?,?,?,?,'STARTED',?,?,?,?,?)""", (
-                    fetch_id, dataset_id, scope_key, json.dumps(tuple(units)), started_at,
+                    fetch_id, dataset_id, scope_key, json.dumps(requested_units), started_at,
                     self.provider_id, endpoint, json.dumps(parameters, sort_keys=True),
                     json.dumps(statuses), contract_version,
                 ))
+            self.record_transition(
+                fetch_id, dataset_id, scope_key, requested_units,
+                state="PLANNED", occurred_at=started_at, endpoint=endpoint,
+                connection=connection,
+            )
         return fetch_id
+
+    def record_transition(
+        self,
+        fetch_id: str,
+        dataset_id: str,
+        scope_key: str,
+        units: Iterable[str],
+        *,
+        state: str,
+        occurred_at: str,
+        endpoint: str | None = None,
+        operation: str | None = None,
+        attempt: int | None = None,
+        rows: int | None = None,
+        fields: Iterable[str] = (),
+        schema_version: str | None = None,
+        error_code: str | None = None,
+        exception_type: str | None = None,
+        exception_cause_type: str | None = None,
+        safe_message: str | None = None,
+        artifact_reference: str | None = None,
+        connection: sqlite3.Connection | None = None,
+    ) -> None:
+        if state not in _TRANSITION_STATES:
+            raise ValueError("Unknown coverage transition state.")
+        unit_values = tuple(dict.fromkeys(str(unit) for unit in units))
+        if not unit_values:
+            raise ValueError("coverage transitions require at least one unit.")
+        field_values = tuple(dict.fromkeys(str(field) for field in fields))
+        owner = connection is None
+        target = self._connect() if owner else connection
+        assert target is not None
+        try:
+            target.executemany(
+                """INSERT INTO coverage_transitions(
+                    fetch_id,dataset_id,scope_key,unit_key,coverage_identity,provider_id,
+                    endpoint,state,operation,occurred_at,attempt,rows,fields,schema_version,
+                    error_code,exception_type,exception_cause_type,safe_message,artifact_reference
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                [
+                    (
+                        fetch_id, dataset_id, scope_key, unit,
+                        coverage_identity_key(dataset_id, scope_key, unit),
+                        self.provider_id, endpoint, state, operation, occurred_at,
+                        attempt, rows, json.dumps(field_values), schema_version,
+                        error_code, exception_type, exception_cause_type,
+                        safe_message, artifact_reference,
+                    )
+                    for unit in unit_values
+                ],
+            )
+            if owner:
+                target.commit()
+        except Exception:
+            if owner:
+                target.rollback()
+            raise
+        finally:
+            if owner:
+                target.close()
 
     def finish_fetch(self, fetch_id: str, *, status: str, finished_at: str, rows: int = 0, error_type: str | None = None, connection: sqlite3.Connection | None = None, retrieved_at: str | None = None, schema_version: str | None = None, canonical_hash: str | None = None, raw_reference: str | None = None, canonical_reference: str | None = None, manifest_reference: str | None = None, sdk_version: str | None = None, quality_conclusion: str | None = None) -> None:
         if status not in {"COMPLETE", "FAILED"}:
@@ -188,3 +321,28 @@ class CoverageLedger:
     def fetch_events(self) -> tuple[dict[str, object], ...]:
         with self._connect() as connection:
             return tuple(dict(row) for row in connection.execute("SELECT * FROM fetch_events WHERE provider_id=? ORDER BY started_at, fetch_id", (self.provider_id,)))
+
+    def coverage_transitions(self, fetch_id: str | None = None) -> tuple[CoverageTransition, ...]:
+        sql = "SELECT * FROM coverage_transitions WHERE provider_id=?"
+        params: tuple[object, ...] = (self.provider_id,)
+        if fetch_id is not None:
+            sql += " AND fetch_id=?"
+            params += (fetch_id,)
+        sql += " ORDER BY transition_id"
+        with self._connect() as connection:
+            return tuple(
+                CoverageTransition(**dict(row))
+                for row in connection.execute(sql, params)
+            )
+
+    def latest_transition(
+        self, dataset_id: str, scope_key: str, unit: str
+    ) -> CoverageTransition | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT * FROM coverage_transitions
+                WHERE provider_id=? AND dataset_id=? AND scope_key=? AND unit_key=?
+                ORDER BY transition_id DESC LIMIT 1""",
+                (self.provider_id, dataset_id, scope_key, unit),
+            ).fetchone()
+        return None if row is None else CoverageTransition(**dict(row))

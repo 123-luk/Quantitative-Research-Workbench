@@ -449,6 +449,30 @@ _EN.update({
     "task.repair.refetch missing unit and publish canonical proof before marking COMPLETE": "Refetch only the missing unit, publish verifiable local evidence, then mark it complete",
 })
 
+_ZH.update({
+    "task.transaction_fetch_id": "数据事务标识",
+    "task.transaction_state": "事务停止状态",
+    "task.transaction_operation": "停止操作",
+    "task.transaction_error_code": "安全错误码",
+    "task.transaction_exception_type": "原始异常类型",
+    "task.transaction_cause_type": "直接原因类型",
+    "task.transaction_message": "安全诊断",
+    "task.transaction_rows": "已观察行数",
+    "task.transaction_fields": "已观察字段",
+})
+
+_EN.update({
+    "task.transaction_fetch_id": "Coverage transaction ID",
+    "task.transaction_state": "Stopping transaction state",
+    "task.transaction_operation": "Stopping operation",
+    "task.transaction_error_code": "Safe error code",
+    "task.transaction_exception_type": "Original exception type",
+    "task.transaction_cause_type": "Direct cause type",
+    "task.transaction_message": "Safe diagnostic",
+    "task.transaction_rows": "Observed rows",
+    "task.transaction_fields": "Observed fields",
+})
+
 if set(_ZH) != set(_EN):
     raise RuntimeError("zh-CN and en translation key sets must be exactly equal.")
 if any(not value.strip() for catalog in (_ZH, _EN) for value in catalog.values()):

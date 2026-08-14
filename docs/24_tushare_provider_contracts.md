@@ -136,5 +136,147 @@ may create an empty-event proof.
 No real provider token was available to this process. No real capability probe,
 HTTPS/TLS transaction, provider comparison, or end-to-end task was run. UAT-009
 therefore remains open in strict mode; UAT-028 remains open until a non-empty
-run ID opens. UAT-030 is implemented through task schema 1.1 in-memory migration
-and formal diagnostics, but still requires packaged-app recheck.
+run ID opens. UAT-030 diagnostics introduced in task schema 1.1 are carried
+forward by schema 1.2 in-memory migration, but still require packaged-app recheck.
+
+## UAT-032 reopened: real-failure evidence and diagnostic gate
+
+UAT-032 was reopened on 2026-08-14. Commit `ec26791cabc4eb990d8217e008b8cbce861f589c`
+corrected the fictitious dated planning semantics, but did not pass real-provider
+UAT. This investigation did not retry or edit a real task and did not call either
+TuShare provider.
+
+### Read-only evidence timeline
+
+Both records have task schema 1.1, provider `tushare_proxy`, no run ID, and a
+provider-scoped ledger at `data/providers/tushare_proxy/metadata/catalog.sqlite`.
+Credentials are session/process-only and are not persisted; therefore the
+credential value and a historical credential fingerprint are intentionally
+unavailable. The provider scope is known, but credential-instance identity is
+an evidence gap.
+
+| Task | Task interval | Retry lineage | Task start (UTC) | GLOBAL fetch event | Fetch terminal (UTC) | Task terminal | Progress |
+|---|---|---|---|---|---|---|---:|
+| `e463823c-96ca-408e-ac61-2f16f8db738d` | 2023-01-01--2023-02-01 | new task retrying `5cf63598-f225-4320-be52-2b95f6143f41`; original ancestor `7c47ac50-6d90-45a0-843a-25b5727f1140` | 06:28:43.735712 | `306f9953629044d59510b2297fa54af8`, 06:30:36.985114 | FAILED 06:30:41.901523 | 06:30:41.915859 | 432/433 |
+| `4b311baa-7867-4330-b87b-e64716bf59a7` | 2024-01-01--2024-02-03 | new task retrying `959e1aa3-a1b1-40cb-a883-5412d11d3dbb`; original ancestor `1afd8bce-9ede-474d-b1cf-ed5ecb7e7527` | 06:25:54.899005 | `5ee09f43065246c8bb97cf51d84f4a40`, 06:28:21.928596 | FAILED 06:28:26.098582 | 06:28:26.109679 | 491/492 |
+
+The ancestor retries used the obsolete dated units `2023-01-31` and
+`2024-02-03`. The two subject tasks are distinct child task records, not reused
+tasks or hidden subtasks. Their planner progress and fetch events both use the
+same identity:
+
+```text
+provider=tushare_proxy
+dataset=stock_basic
+scope={"scope":"CN_STOCK_REFERENCE"}
+unit=GLOBAL
+endpoint=stock_basic
+schema=1.2
+provider-contract=1.1
+statuses=L,D,P,G
+```
+
+The proxy ledger has no `stock_basic` coverage row. For each subject task its
+single fetch event persisted the four token-free calls, `rows=0`, terminal
+`error_type=DataUnavailableError`, and no retrieval/schema/hash/raw/canonical/
+manifest completion fields. Read-only filesystem inspection found no proxy
+`stock_basic` raw directory, canonical directory, manifest, empty marker, or
+temporary canonical file. The official-provider ledger contains unrelated old
+dated snapshots and cannot satisfy or repair the proxy namespace.
+
+### First divergent state
+
+The first demonstrated divergence is after provider fetch/normalization/merge
+and before raw staging, at `validate_quality()` in
+`src/data/preparation.py::DataPreparationService.ensure`.
+
+The conclusion follows from the persisted state and executable control flow:
+
+1. `src/data/fetching.py::_reference` returns only after all four L/D/P/G calls,
+   per-status `normalize_frame`, status matching, concatenation, and deduplication.
+   A call exception would be persisted as `ProviderFetchError`; a frame/schema/
+   status exception would be `CanonicalDataError`.
+2. The real event instead persisted the inner type `DataUnavailableError`.
+   Inside this transaction, that type can be raised at the quality gate or after
+   raw staging when canonical readback is empty.
+3. `RawParquetStore.save` precedes canonical merge/readback and never deletes a
+   committed raw file. Both fetch-specific raw files and the entire proxy
+   `stock_basic` raw directory are absent. The later empty-canonical branch is
+   therefore excluded.
+4. For the registered `stock_basic` fields, `validate_quality` can emit only
+   `INVALID_SECURITY_CODE`; stock_basic has no OHLC, volume, adjustment factor,
+   or configured row-limit rule. Thus the merged provider response reached the
+   security-code quality gate and was rejected there.
+
+This identifies the stopping gate and inferred safe category, but it does not
+identify the offending provider value, per-status row counts, response fields,
+or exact per-call timestamps. Those facts were not persisted. The investigation
+therefore does **not** claim a complete payload root cause and makes no quality,
+regex, proxy-adapter, or coverage-flow fix.
+
+The GUI's generic local-ledger diagnosis is also explained: `ensure()` changes
+`failure_origin` to `local` immediately before `validate_quality`; the outer
+`DataUnavailableError` is then mapped to `COVERAGE_VALIDATION`, while task schema
+1.1 discards the original quality category. This is a diagnostic loss, not
+evidence of a ledger/canonical mismatch.
+
+### Required-direction disposition
+
+- Confirmed: both retries created new tasks; planner and fetch input are
+  `stock_basic / CN_STOCK_REFERENCE / GLOBAL`; provider/schema/contract identity
+  agrees; the four-call fetch/normalization/merge path completed; the merged
+  response stopped at quality validation; GUI collapsed that state into a local
+  coverage diagnosis.
+- Excluded: a dated GLOBAL representation, cross-provider reuse, an empty merged
+  result, raw/canonical written to another proxy path, an abandoned canonical
+  temp file, manifest or ledger write using a legacy date, ledger transaction
+  rollback, and a downstream readback identity mismatch. None of the storage or
+  ledger-commit stages was reached.
+- Evidence insufficient: historical credential fingerprint, L/D/P/G row counts
+  and individual timings, exact returned field lists, offending security code,
+  whether the proxy payload differs from the official payload, and why that
+  value appeared. These require exactly one new manual retry with diagnostics.
+
+### Diagnostic-only implementation
+
+Future explicit-write ledgers add `coverage_transitions`, one row per normalized
+coverage unit. It records `PLANNED`, provider-attempt and per-call
+`FETCH_STARTED`, `FETCH_SUCCEEDED` or `FETCH_FAILED`, `RAW_STAGED`, temporary
+canonical validation, atomic canonical and manifest commits,
+`LEDGER_COMMITTED`, and `READBACK_VERIFIED`. Records include provider, endpoint,
+canonical dataset/scope/unit identity, attempt, safe row/field metadata, schema,
+safe error code, original exception type, direct `__cause__` type, safe summary,
+and artifact reference. They never persist token values, request headers,
+sensitive URLs, or arbitrary provider exception text.
+
+Task schema 1.2 reads 1.0/1.1 in memory without rewriting historical task files.
+On failure, the latest transition is copied into the task's technical details so
+the GUI shows the actual stopping state and safe cause. Manifests now carry the
+same canonical `coverage_identities` as diagnostic provenance. No provider call,
+normalization rule, quality rule, retry rule, canonical content, or completion
+decision was changed.
+
+### Registry-driven identity audit
+
+The offline parameterized audit covered all eight registered datasets and all
+five registered granularities: GLOBAL snapshot, calendar date, market trade
+date, entity trade date, and entity month. The generic path passes the same
+planner `FetchTask` dataset/scope/units into fetch, storage partitioning,
+manifest provenance, ledger transitions/records, and readback. No additional
+functional identity divergence was found. A cross-dataset provenance gap was
+confirmed: old manifests did not explicitly carry normalized unit identities;
+future manifests now do. Legacy files are retained and were not rewritten.
+
+Exact offline commands executed:
+
+```powershell
+E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_coverage_transaction_diagnostics.py::test_quality_failure_records_exact_safe_stopping_state tests/test_coverage_transaction_diagnostics.py::test_success_records_fetch_to_readback_transaction_and_manifest_identity tests/test_coverage_transaction_diagnostics.py::test_registered_coverage_identity_is_registry_driven_and_layer_stable
+E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_stock_basic_snapshot_uat032.py::test_four_status_snapshot_has_no_date_calls_and_persists_provenance tests/test_provider_dual_contracts.py::test_task_1_0_read_migration_is_in_memory_and_adds_formal_diagnostics tests/test_gui_uat_consolidated.py::test_task_record_is_atomic_json_and_never_persists_token
+```
+
+Results were `10 passed in 4.40s` and `3 passed in 5.99s`. No real provider,
+credential, real task retry, EXE, Streamlit/AppTest, complete pytest, test
+directory, or long exact-run group was executed. One in-memory `compile()` check
+of the ten changed Python files also passed without writing bytecode. UAT-032 remains open. The only
+next action is for the user to manually retry one of the two failed tasks once,
+then inspect its transaction state chain. UAT-009 and UAT-028 remain open.

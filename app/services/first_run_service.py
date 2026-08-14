@@ -103,6 +103,15 @@ class FailureDiagnostic:
     repair_action: str | None = None
     provider_attempts: int | None = None
     network_category: str | None = None
+    transaction_fetch_id: str | None = None
+    transaction_state: str | None = None
+    transaction_operation: str | None = None
+    transaction_error_code: str | None = None
+    transaction_exception_type: str | None = None
+    transaction_cause_type: str | None = None
+    transaction_message: str | None = None
+    transaction_rows: int | None = None
+    transaction_fields: tuple[str, ...] = ()
 
 
 def _network_category(exc: BaseException | None) -> str | None:
@@ -653,6 +662,23 @@ class FirstRunOrchestrator:
                 except Exception:
                     canonical_status = "UNREADABLE"
                 attempts = getattr(exc.safe_cause, "provider_attempts", None)
+                transition = None
+                try:
+                    transition = runtime.ledger.latest_transition(
+                        exc.dataset_id, scope_key(scope), unit
+                    )
+                except (AttributeError, sqlite3.Error, ValueError):
+                    transition = None
+                transition_fields: tuple[str, ...] = ()
+                if transition is not None:
+                    try:
+                        parsed_fields = json.loads(transition.fields)
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        parsed_fields = ()
+                    if isinstance(parsed_fields, list):
+                        transition_fields = tuple(
+                            str(value) for value in parsed_fields if isinstance(value, str)
+                        )
                 diagnostic = FailureDiagnostic(
                     ledger_status=ledger_status,
                     canonical_status=canonical_status,
@@ -664,6 +690,15 @@ class FirstRunOrchestrator:
                     repair_action="refetch missing unit and publish canonical proof before marking COMPLETE",
                     provider_attempts=attempts,
                     network_category=_network_category(exc.safe_cause),
+                    transaction_fetch_id=transition.fetch_id if transition else None,
+                    transaction_state=transition.state if transition else None,
+                    transaction_operation=transition.operation if transition else None,
+                    transaction_error_code=transition.error_code if transition else None,
+                    transaction_exception_type=transition.exception_type if transition else None,
+                    transaction_cause_type=transition.exception_cause_type if transition else None,
+                    transaction_message=transition.safe_message if transition else None,
+                    transaction_rows=transition.rows if transition else None,
+                    transaction_fields=transition_fields,
                 )
             raise WorkbenchRunError(
                 code,

@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from typing import Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
 import pandas as pd
 
@@ -209,7 +209,16 @@ class PartitionedParquetStore:
             temp.unlink(missing_ok=True)
             raise
 
-    def merge(self, spec: DatasetSpec, frame: pd.DataFrame, *, units: Iterable[str], scope: tuple[tuple[str, str], ...], provenance: Mapping[str, object] | None = None) -> tuple[Path, ...]:
+    def merge(
+        self,
+        spec: DatasetSpec,
+        frame: pd.DataFrame,
+        *,
+        units: Iterable[str],
+        scope: tuple[tuple[str, str], ...],
+        provenance: Mapping[str, object] | None = None,
+        transition: Callable[[str, str, Path, int, tuple[str, ...]], None] | None = None,
+    ) -> tuple[Path, ...]:
         normalized = normalize_frame(spec, frame)
         paths: list[Path] = []
         by_path: dict[Path, list[str]] = {}
@@ -237,7 +246,17 @@ class PartitionedParquetStore:
                 verified = normalize_frame(spec, pd.read_parquet(temp, engine=self.engine))
                 if content_hash(spec, verified) != content_hash(spec, merged):
                     raise CanonicalDataError("temporary Parquet verification failed.")
+                if transition is not None:
+                    transition(
+                        "CANONICAL_VALIDATED", "PARQUET_TEMP_VERIFIED", target,
+                        len(verified), tuple(str(name) for name in verified.columns),
+                    )
                 os.replace(temp, target)
+                if transition is not None:
+                    transition(
+                        "CANONICAL_COMMITTED", "PARQUET_ATOMIC_REPLACE", target,
+                        len(verified), tuple(str(name) for name in verified.columns),
+                    )
                 manifest = target.with_suffix(target.suffix + ".manifest.json")
                 descriptor, raw_manifest = tempfile.mkstemp(
                     prefix=f".{manifest.stem}.", suffix=".tmp", dir=manifest.parent
@@ -256,6 +275,11 @@ class PartitionedParquetStore:
                     with manifest_temp.open("r+b") as handle:
                         os.fsync(handle.fileno())
                     os.replace(manifest_temp, manifest)
+                    if transition is not None:
+                        transition(
+                            "CANONICAL_COMMITTED", "MANIFEST_ATOMIC_REPLACE", manifest,
+                            len(verified), tuple(str(name) for name in verified.columns),
+                        )
                 finally:
                     manifest_temp.unlink(missing_ok=True)
             finally:
