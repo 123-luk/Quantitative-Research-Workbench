@@ -337,3 +337,100 @@ transaction operation and safe quality summary are accurate, but the main
 deferred rather than guessed in this diagnostic-only pass.
 
 尚未确定完整根因，仅补充违规标识样本诊断，需要用户再重试一次。
+
+## UAT-032 legacy reference identity contract
+
+Task `8d75acc7-30be-4f2d-a6ce-7f013adf956f` and transaction
+`4a9b7ca2f81047b19483259475900c3c` captured two exact proxy-returned D
+identifiers: `T600018.SH` and `TS0018.SH`. The transaction retained their public
+identifier/status/market/exchange fields but, by design, not the complete rows.
+Consequently its task record cannot supply name, list date, or delist date.
+
+A read-only comparison against the legacy official-provider stock-basic cache
+found the following repeated row in six dated schema-1.1 snapshots:
+
+```text
+ts_code=T600018.SH
+symbol=T600018
+name=上港集箱(退)
+area=null
+industry=null
+market=null
+exchange=SSE
+curr_type=CNY
+list_status=D
+list_date=2000-07-19
+delist_date=2006-10-20
+```
+
+`TS0018.SH` was absent from that official cache. The isolated current official
+provider directory has no stock-basic snapshot. No real endpoint was called.
+The official doc-25 field contract identifies `ts_code`, `symbol`, name,
+market/exchange, lifecycle status, list date, and delist date as stock-basic
+reference fields, but it provides no entity-mapping field or rule authorizing
+removal of `T`/`TS` prefixes. Numeric similarity is therefore not mapping proof.
+
+For this task, the existing calendar and planning formulas prove the complete
+required interval as `2022-11-17` through `2023-02-08`: the first requested open
+formation is 2023-01-03; 33 required history periods start on 2022-11-17; the
+effective last formation is 2023-01-31; one entry-lag plus five holding periods
+end on 2023-02-08. The evidenced T entity ended in 2006 and is irrelevant to
+this interval. TS lifecycle dates are not yet known and must fail closed if the
+next response does not prove non-overlap.
+
+### Registry-driven identity classes
+
+The central classification contract is:
+
+- `CANONICAL_TRADABLE`: exact `^[0-9]{6}\.(?:SH|SZ|BJ)$` identity. This remains
+  mandatory for daily, daily_basic, adj_factor, suspend events, factors,
+  signals, holdings, and backtests.
+- `LEGACY_REFERENCE`: a non-canonical stock-basic identity with status D, valid
+  ordered list/delist dates, and no overlap with the complete required interval.
+  The row remains in the provider reference snapshot and receives stable
+  exclusion evidence. It is not mapped, stripped, or exposed as a tradable
+  Universe security.
+- `INVALID`: a non-canonical identity overlapping the required interval, an
+  L/P/G reference, or a row lacking lifecycle proof. Overlap uses
+  `UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER`; other unproven rows retain the
+  invalid-security quality block.
+
+This decision is dataset-contract driven: stock_basic is
+`PROVIDER_REFERENCE`; daily, daily_basic, adj_factor, and suspend_d are
+`CANONICAL_TRADABLE`; trade_cal and index identities do not reuse the stock
+security rule. Standard numeric D rows are never removed. They participate in
+historical eligibility under `list_date <= T < delist_date`, which preserves
+delisted securities and prevents survivorship bias.
+
+Because GLOBAL coverage can be reused across tasks, the Universe data boundary
+repeats the same classification for the current plan's complete interval. It
+removes only `LEGACY_REFERENCE` rows from the tradable slice and blocks an
+overlapping cached reference. The interval is included in source identity, so a
+classification made for one task is never treated as proof for another range.
+
+### Quarantined raw and error boundary
+
+After all four provider calls normalize and merge, the registered frame is
+atomically written as `RAW_STAGED / UNVERIFIED_QUARANTINE` before quality
+validation. Raw contains no Token, headers, or request credential. It is never
+used by canonical reads, coverage planning, or reuse. A failed quality gate
+retains that fetch-specific audit file but cannot create canonical, manifest, or
+Ledger COMPLETE. A later successful retry receives a new fetch identity; the
+old quarantine cannot masquerade as success.
+
+Quality failures now carry origin `provider_quality` and stage
+`quality_validation`. Ordinary invalid provider data maps to
+`PROVIDER_DATA_QUALITY`; an overlapping unmapped legacy identity maps precisely
+to `UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER`. Only failures after the quality
+gate in canonical publication, Ledger commit, or readback remain local Coverage
+errors.
+
+The same-rule audit found no other reference dataset incorrectly applying the
+stock ts_code regex at ingestion. Index-weight constituent identities are
+checked downstream against the strict canonical Universe contract. The SH/SZ-
+only convenience behavior in `stock_query_service.py` still omits BJ; it remains
+reported but unchanged because this failure did not exercise that code.
+
+Verification used seven distinct exact pytest node IDs. Four affected nodes
+were rerun after the final origin and cross-interval reuse boundaries changed;
+all eleven invocations passed and each stayed below 7 seconds of pytest runtime.

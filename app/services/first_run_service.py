@@ -42,6 +42,7 @@ from src.research_data import AdjustedPriceService, CanonicalAdjustedPriceDataSo
 from src.research_data.adjusted_prices import AdjustedPriceError
 from src.research_data.planning import ResearchInputError
 from src.universe import CanonicalUniverseDataSource, UniverseService, UniverseSpec
+from src.universe.contracts import UnsupportedLegacySecurityIdentifier
 from src.universe.data import STOCK_BASIC_SCOPE
 
 
@@ -55,6 +56,8 @@ class WorkbenchErrorCode(str, Enum):
     PROVIDER_EMPTY = "PROVIDER_EMPTY"
     PROVIDER_ERROR = "PROVIDER_ERROR"
     PROVIDER_RESPONSE_INVALID = "PROVIDER_RESPONSE_INVALID"
+    PROVIDER_DATA_QUALITY = "PROVIDER_DATA_QUALITY"
+    UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER = "UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER"
     DATA_INCOMPLETE = "DATA_INCOMPLETE"
     COVERAGE_VALIDATION = "COVERAGE_VALIDATION"
     UNSUPPORTED = "UNSUPPORTED"
@@ -65,6 +68,10 @@ def classify_data_unavailable_error(exc: DataUnavailableError) -> WorkbenchError
     """Map one safe preparation failure without exposing provider text."""
     if exc.origin == "local":
         return WorkbenchErrorCode.COVERAGE_VALIDATION
+    if exc.origin == "provider_quality":
+        if exc.diagnosis_code and "UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER" in exc.diagnosis_code:
+            return WorkbenchErrorCode.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER
+        return WorkbenchErrorCode.PROVIDER_DATA_QUALITY
     kind = classify_provider_error(exc.safe_cause or exc)
     cause_text = " ".join(
         f"{type(item).__name__} {item}"
@@ -94,6 +101,11 @@ def classify_data_unavailable_error(exc: DataUnavailableError) -> WorkbenchError
         ProviderErrorKind.RESPONSE_INVALID: WorkbenchErrorCode.PROVIDER_RESPONSE_INVALID,
         ProviderErrorKind.PROVIDER_ERROR: WorkbenchErrorCode.DATA_INCOMPLETE,
     }[kind]
+
+
+def classify_data_unavailable_stage(exc: DataUnavailableError, active_stage: str) -> str:
+    """Expose provider quality as its true stage without relabeling local faults."""
+    return "quality_validation" if exc.origin == "provider_quality" else active_stage
 
 
 @dataclass(frozen=True)
@@ -405,10 +417,14 @@ class WorkbenchRuntime:
         return DataPreparationService(registry=self.registry, ledger=self.ledger, curated_store=self.curated, raw_store=self.raw, open_dates=open_dates, client_factory=self.client_factory)
 
     def research_builder(self, draft: WorkbenchRunDraft, plan: ResearchInputPlan, calendar: ResearchCalendar) -> ResearchInputBuilder:
+        required_start = min(item.required_start for item in plan.requirements)
+        required_end = max(item.required_end for item in plan.requirements)
         universe = CanonicalUniverseDataSource(
             registry=self.registry, ledger=self.ledger, store=self.curated,
             stock_basic_as_of=plan.end_date,
             index_weight_start=(pd.Timestamp(plan.start_date).to_period("M") - 1).start_time.date().isoformat(),
+            stock_basic_required_start=required_start,
+            stock_basic_required_end=required_end,
         )
         market = CanonicalAdjustedPriceDataSource(registry=self.registry, ledger=self.ledger, store=self.curated, scope="CN_A")
         research = draft.pipeline_config.factor_research
@@ -633,6 +649,14 @@ class FirstRunOrchestrator:
             return FirstRunResult(outcome, plan, materialization, prepared, bootstrap_result.provider_calls + prepared.provider_calls, perf_counter() - started, tuple(events))
         except WorkbenchRunError:
             raise
+        except UnsupportedLegacySecurityIdentifier:
+            raise WorkbenchRunError(
+                WorkbenchErrorCode.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER,
+                "quality_validation",
+                user_message=(
+                    "A cached provider reference overlaps the complete required interval without a verified tradable mapping."
+                ),
+            ) from None
         except MissingCredentialError as exc:
             raise WorkbenchRunError(WorkbenchErrorCode.CREDENTIAL_MISSING, "download") from None
         except DataUnavailableError as exc:
@@ -697,7 +721,11 @@ class FirstRunOrchestrator:
                         if ledger_status == "COMPLETE" and canonical_status in {"MISSING", "UNREADABLE"}
                         else None
                     ),
-                    repair_action="refetch missing unit and publish canonical proof before marking COMPLETE",
+                    repair_action=(
+                        "review quarantined provider identifiers without assuming a canonical mapping"
+                        if exc.origin == "provider_quality"
+                        else "refetch missing unit and publish canonical proof before marking COMPLETE"
+                    ),
                     provider_attempts=attempts,
                     network_category=_network_category(exc.safe_cause),
                     transaction_fetch_id=transition.fetch_id if transition else None,
@@ -711,12 +739,17 @@ class FirstRunOrchestrator:
                     transaction_fields=transition_fields,
                     transaction_quality_evidence=transition_quality_evidence,
                 )
+            failure_stage = classify_data_unavailable_stage(exc, active_stage)
             raise WorkbenchRunError(
                 code,
-                active_stage,
+                failure_stage,
                 dataset_id=exc.dataset_id,
                 missing_range=missing_range,
-                user_message="Data preparation failed before research calculation started. Review the dataset, missing range, and recommended recovery action.",
+                user_message=(
+                    "Provider data failed the quality gate before canonical publication. Review the bounded identifier evidence; no mapping was assumed."
+                    if exc.origin == "provider_quality"
+                    else "Data preparation failed before research calculation started. Review the dataset, missing range, and recommended recovery action."
+                ),
                 diagnostic=diagnostic,
             ) from None
         except (CanonicalDataError, AdjustedPriceError, ResearchInputError):

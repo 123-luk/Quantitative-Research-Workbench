@@ -13,7 +13,14 @@ from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, canonical_date, normalize_s
 from src.data.coverage_ledger import CoverageLedger
 from src.data.coverage_planner import scope_key
 from src.data.dataset_registry import DatasetRegistry
-from src.universe.contracts import UniverseDataUnavailable
+from src.data.security_identifiers import (
+    SecurityIdentifierClass,
+    classify_provider_reference_identifier,
+)
+from src.universe.contracts import (
+    UniverseDataUnavailable,
+    UnsupportedLegacySecurityIdentifier,
+)
 
 
 STOCK_BASIC_SCOPE = normalize_scope({"scope": "CN_STOCK_REFERENCE"})
@@ -50,12 +57,31 @@ def _months(start: str, end: str) -> tuple[str, ...]:
 class CanonicalUniverseDataSource:
     """Read explicit ledger-proven partitions without discovery fallbacks."""
 
-    def __init__(self, *, registry: DatasetRegistry, ledger: CoverageLedger, store: PartitionedParquetStore, stock_basic_as_of: str, index_weight_start: str) -> None:
+    def __init__(self, *, registry: DatasetRegistry, ledger: CoverageLedger, store: PartitionedParquetStore, stock_basic_as_of: str, index_weight_start: str, stock_basic_required_start: str | None = None, stock_basic_required_end: str | None = None) -> None:
         self.registry = registry
         self.ledger = ledger
         self.store = store
         self.stock_basic_as_of = canonical_date(stock_basic_as_of)
         self.index_weight_start = canonical_date(index_weight_start)
+        self.stock_basic_required_start = (
+            canonical_date(stock_basic_required_start)
+            if stock_basic_required_start is not None else None
+        )
+        self.stock_basic_required_end = (
+            canonical_date(stock_basic_required_end)
+            if stock_basic_required_end is not None else None
+        )
+        if (
+            self.stock_basic_required_start is None
+        ) != (
+            self.stock_basic_required_end is None
+        ):
+            raise ValueError("stock_basic required interval must provide both boundaries.")
+        if (
+            self.stock_basic_required_start is not None
+            and self.stock_basic_required_start > self.stock_basic_required_end
+        ):
+            raise ValueError("stock_basic required interval is reversed.")
 
     def _read(self, dataset_id: str, scope: tuple[tuple[str, str], ...], units: tuple[str, ...], source_as_of: str | None) -> CanonicalUniverseSlice:
         spec = self.registry.get(dataset_id)
@@ -81,7 +107,36 @@ class CanonicalUniverseDataSource:
         return CanonicalUniverseSlice(frame, dataset_id, spec.schema_version, source_as_of, f"{dataset_id}:{spec.schema_version}:{identity_hash}")
 
     def stock_basic(self) -> CanonicalUniverseSlice:
-        return self._read("stock_basic", STOCK_BASIC_SCOPE, (GLOBAL_SNAPSHOT_UNIT,), None)
+        source = self._read("stock_basic", STOCK_BASIC_SCOPE, (GLOBAL_SNAPSHOT_UNIT,), None)
+        if self.stock_basic_required_start is None:
+            return source
+        keep: list[bool] = []
+        for row in source.frame.itertuples(index=False):
+            decision = classify_provider_reference_identifier(
+                ts_code=getattr(row, "ts_code", None),
+                list_status=getattr(row, "list_status", None),
+                list_date=getattr(row, "list_date", None),
+                delist_date=getattr(row, "delist_date", None),
+                required_start=self.stock_basic_required_start,
+                required_end=self.stock_basic_required_end,
+            )
+            if decision.classification is SecurityIdentifierClass.INVALID:
+                raise UnsupportedLegacySecurityIdentifier(
+                    f"{getattr(row, 'ts_code', '')} cannot be mapped safely for "
+                    f"{self.stock_basic_required_start} through {self.stock_basic_required_end}."
+                )
+            keep.append(
+                decision.classification is SecurityIdentifierClass.CANONICAL_TRADABLE
+            )
+        filtered = source.frame.loc[keep].reset_index(drop=True)
+        identity = (
+            f"{source.source_identity}|tradable:{self.stock_basic_required_start}:"
+            f"{self.stock_basic_required_end}"
+        )
+        return CanonicalUniverseSlice(
+            filtered, source.dataset_id, source.schema_version,
+            source.source_as_of, identity,
+        )
 
     def index_weight(self, index_code: str, through_date: str) -> CanonicalUniverseSlice:
         through = canonical_date(through_date)

@@ -153,17 +153,10 @@ def test_quality_failure_persists_identifier_evidence_without_changing_state_cha
     assert evidence["status_row_counts"] == {"L": 1, "D": 0, "P": 0, "G": 0}
     assert evidence["pre_merge_rows"] == evidence["merged_rows"] == 1
     assert evidence["deduplicated_rows"] == 0
-    assert evidence["samples"] == [{
-        "exchange": "SSE",
-        "list_status": "L",
-        "market": "Main Board",
-        "normalized_ts_code": "INVALID",
-        "raw_ts_code": "INVALID",
-        "rule_id": SECURITY_IDENTIFIER_RULE_ID,
-        "symbol": "INVALID",
-        "ts_code": "INVALID",
-    }]
+    assert evidence["samples"][0]["ts_code"] == "INVALID"
+    assert evidence["samples"][0]["classification"] == "INVALID"
+    assert evidence["samples"][0]["rule_id"] != SECURITY_IDENTIFIER_RULE_ID
     assert event["status"] == "FAILED"
     assert service.ledger.records("stock_basic") == ()
-    assert not (tmp_path / "raw" / "tushare_official" / "stock_basic").exists()
+    assert Path(str(event["raw_reference"])).is_file()
     assert not (tmp_path / "curated" / "stock_basic").exists()

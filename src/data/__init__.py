@@ -6,7 +6,7 @@ from src.data.parquet_store import ParquetStore
 from src.data.canonical_store import PartitionedParquetStore, RawParquetStore
 from src.data.provider_registry import ProviderClientFactory, ProviderId, ProviderRegistry
 from src.data.provider_contracts import ProviderContractRegistry
-from src.data.contracts import DataRequirement, DatasetSpec, ResearchFrequency
+from src.data.contracts import DataRequirement, DatasetSpec, IdentifierContract, ResearchFrequency
 from src.data.coverage_ledger import CoverageLedger
 from src.data.coverage_planner import MissingDataPlanner
 from src.data.dataset_registry import DatasetRegistry, create_default_dataset_registry
@@ -21,6 +21,7 @@ __all__ = [
     "DataRequirement",
     "DatasetRegistry",
     "DatasetSpec",
+    "IdentifierContract",
     "MissingDataPlanner",
     "PartitionedParquetStore",
     "ProviderClientFactory",

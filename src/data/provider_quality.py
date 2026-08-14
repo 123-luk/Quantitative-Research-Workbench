@@ -9,16 +9,33 @@ import numpy as np
 import pandas as pd
 
 from src.data.canonical_store import normalize_frame
-from src.data.contracts import DatasetSpec
+from src.data.contracts import DatasetSpec, IdentifierContract
+from src.data.security_identifiers import (
+    CANONICAL_SECURITY_PATTERN,
+    CANONICAL_SECURITY_RULE_ID,
+    INVALID_REFERENCE_RULE_ID,
+    LEGACY_REFERENCE_RULE_ID,
+    UNSUPPORTED_LEGACY_RULE_ID,
+    SecurityIdentifierClass,
+    classify_provider_reference_identifier,
+)
 
 
-SECURITY_IDENTIFIER_RULE_ID = "TS_CODE_6_DIGIT_CN_EXCHANGE_SUFFIX"
-SECURITY_IDENTIFIER_PATTERN = r"^[0-9]{6}\.(?:SH|SZ|BJ)$"
+SECURITY_IDENTIFIER_RULE_ID = CANONICAL_SECURITY_RULE_ID
+SECURITY_IDENTIFIER_PATTERN = CANONICAL_SECURITY_PATTERN.pattern
 MAX_INVALID_IDENTIFIER_SAMPLES = 20
 _IDENTIFIER_SAMPLE_FIELDS = (
     "ts_code", "symbol", "list_status", "market", "exchange",
-    "raw_ts_code", "normalized_ts_code", "rule_id",
+    "raw_ts_code", "normalized_ts_code", "list_date", "delist_date",
+    "classification", "decision_reason", "required_start", "required_end",
+    "rule_id",
 )
+_IDENTIFIER_RULE_IDS = frozenset({
+    CANONICAL_SECURITY_RULE_ID,
+    LEGACY_REFERENCE_RULE_ID,
+    UNSUPPORTED_LEGACY_RULE_ID,
+    INVALID_REFERENCE_RULE_ID,
+})
 
 
 @dataclass(frozen=True)
@@ -41,8 +58,9 @@ def invalid_security_code_mask(rows: pd.DataFrame) -> pd.Series:
     """Return the exact mask used by the canonical security identifier gate."""
     if "ts_code" not in rows:
         return pd.Series(False, index=rows.index, dtype=bool)
-    return ~rows["ts_code"].astype("string").str.match(
-        SECURITY_IDENTIFIER_PATTERN, na=False
+    return ~rows["ts_code"].astype("string").map(
+        lambda value: bool(CANONICAL_SECURITY_PATTERN.fullmatch(str(value)))
+        if not pd.isna(value) else False
     )
 
 
@@ -69,13 +87,19 @@ def sanitize_identifier_evidence(value: object) -> dict[str, object]:
             sample = {
                 field: _safe_identifier_text(item.get(field))
                 for field in _IDENTIFIER_SAMPLE_FIELDS
+                if field in item
             }
-            if sample["rule_id"] != SECURITY_IDENTIFIER_RULE_ID:
+            if sample.get("rule_id") not in _IDENTIFIER_RULE_IDS:
                 continue
             samples.append(sample)
     samples = sorted(
-        {tuple(item[field] for field in _IDENTIFIER_SAMPLE_FIELDS): item for item in samples}.values(),
-        key=lambda item: tuple(str(item[field] or "") for field in _IDENTIFIER_SAMPLE_FIELDS),
+        {
+            tuple(item.get(field) for field in _IDENTIFIER_SAMPLE_FIELDS): item
+            for item in samples
+        }.values(),
+        key=lambda item: tuple(
+            str(item.get(field) or "") for field in _IDENTIFIER_SAMPLE_FIELDS
+        ),
     )[:MAX_INVALID_IDENTIFIER_SAMPLES]
 
     def count(name: str) -> int:
@@ -92,9 +116,30 @@ def sanitize_identifier_evidence(value: object) -> dict[str, object]:
         for status in ("L", "D", "P", "G")
     }
     invalid_count = count("invalid_count")
+    excluded_count = count("excluded_count")
+    raw_reason_counts = value.get("reason_counts")
+    reason_counts = {
+        rule_id: raw_reason_counts.get(rule_id, 0)
+        for rule_id in sorted(_IDENTIFIER_RULE_IDS)
+        if isinstance(raw_reason_counts, Mapping)
+        and type(raw_reason_counts.get(rule_id, 0)) is int
+        and raw_reason_counts.get(rule_id, 0) > 0
+    }
+    if not reason_counts and invalid_count:
+        reason_counts = {SECURITY_IDENTIFIER_RULE_ID: invalid_count}
+    raw_classification_counts = value.get("classification_counts")
+    classification_counts = {
+        classification.value: raw_classification_counts.get(classification.value, 0)
+        for classification in SecurityIdentifierClass
+        if isinstance(raw_classification_counts, Mapping)
+        and type(raw_classification_counts.get(classification.value, 0)) is int
+        and raw_classification_counts.get(classification.value, 0) >= 0
+    }
     return {
         "invalid_count": invalid_count,
-        "reason_counts": {SECURITY_IDENTIFIER_RULE_ID: invalid_count},
+        "excluded_count": excluded_count,
+        "reason_counts": reason_counts,
+        "classification_counts": classification_counts,
         "samples": samples,
         "status_row_counts": status_counts,
         "pre_merge_rows": count("pre_merge_rows"),
@@ -109,10 +154,12 @@ def invalid_security_identifier_evidence(
     raw_frames: Mapping[str, pd.DataFrame],
     status_row_counts: Mapping[str, int],
     pre_merge_rows: int,
+    required_start: str | None = None,
+    required_end: str | None = None,
 ) -> dict[str, object]:
     """Build bounded public identifier evidence for a merged stock_basic frame."""
     mask = invalid_security_code_mask(rows)
-    invalid = rows.loc[mask].copy()
+    noncanonical = rows.loc[mask].copy()
     raw_by_status_and_code: dict[tuple[str, str], str | None] = {}
     for status in ("L", "D", "P", "G"):
         frame = raw_frames.get(status)
@@ -126,9 +173,31 @@ def invalid_security_identifier_evidence(
             raw_by_status_and_code.setdefault((status, str(raw_code)), raw_code)
 
     samples: list[dict[str, object]] = []
-    for row in invalid.itertuples(index=False):
+    invalid_count = 0
+    excluded_count = 0
+    reason_counts: dict[str, int] = {}
+    classification_counts = {
+        SecurityIdentifierClass.CANONICAL_TRADABLE.value: int((~mask).sum()),
+        SecurityIdentifierClass.LEGACY_REFERENCE.value: 0,
+        SecurityIdentifierClass.INVALID.value: 0,
+    }
+    for row in noncanonical.itertuples(index=False):
         normalized_code = _safe_identifier_text(getattr(row, "ts_code", None))
         status = _safe_identifier_text(getattr(row, "list_status", None))
+        decision = classify_provider_reference_identifier(
+            ts_code=normalized_code,
+            list_status=status,
+            list_date=getattr(row, "list_date", None),
+            delist_date=getattr(row, "delist_date", None),
+            required_start=required_start,
+            required_end=required_end,
+        )
+        classification_counts[decision.classification.value] += 1
+        reason_counts[decision.rule_id] = reason_counts.get(decision.rule_id, 0) + 1
+        if decision.classification is SecurityIdentifierClass.LEGACY_REFERENCE:
+            excluded_count += 1
+        elif decision.classification is SecurityIdentifierClass.INVALID:
+            invalid_count += 1
         samples.append({
             "ts_code": normalized_code,
             "symbol": _safe_identifier_text(getattr(row, "symbol", None)),
@@ -139,10 +208,19 @@ def invalid_security_identifier_evidence(
                 (str(status), str(normalized_code)), normalized_code
             ),
             "normalized_ts_code": normalized_code,
-            "rule_id": SECURITY_IDENTIFIER_RULE_ID,
+            "list_date": _safe_identifier_text(getattr(row, "list_date", None)),
+            "delist_date": _safe_identifier_text(getattr(row, "delist_date", None)),
+            "classification": decision.classification.value,
+            "decision_reason": decision.reason,
+            "required_start": required_start,
+            "required_end": required_end,
+            "rule_id": decision.rule_id,
         })
     return sanitize_identifier_evidence({
-        "invalid_count": int(mask.sum()),
+        "invalid_count": invalid_count,
+        "excluded_count": excluded_count,
+        "reason_counts": reason_counts,
+        "classification_counts": classification_counts,
         "samples": samples,
         "status_row_counts": dict(status_row_counts),
         "pre_merge_rows": pre_merge_rows,
@@ -151,11 +229,37 @@ def invalid_security_identifier_evidence(
     })
 
 
-def validate_quality(spec: DatasetSpec, frame: pd.DataFrame) -> tuple[QualityIssue, ...]:
+def validate_quality(
+    spec: DatasetSpec,
+    frame: pd.DataFrame,
+    *,
+    required_start: str | None = None,
+    required_end: str | None = None,
+) -> tuple[QualityIssue, ...]:
     rows = normalize_frame(spec, frame)
     issues: list[QualityIssue] = []
-    if spec.dataset_id not in {"index_daily"} and invalid_security_code_mask(rows).any():
+    if spec.identifier_contract is IdentifierContract.CANONICAL_TRADABLE and invalid_security_code_mask(rows).any():
         issues.append(QualityIssue("INVALID_SECURITY_CODE", "ts_code", None))
+    elif spec.identifier_contract is IdentifierContract.PROVIDER_REFERENCE:
+        decisions = tuple(
+            classify_provider_reference_identifier(
+                ts_code=getattr(row, "ts_code", None),
+                list_status=getattr(row, "list_status", None),
+                list_date=getattr(row, "list_date", None),
+                delist_date=getattr(row, "delist_date", None),
+                required_start=required_start,
+                required_end=required_end,
+            )
+            for row in rows.loc[invalid_security_code_mask(rows)].itertuples(index=False)
+        )
+        if any(item.rule_id == UNSUPPORTED_LEGACY_RULE_ID for item in decisions):
+            issues.append(QualityIssue(UNSUPPORTED_LEGACY_RULE_ID, "ts_code", None))
+        if any(
+            item.classification is SecurityIdentifierClass.INVALID
+            and item.rule_id != UNSUPPORTED_LEGACY_RULE_ID
+            for item in decisions
+        ):
+            issues.append(QualityIssue("INVALID_SECURITY_CODE", "ts_code", None))
     if {"open", "high", "low", "close"}.issubset(rows):
         invalid = (rows["high"] < rows[["open", "close", "low"]].max(axis=1)) | (rows["low"] > rows[["open", "close", "high"]].min(axis=1))
         if invalid.any():

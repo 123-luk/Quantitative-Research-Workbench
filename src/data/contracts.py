@@ -52,6 +52,12 @@ class RevisionPolicy(str, Enum):
     EXPLICIT_REFRESH = "EXPLICIT_REFRESH"
 
 
+class IdentifierContract(str, Enum):
+    NONE = "NONE"
+    CANONICAL_TRADABLE = "CANONICAL_TRADABLE"
+    PROVIDER_REFERENCE = "PROVIDER_REFERENCE"
+
+
 def canonical_date(value: object) -> str:
     if isinstance(value, datetime):
         value = value.date()
@@ -113,6 +119,7 @@ class DatasetSpec:
     availability_semantics: str
     allow_empty_complete: bool = False
     provider_row_limit: int | None = None
+    identifier_contract: IdentifierContract = IdentifierContract.NONE
 
     def __post_init__(self) -> None:
         enum_fields = {
@@ -121,6 +128,7 @@ class DatasetSpec:
             "coverage_kind": CoverageKind,
             "fetch_strategy": FetchStrategy,
             "revision_policy": RevisionPolicy,
+            "identifier_contract": IdentifierContract,
         }
         for name, enum_type in enum_fields.items():
             if not isinstance(getattr(self, name), enum_type):

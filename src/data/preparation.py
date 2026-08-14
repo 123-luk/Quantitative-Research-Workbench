@@ -16,14 +16,14 @@ from typing import Callable, Iterable, Mapping
 import pandas as pd
 
 from src.data.canonical_store import PartitionedParquetStore, RawParquetStore, content_hash
-from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, CoverageKind, DataRequirement, DatasetSpec
+from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, CoverageKind, DataRequirement, DatasetSpec, IdentifierContract
 from src.data.coverage_ledger import CoverageLedger, CoverageRecord, coverage_identity_key
 from src.data.coverage_planner import FetchTask, MissingDataPlan, MissingDataPlanner, coalesce_coverage_requirements, scope_key
 from src.data.dataset_registry import DatasetRegistry, create_default_dataset_registry
 from src.data.fetching import FetchStrategyRegistry, create_default_fetch_strategy_registry, provider_request_parameters
 from src.data.provider_contracts import CoverageGranularity, EndpointContract, ProviderContractRegistry
 from src.data.tushare_client import TushareClient
-from src.data.provider_quality import sanitize_identifier_evidence, validate_quality
+from src.data.provider_quality import invalid_security_identifier_evidence, sanitize_identifier_evidence, validate_quality
 
 
 class MissingCredentialError(RuntimeError):
@@ -42,13 +42,15 @@ class DataUnavailableError(RuntimeError):
         cause: BaseException | None = None,
         origin: str = "provider",
         scope: tuple[tuple[str, str], ...] | None = None,
+        diagnosis_code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.dataset_id = dataset_id
         self.units = tuple(units)
         self.safe_cause = cause
         self.scope = scope
-        if origin not in {"provider", "local"}:
+        self.diagnosis_code = diagnosis_code
+        if origin not in {"provider", "provider_quality", "local"}:
             raise ValueError("preparation failure origin is invalid")
         self.origin = origin
 
@@ -367,6 +369,8 @@ class DataPreparationService:
 
     def ensure(self, requirements: Iterable[DataRequirement], credential: str | None = None, *, client: object | None = None, progress: Callable[[str, str, int, int], None] | None = None) -> DataPreparationResult:
         normalized = tuple(sorted(coalesce_coverage_requirements(self.registry, requirements), key=lambda item: (self.registry.get(item.dataset_id).coverage_kind.value != "CALENDAR_DATE", item.dataset_id, item.scope, item.required_start)))
+        required_start = min((item.required_start for item in normalized), default=None)
+        required_end = max((item.required_end for item in normalized), default=None)
         calls = 0
         rows_total = 0
         try:
@@ -418,6 +422,7 @@ class DataPreparationService:
                 observed_rows: int | None = None
                 observed_fields: tuple[str, ...] = ()
                 quality_evidence: dict[str, object] = {}
+                raw_path = None
                 try:
                     result, successful_attempt = self._fetch_with_retry(
                         spec, task, client, fetch_id=fetch_id,
@@ -430,6 +435,21 @@ class DataPreparationService:
                     quality_evidence = sanitize_identifier_evidence(
                         result.diagnostics.get("quality_evidence")
                     )
+                    if spec.identifier_contract is IdentifierContract.PROVIDER_REFERENCE:
+                        status_counts = quality_evidence.get("status_row_counts", {})
+                        quality_evidence = invalid_security_identifier_evidence(
+                            frame,
+                            raw_frames={},
+                            status_row_counts=(
+                                status_counts if isinstance(status_counts, Mapping) else {}
+                            ),
+                            pre_merge_rows=(
+                                int(quality_evidence.get("pre_merge_rows", len(frame)))
+                                if quality_evidence else len(frame)
+                            ),
+                            required_start=required_start,
+                            required_end=required_end,
+                        )
                     self._record_transition(
                         fetch_id, spec, task, "FETCH_SUCCEEDED",
                         endpoint=contract.api_name, operation="FETCH_MERGED",
@@ -439,24 +459,33 @@ class DataPreparationService:
                     )
                     retrieved_at = _now()
                     failure_origin = "local"
+                    failure_operation = "RAW_STAGE"
+                    raw_path = self.raw_store.save(spec.dataset_id, fetch_id, frame)
+                    self._record_transition(
+                        fetch_id, spec, task, "RAW_STAGED",
+                        endpoint=contract.api_name, operation="UNVERIFIED_QUARANTINE",
+                        rows=observed_rows, fields=observed_fields,
+                        schema_version=spec.schema_version,
+                        artifact_reference=str(raw_path),
+                        quality_evidence=quality_evidence,
+                    )
+                    failure_origin = "provider_quality"
                     failure_operation = "QUALITY_VALIDATION"
-                    issues = validate_quality(spec, frame)
+                    issues = validate_quality(
+                        spec, frame,
+                        required_start=required_start,
+                        required_end=required_end,
+                    )
                     if issues:
                         categories = ",".join(sorted({item.category for item in issues}))
                         failure_code = "QUALITY_VALIDATION_FAILED"
                         safe_message = categories
                         raise DataUnavailableError(
-                            f"Provider data quality validation failed: {categories}."
+                            f"Provider data quality validation failed: {categories}.",
+                            origin="provider_quality",
+                            diagnosis_code=categories,
                         )
-                    failure_operation = "RAW_STAGE"
-                    raw_path = self.raw_store.save(spec.dataset_id, fetch_id, frame)
-                    self._record_transition(
-                        fetch_id, spec, task, "RAW_STAGED",
-                        endpoint=contract.api_name, operation="RAW_ATOMIC_REPLACE",
-                        rows=observed_rows, fields=observed_fields,
-                        schema_version=spec.schema_version,
-                        artifact_reference=str(raw_path),
-                    )
+                    failure_origin = "local"
                     provenance = {
                         "endpoint": contract.api_name,
                         "contract_version": contract.contract_version,
@@ -556,7 +585,14 @@ class DataPreparationService:
                         safe_message=safe_message or "Coverage transaction did not complete.",
                         quality_evidence=quality_evidence,
                     )
-                    self.ledger.finish_fetch(fetch_id, status="FAILED", finished_at=_now(), error_type=type(exc).__name__)
+                    self.ledger.finish_fetch(
+                        fetch_id, status="FAILED", finished_at=_now(),
+                        error_type=type(exc).__name__,
+                        raw_reference=str(raw_path) if raw_path is not None else None,
+                        quality_conclusion=(
+                            safe_message if failure_operation == "QUALITY_VALIDATION" else None
+                        ),
+                    )
                     raise DataUnavailableError(
                         f"Data preparation failed for dataset {spec.dataset_id!r}.",
                         dataset_id=spec.dataset_id,
@@ -564,6 +600,7 @@ class DataPreparationService:
                         cause=exc,
                         origin=failure_origin,
                         scope=task.scope,
+                        diagnosis_code=safe_message,
                     ) from exc
         final_plans = tuple(self._planner().plan((requirement,))[0] for requirement in normalized)
         if not all(plan.ready for plan in final_plans):

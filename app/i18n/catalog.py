@@ -224,7 +224,7 @@ _ZH.update({
     "task.recovery.PIPELINE_ERROR": "数据准备已完成；查看技术详情后重试研究计算。", "task.recovery.PROVIDER_ERROR": "稍后重试或检查 TuShare 服务状态。",
     "task.recovery.PROCESS_INTERRUPTED": "重新输入 Token（如仍需补数）并重试。", "task.recovery.INTERNAL_ERROR": "重试；若重复发生，请检查应用日志。",
     "progress.created": "已创建", "progress.validating": "验证配置", "progress.validate": "验证配置", "progress.plan": "规划研究输入",
-    "progress.check": "检查本地数据", "progress.download": "下载缺失数据", "progress.build": "构建研究输入",
+    "progress.check": "检查本地数据", "progress.download": "下载缺失数据", "progress.quality_validation": "校验 Provider 数据质量", "progress.build": "构建研究输入",
     "progress.pipeline": "运行规范研究流水线", "progress.artifacts": "验证结果", "progress.complete": "完成",
     "progress.factor": "计算因子", "progress.modeling": "构建建模面板", "progress.ml": "训练与验证模型",
     "progress.signal": "生成信号", "progress.portfolio": "构建组合与持仓", "progress.research_backtest": "运行研究回测",
@@ -266,7 +266,7 @@ _EN.update({
     "task.recovery.PIPELINE_ERROR": "Data preparation completed; inspect technical details and retry research calculation.", "task.recovery.PROVIDER_ERROR": "Retry later or check TuShare service status.",
     "task.recovery.PROCESS_INTERRUPTED": "Re-enter the token if missing data remains, then retry.", "task.recovery.INTERNAL_ERROR": "Retry; inspect application logs if it recurs.",
     "progress.created": "Created", "progress.validating": "Validate Configuration", "progress.validate": "Validate Configuration", "progress.plan": "Plan Research Inputs",
-    "progress.check": "Check Local Data", "progress.download": "Download Missing Data", "progress.build": "Build Research Inputs",
+    "progress.check": "Check Local Data", "progress.download": "Download Missing Data", "progress.quality_validation": "Validate Provider Data Quality", "progress.build": "Build Research Inputs",
     "progress.pipeline": "Run Canonical Pipeline", "progress.artifacts": "Validate Results", "progress.complete": "Complete",
     "progress.factor": "Calculate Factors", "progress.modeling": "Build Modeling Panel", "progress.ml": "Train and Validate Model",
     "progress.signal": "Build Signals", "progress.portfolio": "Construct Portfolio and Holdings", "progress.research_backtest": "Run Research Backtest",
@@ -460,6 +460,13 @@ _ZH.update({
     "task.transaction_rows": "已观察行数",
     "task.transaction_fields": "已观察字段",
     "task.transaction_quality_evidence": "受限的证券标识质量证据",
+    "task.error.PROVIDER_DATA_QUALITY": "Provider 数据质量校验失败",
+    "task.error.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER": "历史参考证券标识缺少可靠映射",
+    "task.reason.PROVIDER_DATA_QUALITY": "Provider 返回的数据在写入 canonical 前未通过质量门禁；这不是本地覆盖账本故障。",
+    "task.reason.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER": "历史参考标识与完整研究所需区间重叠，但没有可验证的可交易证券映射，无法保证历史行情准确。",
+    "task.recovery.PROVIDER_DATA_QUALITY": "检查技术详情中的受限样本，并向 Provider 核验；系统不会猜测映射或静默删除记录。",
+    "task.recovery.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER": "核验该历史实体与可交易代码的正式映射后再重试；Token、网络和 Coverage Ledger 不是本次原因。",
+    "task.repair.review quarantined provider identifiers without assuming a canonical mapping": "检查隔离的 Provider 标识证据，不推测或生成 canonical 映射",
 })
 
 _EN.update({
@@ -473,6 +480,13 @@ _EN.update({
     "task.transaction_rows": "Observed rows",
     "task.transaction_fields": "Observed fields",
     "task.transaction_quality_evidence": "Bounded security identifier quality evidence",
+    "task.error.PROVIDER_DATA_QUALITY": "Provider data quality validation failed",
+    "task.error.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER": "Legacy reference identifier has no verified mapping",
+    "task.reason.PROVIDER_DATA_QUALITY": "Provider data failed the pre-canonical quality gate; this is not a local coverage-ledger failure.",
+    "task.reason.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER": "A legacy reference identity overlaps the complete required interval without a verified tradable mapping, so historical prices cannot be guaranteed.",
+    "task.recovery.PROVIDER_DATA_QUALITY": "Review the bounded technical samples and verify them with the provider; no mapping or silent deletion is performed.",
+    "task.recovery.UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER": "Verify a formal entity-to-tradable-code mapping before retrying; token, network, and Coverage Ledger are not the cause.",
+    "task.repair.review quarantined provider identifiers without assuming a canonical mapping": "Review quarantined provider identifier evidence without assuming a canonical mapping",
 })
 
 if set(_ZH) != set(_EN):

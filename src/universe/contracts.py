@@ -10,9 +10,9 @@ from typing import Any, Mapping
 import re
 
 from src.data.contracts import canonical_date
+from src.data.security_identifiers import CANONICAL_SECURITY_PATTERN
 
 
-CANONICAL_SECURITY_PATTERN = re.compile(r"^[0-9]{6}\.(SH|SZ|BJ)$")
 CANONICAL_INDEX_PATTERN = re.compile(r"^[A-Z0-9]{1,20}\.[A-Z]{2,6}$")
 
 
@@ -25,6 +25,10 @@ class UniverseConfigError(UniverseError):
 
 
 class UniverseDataUnavailable(UniverseError):
+    pass
+
+
+class UnsupportedLegacySecurityIdentifier(UniverseDataUnavailable):
     pass
 
 

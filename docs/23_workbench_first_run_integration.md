@@ -296,3 +296,49 @@ AppTest, full suite/directory, large regression group, or exact run. UAT-032,
 UAT-009, and UAT-028 remain open.
 
 尚未确定完整根因，仅补充违规标识样本诊断，需要用户再重试一次。
+
+# UAT-032 legacy stock references and survivorship protection
+
+The successful diagnostic retry exposed `T600018.SH` and `TS0018.SH` as D
+provider references. No mapping to `600018.SH`, `000018.SH`, or any other
+tradable code is inferred. The old official-provider cache identifies only the
+first as `上港集箱(退)`, listed 2000-07-19 and delisted 2006-10-20; the second
+has no local official entity proof.
+
+Workbench computes the full interval before quality classification. For the
+subject configuration it is 2022-11-17 through 2023-02-08, including ML/factor
+history, formations, embargo context, entry lag, and forward holding. A D
+non-canonical reference with valid dates wholly outside that interval is retained
+in stock_basic as `LEGACY_REFERENCE` and deterministically excluded from the
+tradable Universe. Overlap blocks with
+`UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER`; L/P/G or missing dates also block.
+
+The strict six-digit SH/SZ/BJ pattern remains unchanged for all downstream
+tradable datasets and artifacts. Numeric D securities are retained and evaluated
+point in time, so historical delisted stocks are not removed and survivorship
+bias is not introduced.
+
+GLOBAL stock-basic reuse does not reuse a prior task's interval decision. The
+Universe data boundary reclassifies provider references for the current complete
+plan interval, filters only proven `LEGACY_REFERENCE` rows from its tradable
+slice, and blocks any cached legacy reference that overlaps the new interval.
+
+Fetched stock-basic frames are now staged as audit-only quarantine before the
+quality gate. Failed quarantine cannot satisfy canonical reads, planning, reuse,
+or Ledger COMPLETE. Technical details retain bounded classification evidence;
+the fetch-specific raw file preserves registered reference fields without Token,
+headers, or credentials.
+
+The user-facing stage is now Provider Data Quality rather than local Coverage.
+An overlapping unmapped legacy reference receives the precise unsupported-
+legacy error. Local Coverage wording remains reserved for canonical, manifest,
+Ledger, or readback failures after quality succeeds.
+
+Seven distinct exact offline test nodes passed, covering both real identifiers
+outside the interval, overlap rejection, numeric-D survivorship, L/P/G and
+missing-date rejection, GLOBAL-to-readback success, user error mapping, and
+quarantine non-reuse. Four affected nodes were rerun after the final origin and
+GLOBAL-reuse boundary adjustments and passed. No real provider call, Token, task retry/create,
+EXE, Streamlit/AppTest, full file/directory/suite, large regression group, or
+exact run was executed. UAT-032, UAT-009, and UAT-028 remain open; the user must
+perform one real manual retry.

@@ -4081,3 +4081,50 @@ override，V4-E3 为 CLI + YAML + docs。
   EXE, Streamlit/AppTest, complete pytest, test directory, large regression
   group, or exact run was executed. UAT-032, UAT-009, and UAT-028 remain open.
   The user must manually retry once to populate the new evidence.
+
+## 2026-08-14 UAT-032 legacy provider-reference identifiers
+
+- Real retry task `8d75acc7-30be-4f2d-a6ce-7f013adf956f`, transaction
+  `4a9b7ca2f81047b19483259475900c3c`, confirmed two non-canonical D references:
+  `T600018.SH` and `TS0018.SH`. The bounded task evidence did not retain names or
+  lifecycle dates. Read-only legacy official-provider cache independently
+  contains `T600018.SH / T600018 / 上港集箱(退) / D / SSE / 2000-07-19 /
+  2006-10-20`; `TS0018.SH` is absent from that cache. Neither fact proves a
+  mapping to a six-digit canonical tradable code.
+- The complete task-dependent interval is `2022-11-17` through `2023-02-08`,
+  including 33 ML/history periods, the research formations, one entry-lag
+  period, and five holding periods. The evidenced T reference is outside this
+  interval. The TS dates remain unknown until a new response is quarantined.
+- Dataset Registry now declares identifier contracts. `stock_basic` is
+  `PROVIDER_REFERENCE`; daily, daily_basic, adj_factor, and suspend_d remain
+  `CANONICAL_TRADABLE`; trade_cal, index_daily, and index_weight do not apply the
+  stock ts_code contract at this generic gate. The downstream canonical security
+  regex remains exactly `^[0-9]{6}\.(?:SH|SZ|BJ)$`.
+- Provider-reference classification is centralized as `CANONICAL_TRADABLE`,
+  `LEGACY_REFERENCE`, or `INVALID`. A non-canonical row is legacy-only when it
+  is D, has valid ordered list/delist dates, and its validity interval does not
+  overlap the complete required interval. It is retained in the provider
+  reference snapshot with exclusion evidence and never converted. An overlapping
+  legacy reference blocks with `UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER`; L/P/G
+  or insufficient lifecycle proof continues to block as invalid.
+- No D rows are blanket-deleted. Canonical numeric D rows remain available for
+  `list_date <= T < delist_date`, preserving delisted history and preventing
+  survivorship bias. Universe reads reclassify cached GLOBAL reference rows for
+  the current complete interval, so an old safe exclusion cannot be reused for
+  a later overlapping task. Universe snapshots continue to contain only strict
+  canonical tradable identifiers.
+- The normalized provider frame is now atomically staged before quality under
+  `RAW_STAGED / UNVERIFIED_QUARANTINE`. This raw path is audit-only: it creates
+  neither canonical data nor Ledger COMPLETE and is not consulted by reuse.
+  Quality success alone permits canonical publication; failed quarantine remains
+  attached to the failed fetch event. It contains registered data fields only,
+  never Token, headers, or request credentials.
+- Provider quality failures now use origin `provider_quality`, stage
+  `quality_validation`, and user category `PROVIDER_DATA_QUALITY` or the precise
+  unsupported-legacy category. After quality passes, canonical/manifest/ledger/
+  readback failures return to local Coverage classification.
+- Seven distinct exact offline pytest nodes passed; four affected nodes were
+  rerun after tightening origin boundaries and also passed. No real call, Token,
+  task retry/create, EXE, Streamlit/AppTest, whole file/directory, full suite, or
+  exact run was executed. UAT-032, UAT-009, and UAT-028 remain open pending one
+  real manual retry.

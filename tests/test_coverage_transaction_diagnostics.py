@@ -98,7 +98,7 @@ def test_quality_failure_records_exact_safe_stopping_state(tmp_path: Path) -> No
     assert event["status"] == "FAILED"
     assert event["error_type"] == "DataUnavailableError"
     assert service.ledger.records("stock_basic") == ()
-    assert not (tmp_path / "raw" / "tushare_official" / "stock_basic").exists()
+    assert Path(str(event["raw_reference"])).is_file()
     assert not (tmp_path / "curated" / "stock_basic").exists()
 
 
