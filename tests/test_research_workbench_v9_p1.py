@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import inspect
+import json
 from pathlib import Path
 
 import pytest
@@ -227,6 +228,58 @@ def test_run_service_keeps_exact_identity_when_backend_fails_after_creation(
     assert outcome.error is not None and outcome.error.run_id == "exact-failed-run"
 
 
+def test_run_service_preserves_failed_stage_direct_cause_and_input_shape(
+    tmp_path: Path,
+) -> None:
+    config = build_pipeline_config(_state())
+    config.output_dir = str(tmp_path / "output")
+
+    def fail(config: object, *, run_created_callback: object, stage_callback: object) -> object:
+        run_dir = tmp_path / "output" / "runs" / "exact-failed-run"
+        signal_dir = run_dir / "signal"
+        signal_dir.mkdir(parents=True)
+        (signal_dir / "audit.json").write_text(
+            json.dumps(
+                {
+                    "input_rows": 30,
+                    "output_rows": 30,
+                    "trade_date_count": 10,
+                    "min_trade_date": "2023-01-11",
+                    "max_trade_date": "2023-01-31",
+                }
+            ),
+            encoding="utf-8",
+        )
+        run_created_callback(run_dir)  # type: ignore[operator]
+        stage_callback("portfolio", "STARTED")  # type: ignore[operator]
+        try:
+            raise ValueError(
+                "insufficient universe: requested top_n=10, available_count=3"
+            )
+        except ValueError as cause:
+            raise RuntimeError("Holdings build failed: ValueError") from cause
+
+    outcome = RunService(fail, supports_identity_hook=True).run(
+        config, stage_callback=lambda stage, status: None
+    )
+
+    assert not outcome.success and outcome.error is not None
+    assert outcome.error.stage == "portfolio"
+    assert outcome.error.cause_class == "ValueError"
+    assert outcome.error.cause_message == (
+        "insufficient universe: requested top_n=10, available_count=3"
+    )
+    assert outcome.error.input_shape == {
+        "input_rows": 30,
+        "output_rows": 30,
+        "trade_date_count": 10,
+        "min_trade_date": "2023-01-11",
+        "max_trade_date": "2023-01-31",
+    }
+    assert outcome.error.output_shape is None
+    assert outcome.error.retryable and outcome.error.retry_stage == "validate"
+
+
 def test_navigation_and_exact_results_handoff_use_small_state() -> None:
     assert NAVIGATION_ROUTES == ("Overview", "New Run", "Results", "Runs", "Data")
     state: dict[str, object] = {}
@@ -244,6 +297,19 @@ def test_navigation_and_exact_results_handoff_use_small_state() -> None:
     }
     with pytest.raises(ValueError):
         open_results(state, "")
+
+
+def test_results_handoff_persists_exact_run_in_query_params() -> None:
+    state: dict[str, object] = {}
+    query_params: dict[str, object] = {}
+
+    open_results(state, " exact-run-id ", query_params)
+
+    assert state == {
+        "selected_run_id": "exact-run-id",
+        "current_page": "Results",
+    }
+    assert query_params == {"run_id": "exact-run-id"}
 
 
 def test_error_presenter_contains_only_safe_fields() -> None:

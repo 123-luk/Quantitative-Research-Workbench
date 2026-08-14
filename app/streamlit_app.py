@@ -40,7 +40,7 @@ def _credential_sidebar(locale: str) -> None:
         key=widget_key,
     )
     st.session_state[token_state] = token
-    # Keep the legacy official-only key as a non-persistent compatibility view.
+    # Keep the official-only compatibility key as a non-persistent view.
     if selected == ProviderId.TUSHARE_OFFICIAL.value:
         st.session_state["tushare_session_token"] = token
     credential = CredentialService().resolve(token, provider_id=selected)

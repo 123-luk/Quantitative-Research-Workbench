@@ -151,7 +151,15 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
             action.caption(t("task.result_not_ready", locale=locale))
         with details.expander(t("task.technical", locale=locale)):
             st.write(f"{t('task.technical_id', locale=locale)}: `{task.task_id}`")
-            st.write(f"{t('task.technical_result', locale=locale)}: {t('overview.yes' if task.run_id else 'overview.no', locale=locale)}")
+            st.write(
+                f"{t('task.technical_run', locale=locale)}: "
+                f"`{task.run_id}`" if task.run_id else
+                f"{t('task.technical_run', locale=locale)}: {t('overview.no', locale=locale)}"
+            )
+            st.write(
+                f"{t('task.technical_result', locale=locale)}: "
+                f"{t('overview.yes' if task.can_open_results else 'overview.no', locale=locale)}"
+            )
             st.write(f"{t('task.technical_completed', locale=locale)}: {', '.join(t(f'progress.{stage}', locale=locale) for stage in task.completed_stages) or '—'}")
             if task.failure_code:
                 st.write(f"{t('task.error_category', locale=locale)}: {t(f'task.error.{task.failure_code}', locale=locale)}")
@@ -175,6 +183,27 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
             if task.transaction_quality_evidence:
                 st.write(t("task.transaction_quality_evidence", locale=locale))
                 st.json(_quality_diagnostic_summary(task.transaction_quality_evidence))
+            research_details = (
+                ("research_exception_type", task.research_exception_type),
+                ("research_cause_type", task.research_cause_type),
+                ("research_cause_message", task.research_cause_message),
+                ("retryable", task.retryable),
+                ("retry_stage", task.retry_stage),
+            )
+            for name, value in research_details:
+                if value is not None:
+                    rendered = (
+                        t("overview.yes" if value else "overview.no", locale=locale)
+                        if type(value) is bool
+                        else value
+                    )
+                    st.write(f"{t(f'task.{name}', locale=locale)}: {rendered}")
+            if task.research_input_shape:
+                st.write(t("task.research_input_shape", locale=locale))
+                st.json(dict(task.research_input_shape))
+            if task.research_output_shape:
+                st.write(t("task.research_output_shape", locale=locale))
+                st.json(dict(task.research_output_shape))
 
         clear_col, clear_help = st.columns((1, 4))
         clear_requested = st.session_state.get("confirm_clear_task") == task.task_id
@@ -273,4 +302,14 @@ def render(st: object, *, navigate=None, service: ResearchTaskService | None = N
 
 if __name__ == "__main__":
     import streamlit as st
-    render(st, navigate=lambda name: st.switch_page(page_path(name)))
+
+    def _navigate(name: str) -> None:
+        selected = st.session_state.get("selected_run_id")
+        query = (
+            {"run_id": selected}
+            if name == "results" and isinstance(selected, str) and selected
+            else None
+        )
+        st.switch_page(page_path(name), query_params=query)
+
+    render(st, navigate=_navigate)

@@ -8,11 +8,13 @@ from time import perf_counter, sleep
 import pytest
 
 from app.services.first_run_service import (
+    FailureDiagnostic,
     FirstRunResult,
     ProgressEvent,
     WorkbenchErrorCode,
     WorkbenchRunDraft,
     WorkbenchRunError,
+    WorkbenchFeasibilityError,
 )
 from app.services.research_task_service import ResearchTaskService
 from app.services.run_service import RunOutcome
@@ -92,7 +94,7 @@ def test_task_record_is_atomic_json_and_never_persists_token(tmp_path: Path) -> 
     assert len([path for path in paths if path.suffix == ".json"]) == 1
     payload = (tmp_path / "output" / "workbench_tasks" / f"{task.task_id}.json").read_text(encoding="utf-8")
     assert secret not in payload
-    assert json.loads(payload)["schema_version"] == "1.2"
+    assert json.loads(payload)["schema_version"] == "1.3"
     gate.set()
 
 
@@ -116,6 +118,79 @@ def test_failure_mapping_is_persistent_and_never_result_ready(tmp_path: Path, co
     assert failed.failure_code == code.value
     assert failed.failure_message == "safe diagnostic"
     assert not failed.result_ready and not failed.can_open_results
+
+
+def test_research_failure_diagnostics_are_persisted_without_marking_partial_run_ready(
+    tmp_path: Path,
+) -> None:
+    gate = Event()
+    failure = WorkbenchRunError(
+        WorkbenchErrorCode.PIPELINE_ERROR,
+        "portfolio",
+        run_id="partial-run-id",
+        user_message="insufficient universe",
+        diagnostic=FailureDiagnostic(
+            research_exception_type="HoldingsPipelineExecutionError",
+            research_cause_type="HoldingsDataError",
+            research_cause_message="requested top_n=10, available_count=3",
+            research_input_shape={"rows": 30, "trade_date_count": 10},
+            retryable=True,
+            retry_stage="validate",
+        ),
+    )
+    service = ResearchTaskService(
+        tmp_path / "output",
+        orchestrator_factory=lambda: _BlockingOrchestrator(gate, fail=failure),
+    )
+    task = service.submit(_draft(tmp_path), credential="secret")
+    gate.set()
+    failed = _wait(service, task.task_id, "failed")
+
+    assert failed.failure_stage == "portfolio"
+    assert failed.run_id == "partial-run-id"
+    assert not failed.result_ready and not failed.can_open_results
+    assert failed.research_exception_type == "HoldingsPipelineExecutionError"
+    assert failed.research_cause_type == "HoldingsDataError"
+    assert failed.research_input_shape == {"rows": 30, "trade_date_count": 10}
+    assert failed.retryable is True and failed.retry_stage == "validate"
+
+
+def test_infeasible_custom_top_n_is_rejected_before_task_persistence(
+    tmp_path: Path,
+) -> None:
+    base = _draft(tmp_path)
+    values = base.pipeline_config.to_dict()
+    values["top_n"] = 2
+    values["signal"] = {
+        "enabled": True,
+        "source": {"mode": "files", "artifact_dir": str(tmp_path / "ml")},
+        "prediction_column": "prediction",
+        "signal_direction": "descending",
+        "artifact_subdir": "signal",
+    }
+    values["holdings"] = {
+        "enabled": True,
+        "top_n": 2,
+        "insufficient_universe_policy": "error",
+        "weighting": "equal_weight",
+        "artifact_subdir": "holdings",
+        "portfolio_construction": {
+            "method": "equal_weight",
+            "params": {},
+            "constraints": [],
+        },
+    }
+    draft = WorkbenchRunDraft(
+        PipelineConfig.from_dict(values),
+        UniverseSpec.custom(("600000.SH",)),
+        ResearchFrequency.DAILY,
+    )
+    service = ResearchTaskService(tmp_path / "output")
+
+    with pytest.raises(WorkbenchFeasibilityError, match="requested=2"):
+        service.submit(draft, credential=None)
+
+    assert not (tmp_path / "output" / "workbench_tasks").exists()
 
 
 def test_units_risk_free_boundary_and_factor_registry_metadata() -> None:

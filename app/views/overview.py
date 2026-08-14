@@ -65,4 +65,14 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None) -> None
 
 if __name__ == "__main__":
     import streamlit as st
-    render(st, navigate=lambda name: st.switch_page(page_path(name)))
+
+    def _navigate(name: str) -> None:
+        selected = st.session_state.get("selected_run_id")
+        query = (
+            {"run_id": selected}
+            if name == "results" and isinstance(selected, str) and selected
+            else None
+        )
+        st.switch_page(page_path(name), query_params=query)
+
+    render(st, navigate=_navigate)

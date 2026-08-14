@@ -15,7 +15,7 @@ from app.components.navigation import page_path
 from app.i18n import get_locale, t
 from app.services.capability_catalog_service import CapabilityCatalogService
 from app.services.credential_service import CredentialService
-from app.services.first_run_service import FirstRunOrchestrator, WorkbenchErrorCode, WorkbenchRunDraft, WorkbenchRunError, create_workbench_factor_registry
+from app.services.first_run_service import FirstRunOrchestrator, WorkbenchErrorCode, WorkbenchRunDraft, WorkbenchRunError, create_workbench_factor_registry, validate_workbench_draft_feasibility
 from app.services.pipeline_config_service import build_pipeline_config
 from app.services.research_task_service import ResearchTaskService
 from app.services.research_date_service import shanghai_today, validate_research_dates
@@ -314,6 +314,7 @@ def render(st: object, *, navigate: Callable[[str], None] | None = None, orchest
         }
         config = build_pipeline_config(state, catalog=catalog, base_config=defaults)
         draft = WorkbenchRunDraft(config, universe, research_frequency)
+        validate_workbench_draft_feasibility(draft)
         st.session_state["draft_config"] = config.to_dict()
         with st.expander(t("new.config_preview", locale=locale)):
             st.dataframe(pd.DataFrame([

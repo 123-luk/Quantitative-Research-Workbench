@@ -644,6 +644,29 @@ def test_results_ui_requires_exact_selected_run() -> None:
     assert ui.infos == ["Select or complete an exact run_id before opening Results."]
 
 
+def test_results_ui_restores_exact_run_from_query_params(
+    completed_run: tuple[Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output_root, run_id = completed_run
+
+    class _Service:
+        def __init__(self, output: object) -> None:
+            assert output
+
+        def load(self, selected: str):
+            assert selected == run_id
+            return ResultService(output_root).load(selected)
+
+    monkeypatch.setattr(results_page, "ResultService", _Service)
+    ui = _FakeUI(state={"locale": "en"})
+    ui.query_params = {"run_id": run_id}
+
+    results_page.render(ui)
+
+    assert ui.session_state["selected_run_id"] == run_id
+    assert ui.tab_labels == ("Overview", "Holdings", "Returns", "Config", "Artifacts")
+
+
 def test_results_ui_renders_all_tabs_and_preserves_zero_weight_row(
     completed_run: tuple[Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -696,9 +719,16 @@ def test_runs_ui_opens_the_exact_selected_run(monkeypatch: pytest.MonkeyPatch) -
         def list_runs(self) -> tuple[RunSummary, ...]:
             return (summary,)
 
+    class _Tasks:
+        def list_tasks(self) -> tuple[object, ...]:
+            return ()
+
+        def hidden_run_ids(self) -> frozenset[str]:
+            return frozenset()
+
     monkeypatch.setattr(runs_page, "RunCatalogService", _Catalog)
     ui = _FakeUI(state={"locale": "en"}, pressed={"Open Results"})
-    runs_page.render(ui)
+    runs_page.render(ui, service=_Tasks())
     assert ui.session_state["selected_run_id"] == exact
     assert ui.session_state["current_page"] == "Results"
     assert ui.rerun_called is False

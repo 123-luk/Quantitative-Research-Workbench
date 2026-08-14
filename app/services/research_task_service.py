@@ -18,6 +18,7 @@ from app.services.first_run_service import (
     ProgressEvent,
     WorkbenchRunDraft,
     WorkbenchRunError,
+    validate_workbench_draft_feasibility,
 )
 from app.services.result_service import ResultService
 from app.services.research_date_service import require_valid_research_dates
@@ -28,8 +29,8 @@ from src.pipeline.experiment import ExperimentManager
 from src.universe import UniverseSpec
 
 
-TASK_SCHEMA_VERSION = "1.2"
-LEGACY_TASK_SCHEMA_VERSIONS = frozenset({"1.0", "1.1"})
+TASK_SCHEMA_VERSION = "1.3"
+LEGACY_TASK_SCHEMA_VERSIONS = frozenset({"1.0", "1.1", "1.2"})
 ACTIVE_STATUSES = frozenset({"created", "running"})
 TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 
@@ -116,6 +117,13 @@ class ResearchTask:
     transaction_rows: int | None = None
     transaction_fields: tuple[str, ...] = ()
     transaction_quality_evidence: Mapping[str, object] = field(default_factory=dict)
+    research_exception_type: str | None = None
+    research_cause_type: str | None = None
+    research_cause_message: str | None = None
+    research_input_shape: Mapping[str, object] = field(default_factory=dict)
+    research_output_shape: Mapping[str, object] = field(default_factory=dict)
+    retryable: bool | None = None
+    retry_stage: str | None = None
     historical: bool = False
 
     @property
@@ -216,7 +224,35 @@ class ResearchTaskService:
             migrated.setdefault(name, None)
         migrated.setdefault("transaction_fields", [])
         migrated.setdefault("transaction_quality_evidence", {})
+        for name in (
+            "research_exception_type",
+            "research_cause_type",
+            "research_cause_message",
+            "retryable",
+            "retry_stage",
+        ):
+            migrated.setdefault(name, None)
+        migrated.setdefault("research_input_shape", {})
+        migrated.setdefault("research_output_shape", {})
         return migrated
+
+    @staticmethod
+    def _safe_shape(value: object) -> dict[str, object]:
+        if not isinstance(value, Mapping):
+            return {}
+        result: dict[str, object] = {}
+        for key, item in value.items():
+            if not isinstance(key, str) or len(key) > 64:
+                continue
+            if type(item) is int and item >= 0:
+                result[key] = item
+            elif isinstance(item, str) and len(item) <= 128:
+                result[key] = item
+            elif isinstance(item, list) and len(item) <= 64 and all(
+                isinstance(entry, str) and len(entry) <= 128 for entry in item
+            ):
+                result[key] = list(item)
+        return result
 
     @staticmethod
     def _view(value: Mapping[str, object]) -> ResearchTask:
@@ -273,6 +309,13 @@ class ResearchTaskService:
             transaction_quality_evidence=sanitize_identifier_evidence(
                 value.get("transaction_quality_evidence")
             ),
+            research_exception_type=value.get("research_exception_type") if isinstance(value.get("research_exception_type"), str) else None,
+            research_cause_type=value.get("research_cause_type") if isinstance(value.get("research_cause_type"), str) else None,
+            research_cause_message=value.get("research_cause_message") if isinstance(value.get("research_cause_message"), str) else None,
+            research_input_shape=ResearchTaskService._safe_shape(value.get("research_input_shape")),
+            research_output_shape=ResearchTaskService._safe_shape(value.get("research_output_shape")),
+            retryable=value.get("retryable") if type(value.get("retryable")) is bool else None,
+            retry_stage=value.get("retry_stage") if isinstance(value.get("retry_stage"), str) else None,
         )
 
     def get(self, task_id: str) -> ResearchTask:
@@ -322,6 +365,7 @@ class ResearchTaskService:
     def submit(self, draft: WorkbenchRunDraft, *, credential: str | None, retry_of: str | None = None) -> ResearchTask:
         if not isinstance(draft, WorkbenchRunDraft):
             raise TypeError("draft must be a WorkbenchRunDraft.")
+        validate_workbench_draft_feasibility(draft)
         require_valid_research_dates(
             draft.pipeline_config.backtest_start,
             draft.pipeline_config.backtest_end,
@@ -380,6 +424,13 @@ class ResearchTaskService:
             "transaction_rows": None,
             "transaction_fields": [],
             "transaction_quality_evidence": {},
+            "research_exception_type": None,
+            "research_cause_type": None,
+            "research_cause_message": None,
+            "research_input_shape": {},
+            "research_output_shape": {},
+            "retryable": None,
+            "retry_stage": None,
             }
             self._write(record)
             future = _EXECUTOR.submit(self._run, task_id, draft, credential)
@@ -557,6 +608,13 @@ class ResearchTaskService:
                 "transaction_rows": exc.diagnostic.transaction_rows if exc.diagnostic else None,
                 "transaction_fields": list(exc.diagnostic.transaction_fields) if exc.diagnostic else [],
                 "transaction_quality_evidence": dict(exc.diagnostic.transaction_quality_evidence) if exc.diagnostic else {},
+                "research_exception_type": exc.diagnostic.research_exception_type if exc.diagnostic else None,
+                "research_cause_type": exc.diagnostic.research_cause_type if exc.diagnostic else None,
+                "research_cause_message": exc.diagnostic.research_cause_message if exc.diagnostic else None,
+                "research_input_shape": dict(exc.diagnostic.research_input_shape) if exc.diagnostic else {},
+                "research_output_shape": dict(exc.diagnostic.research_output_shape) if exc.diagnostic else {},
+                "retryable": exc.diagnostic.retryable if exc.diagnostic else None,
+                "retry_stage": exc.diagnostic.retry_stage if exc.diagnostic else None,
                 "updated_at": finished,
                 "finished_at": finished,
                 "elapsed_seconds": _elapsed(started, finished),

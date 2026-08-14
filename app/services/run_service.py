@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from time import perf_counter
 from typing import Callable, Mapping
@@ -18,6 +19,103 @@ class SafeRunError:
     message: str
     stage: str | None = None
     run_id: str | None = None
+    cause_class: str | None = None
+    cause_message: str | None = None
+    input_shape: Mapping[str, object] | None = None
+    output_shape: Mapping[str, object] | None = None
+    retryable: bool = True
+    retry_stage: str = "validate"
+
+
+_SHAPE_KEYS = (
+    "input_rows",
+    "output_rows",
+    "row_count",
+    "trade_date_count",
+    "date_count",
+    "min_trade_date",
+    "max_trade_date",
+    "first_trade_date",
+    "last_trade_date",
+    "column_count",
+    "columns",
+)
+
+
+def _sanitize_message(value: object) -> str:
+    message = str(value)
+    if re.search(
+        r"(?i)(token|secret|credential|private[ _-]?key|\.env)", message
+    ):
+        return "Sensitive backend details were redacted."
+    return message
+
+
+def _artifact_shape(directory: Path) -> dict[str, object] | None:
+    """Read only bounded row/column/date metadata from one exact Artifact."""
+    values: dict[str, object] = {}
+    for filename in ("audit.json", "manifest.json"):
+        path = directory / filename
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, Mapping):
+            continue
+        for key in _SHAPE_KEYS:
+            value = payload.get(key)
+            if type(value) is int and value >= 0:
+                values[key] = value
+            elif isinstance(value, str) and len(value) <= 64:
+                values[key] = value
+            elif key == "columns" and isinstance(value, list):
+                columns = [item for item in value if isinstance(item, str)]
+                if len(columns) == len(value) and len(columns) <= 64:
+                    values[key] = columns
+    return values or None
+
+
+def _stage_shapes(
+    config: PipelineConfig,
+    run_id: str | None,
+    stage: str | None,
+) -> tuple[Mapping[str, object] | None, Mapping[str, object] | None]:
+    if not run_id or not stage:
+        return None, None
+    run_dir = Path(config.output_dir).resolve() / "runs" / run_id
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        return None, None
+    experiment_id = config.ml_experiment.experiment_id
+    if not isinstance(experiment_id, str) or not experiment_id:
+        experiment_id = "__unavailable_experiment__"
+    locations = {
+        "modeling": (
+            run_dir / config.factor_research.artifact_subdir,
+            run_dir / config.modeling_panel.output.artifact_subdir,
+        ),
+        "ml": (
+            run_dir / config.modeling_panel.output.artifact_subdir,
+            run_dir / config.ml_experiment.artifact_root / experiment_id,
+        ),
+        "signal": (
+            run_dir / config.ml_experiment.artifact_root / experiment_id,
+            run_dir / config.signal.artifact_subdir,
+        ),
+        "portfolio": (
+            run_dir / config.signal.artifact_subdir,
+            run_dir / config.holdings.artifact_subdir,
+        ),
+        "research_backtest": (
+            run_dir / config.holdings.artifact_subdir,
+            run_dir / config.research_backtest.artifact_subdir,
+        ),
+    }
+    pair = locations.get(stage)
+    if pair is None:
+        return None, None
+    return _artifact_shape(pair[0]), _artifact_shape(pair[1])
 
 
 @dataclass(frozen=True)
@@ -54,16 +152,24 @@ class RunService:
             raise TypeError("config must be a validated PipelineConfig.")
         started = perf_counter()
         exact_run_id: str | None = None
+        active_stage: str | None = None
 
         def remember_run(run_dir: Path) -> None:
             nonlocal exact_run_id
             exact_run_id = run_dir.name
 
+        def observe_stage(stage: str, status: str) -> None:
+            nonlocal active_stage
+            if status == "STARTED":
+                active_stage = stage
+            if stage_callback is not None:
+                stage_callback(stage, status)
+
         try:
             if self._supports_identity_hook:
                 kwargs: dict[str, object] = {"run_created_callback": remember_run}
                 if stage_callback is not None:
-                    kwargs["stage_callback"] = stage_callback
+                    kwargs["stage_callback"] = observe_stage
                 summary = self._runner(config, **kwargs)
             else:
                 summary = self._runner(config)
@@ -102,18 +208,22 @@ class RunService:
                 artifact_summary=artifact_summary,
             )
         except Exception as exc:
-            message = str(exc)
-            if re.search(
-                r"(?i)(token|secret|credential|private[ _-]?key|\.env)", message
-            ):
-                message = "Sensitive backend details were redacted."
+            message = _sanitize_message(exc)
             stage = getattr(exc, "stage", None)
-            safe_stage = stage if isinstance(stage, str) and stage.strip() else None
+            safe_stage = (
+                stage
+                if isinstance(stage, str) and stage.strip()
+                else active_stage
+            )
             failed_run_id = getattr(exc, "run_id", None)
             safe_run_id = (
                 failed_run_id
                 if isinstance(failed_run_id, str) and failed_run_id.strip()
                 else exact_run_id
+            )
+            cause = exc.__cause__
+            input_shape, output_shape = _stage_shapes(
+                config, safe_run_id, safe_stage
             )
             return RunOutcome(
                 success=False,
@@ -126,5 +236,9 @@ class RunService:
                     message=message,
                     stage=safe_stage,
                     run_id=safe_run_id,
+                    cause_class=None if cause is None else type(cause).__name__,
+                    cause_message=None if cause is None else _sanitize_message(cause),
+                    input_shape=input_shape,
+                    output_shape=output_shape,
                 ),
             )

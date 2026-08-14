@@ -126,6 +126,13 @@ class FailureDiagnostic:
     transaction_rows: int | None = None
     transaction_fields: tuple[str, ...] = ()
     transaction_quality_evidence: Mapping[str, object] = field(default_factory=dict)
+    research_exception_type: str | None = None
+    research_cause_type: str | None = None
+    research_cause_message: str | None = None
+    research_input_shape: Mapping[str, object] = field(default_factory=dict)
+    research_output_shape: Mapping[str, object] = field(default_factory=dict)
+    retryable: bool | None = None
+    retry_stage: str | None = None
 
 
 def _network_category(exc: BaseException | None) -> str | None:
@@ -185,6 +192,31 @@ class WorkbenchRunDraft:
             raise TypeError("universe_spec must be a UniverseSpec.")
         if not isinstance(self.research_frequency, ResearchFrequency):
             raise TypeError("research_frequency must be a ResearchFrequency.")
+
+
+class WorkbenchFeasibilityError(ValueError):
+    """Raised before task persistence when a draft cannot satisfy its contract."""
+
+
+def validate_workbench_draft_feasibility(draft: WorkbenchRunDraft) -> None:
+    """Reject configuration contradictions without changing research semantics."""
+    if not isinstance(draft, WorkbenchRunDraft):
+        raise TypeError("draft must be a WorkbenchRunDraft.")
+    config = draft.pipeline_config
+    if (
+        config.holdings.enabled
+        and config.holdings.insufficient_universe_policy == "error"
+        and draft.universe_spec.universe_type.value == "CUSTOM"
+    ):
+        securities = draft.universe_spec.params.get("securities", ())
+        available = len(securities) if isinstance(securities, (list, tuple)) else 0
+        if config.holdings.top_n > available:
+            raise WorkbenchFeasibilityError(
+                "Top N is not feasible for the custom universe: "
+                f"requested={config.holdings.top_n}, configured_securities={available}. "
+                "Reduce Top N, add verified securities, or explicitly choose the "
+                "allow-partial policy."
+            )
 
 
 @dataclass(frozen=True)
@@ -529,6 +561,7 @@ class FirstRunOrchestrator:
         )
 
     def preview(self, draft: WorkbenchRunDraft) -> DataReadinessPreview:
+        validate_workbench_draft_feasibility(draft)
         runtime = self.preview_runtime_factory(draft.pipeline_config)
         bootstrap = _bootstrap_requirement(draft, runtime.factor_registry)
         bootstrap_service = runtime.preparation()
@@ -550,6 +583,7 @@ class FirstRunOrchestrator:
         started = perf_counter()
         events: list[ProgressEvent] = []
         self._event(events, progress, "validate", "STARTED")
+        validate_workbench_draft_feasibility(draft)
         if draft.pipeline_config.factor_research.research is None or draft.pipeline_config.factor_research.research.use_neutralization:
             raise WorkbenchRunError(WorkbenchErrorCode.UNSUPPORTED, "validate")
         runtime = self.runtime_factory(draft.pipeline_config)
@@ -612,11 +646,38 @@ class FirstRunOrchestrator:
                 stage_callback=lambda stage, status: self._event(events, progress, stage, status),
             )
             if not outcome.success or not outcome.run_id:
+                pipeline_error = outcome.error
+                failure_stage = (
+                    pipeline_error.stage
+                    if pipeline_error is not None and pipeline_error.stage
+                    else "pipeline"
+                )
                 raise WorkbenchRunError(
                     WorkbenchErrorCode.PIPELINE_ERROR,
-                    "pipeline",
+                    failure_stage,
                     outcome.run_id,
-                    outcome.error,
+                    pipeline_error,
+                    user_message=(
+                        pipeline_error.cause_message
+                        if pipeline_error is not None
+                        and pipeline_error.cause_message
+                        else pipeline_error.message
+                        if pipeline_error is not None
+                        else "Research pipeline execution failed."
+                    ),
+                    diagnostic=(
+                        None
+                        if pipeline_error is None
+                        else FailureDiagnostic(
+                            research_exception_type=pipeline_error.exception_class,
+                            research_cause_type=pipeline_error.cause_class,
+                            research_cause_message=pipeline_error.cause_message,
+                            research_input_shape=dict(pipeline_error.input_shape or {}),
+                            research_output_shape=dict(pipeline_error.output_shape or {}),
+                            retryable=pipeline_error.retryable,
+                            retry_stage=pipeline_error.retry_stage,
+                        )
+                    ),
                 )
             run_dir = ExperimentManager(bound.output_dir).resolve_run_dir(outcome.run_id)
             contracts = ProviderContractRegistry()

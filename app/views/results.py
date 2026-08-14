@@ -46,10 +46,23 @@ def _render_metrics(st: object, metrics: object, locale: str) -> None:
 def render(st: object) -> None:
     locale = get_locale(st.session_state)
     st.title(t("results.title", locale=locale))
-    run_id = st.session_state.get("selected_run_id")
+    query_params = getattr(st, "query_params", None)
+    query_run_id = (
+        query_params.get("run_id")
+        if query_params is not None
+        else None
+    )
+    run_id = (
+        query_run_id
+        if isinstance(query_run_id, str) and query_run_id
+        else st.session_state.get("selected_run_id")
+    )
     if not isinstance(run_id, str) or not run_id:
         st.info(t("results.empty", locale=locale))
         return
+    st.session_state["selected_run_id"] = run_id
+    if query_params is not None and query_run_id != run_id:
+        query_params["run_id"] = run_id
     try:
         bundle = ResultService(_output_root()).load(run_id)
     except ResultServiceError as exc:

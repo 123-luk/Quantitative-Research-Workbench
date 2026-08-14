@@ -22,11 +22,18 @@ def page_path(page_key: str) -> str:
         raise ValueError(f"Unknown page key: {page_key!r}") from exc
 
 
-def open_results(state: MutableMapping[str, object], run_id: str) -> None:
+def open_results(
+    state: MutableMapping[str, object],
+    run_id: str,
+    query_params: MutableMapping[str, object] | None = None,
+) -> None:
     if not isinstance(run_id, str) or not run_id.strip():
         raise ValueError("Results require an exact non-empty run_id.")
-    state["selected_run_id"] = run_id.strip()
+    exact_run_id = run_id.strip()
+    state["selected_run_id"] = exact_run_id
     state["current_page"] = "Results"
+    if query_params is not None:
+        query_params["run_id"] = exact_run_id
 
 
 def initialize_session_state(state: MutableMapping[str, object]) -> None:

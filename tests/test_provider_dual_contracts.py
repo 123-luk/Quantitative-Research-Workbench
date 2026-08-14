@@ -98,7 +98,7 @@ def test_task_1_0_read_migration_is_in_memory_and_adds_formal_diagnostics(tmp_pa
     assert task.provider_id == "tushare_official" and task.ledger_status is None
     assert task.transaction_state is None and task.transaction_fields == ()
     assert json.loads(service._path(task_id).read_text())["schema_version"] == "1.0"
-    assert TASK_SCHEMA_VERSION == "1.2"
+    assert TASK_SCHEMA_VERSION == "1.3"
 
 
 def test_legacy_retry_reuses_successful_migrated_child_without_rewriting_source(tmp_path) -> None:
