@@ -434,3 +434,37 @@ reported but unchanged because this failure did not exercise that code.
 Verification used seven distinct exact pytest node IDs. Four affected nodes
 were rerun after the final origin and cross-interval reuse boundaries changed;
 all eleven invocations passed and each stayed below 7 seconds of pytest runtime.
+
+## UAT-033 canonical reuse and completed research proof
+
+The final UAT-033 task
+`432b281e-cb94-406a-9afd-eb04213b5d11` proves the proxy-provider contract beyond
+data preparation. All 433 required units were already COMPLETE and passed
+canonical file, manifest, schema, content-hash, Ledger, and readback checks, so
+the provider-call count was zero by the offline-first contract. This is reuse of
+real local TuShare data, not fallback or synthetic data.
+
+Fresh read-only planning reported every adj_factor, daily, daily_basic,
+index_daily, stock_basic, and trade_cal requirement READY with zero missing
+units. The `research_input_1.0` materialization was reusable and all six recorded
+hashes matched. Its complete context is 2022-10-21 through 2023-02-08, with 48
+formation dates from 2022-11-17 through 2023-01-31. Provider provenance records
+`tushare_proxy`, endpoint names, dataset schema versions, PIT cutoffs, the
+stock-basic 1.2 identity, and legacy-reference exclusions. Existing quarantine
+evidence was retained and was not eligible for canonical reuse.
+
+The exact run is
+`20260814_172620_uat_full_lifecycle_custom_600000_sh_000001_sz_600001_sh_000002_sz`.
+Its `run_info.json` records `status=succeeded`, `cache_status=ready`, an empty
+missing-range map, and the proxy provider. Native Factor, Modeling Panel, ML,
+Signal, Holdings, and Research Backtest validators plus ResultService all pass.
+Artifact schemas are research_input 1.0, factor 1, and 1.0 for Modeling, ML,
+Signal, Holdings, and Backtest.
+
+This run used `STANDARD_ROBUST`; provenance explicitly marks that missing daily
+rows would freeze affected trades. Therefore UAT-009 remains OPEN until a real
+strict `suspend_d` (`STRICT_EVENT`) lifecycle succeeds. UAT-032 is CLOSED because
+the real stock_basic GLOBAL snapshot completed canonical/Ledger/readback and the
+same task continued through research. UAT-028 and UAT-033 are CLOSED because the
+real task succeeded with an exact validated run that survives GUI refresh and
+application restart.

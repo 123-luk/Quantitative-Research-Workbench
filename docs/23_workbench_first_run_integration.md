@@ -342,3 +342,54 @@ GLOBAL-reuse boundary adjustments and passed. No real provider call, Token, task
 EXE, Streamlit/AppTest, full file/directory/suite, large regression group, or
 exact run was executed. UAT-032, UAT-009, and UAT-028 remain open; the user must
 perform one real manual retry.
+
+# UAT-033: full research lifecycle and exact-result persistence
+
+UAT-033 closes the gap between “signal generated” and a reloadable exact
+research result. The original task
+`8761b3a7-46c8-49c6-96d7-3eb21e553a08` remains failed and unchanged. Its first
+post-signal exception was Holdings feasibility: `top_n=10` with only three
+PIT-eligible securities on 2023-01-11. Factor, panel, ElasticNet, and the 30-row
+signal Artifact were valid; Holdings and Backtest did not exist.
+
+Custom Universe drafts using `insufficient_universe_policy=error` now reject a
+Top N above the configured security count before task JSON or a worker is
+created. The UI gives requested/current counts and asks the user to reduce Top
+N, add verified securities, or explicitly choose partial selection. This does
+not weaken warm-up, rolling train/validation, embargo, entry lag, holding period,
+or out-of-sample requirements.
+
+The next root cause occurred only after valid 30-row equal-weight Holdings were
+created: Research Backtest Artifact validation evaluated a pandas MultiIndex as
+a boolean. The match gate now uses an explicit length check. A later metadata
+issue treated the canonical pipeline's explicit `required_datasets=[]` as the
+legacy default set; empty and absent are now distinct, so a fully materialized
+run records `cache_status=ready` and no missing ranges.
+
+Task schema 1.3 adds safe research-stage diagnostics: exact stop stage, outer
+exception, direct cause, bounded input/output shapes, retryability, and retry
+start. Historical 1.0--1.2 task files are viewed through an in-memory migration
+and are never rewritten. A partial run ID is labeled as possibly incomplete;
+only `status=succeeded && result_ready && run_id` means a validated complete
+result and enables the Results action.
+
+Results navigation carries the exact run in the query string. The Results page
+validates it with `ExperimentManager` and each native Artifact validator, then
+restores session state. Consequently browser refresh, a fresh Python process,
+and a full Streamlit stop/restart all reopen the same run. Invalid or missing
+identities fail closed; the query parameter does not bypass exact-run path or
+Artifact validation.
+
+Final real task `432b281e-cb94-406a-9afd-eb04213b5d11` succeeded at 433/433 with
+run `20260814_172620_uat_full_lifecycle_custom_600000_sh_000001_sz_600001_sh_000002_sz`.
+It reused verified local `tushare_proxy` canonical data, used Amihud 20D and BP,
+two-fold ElasticNet, `top_n=3`, equal weights, 10 bps costs, and
+`STANDARD_ROBUST`. It produced 144 factor rows, a 144-row Modeling Panel, 30 OOS
+predictions, 30 signals, 30 non-zero Holdings, 30 non-zero rebalance changes,
+10 daily return/NAV rows, and 20 finite performance metrics.
+
+Real-browser checks proved task-to-result navigation, refresh, and application
+restart. AppTest proved the five Results tabs and no failed-task result action.
+The Windows launcher smoke returned exit 0. Final pytest was `3252 passed, 4
+skipped, 13 warnings in 1304.77s`. UAT-028 and UAT-033 are CLOSED; UAT-009 stays
+OPEN because strict `suspend_d` mode was not used.

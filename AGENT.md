@@ -4128,3 +4128,160 @@ override，V4-E3 为 CLI + YAML + docs。
   task retry/create, EXE, Streamlit/AppTest, whole file/directory, full suite, or
   exact run was executed. UAT-032, UAT-009, and UAT-028 remain open pending one
   real manual retry.
+
+## 2026-08-14 UAT-033 full research lifecycle
+
+UAT-033 completed one real, cache-backed TuShare proxy lifecycle without
+synthetic data, provider fallback, or result fabrication. Historical task
+`8761b3a7-46c8-49c6-96d7-3eb21e553a08` and all existing data, tasks, runs,
+quarantine evidence, manifests, Ledger rows, SQLite history, and credentials
+were preserved.
+
+### Root-cause chain
+
+1. The original task completed canonical input, factor, modeling, ElasticNet,
+   and signal stages. Its exact partial run is
+   `20260814_162402_research_workbench_custom_600000_sh_000001_sz_600001_sh_000002_sz`.
+   The first post-signal exception is
+   `HoldingsDataError: insufficient universe on trade_date 2023-01-11:
+   requested top_n=10, available_count=3`. The configured custom universe had
+   four codes, but point-in-time eligibility supplied three securities per
+   formation. Signal was valid and non-empty; Holdings produced no Artifact.
+2. The task configuration was contradictory under
+   `insufficient_universe_policy=error`. A creation-time feasibility gate now
+   rejects Custom Universe `Top N` greater than the configured security count
+   and states requested/current counts and safe remedies. The original failed
+   record remains unchanged. UAT clones used `top_n=3`; no statistical,
+   embargo, holding, entry-lag, or anti-leakage rule was relaxed.
+3. Clone `49bd6db5-1d44-43b3-92f7-db4289aabc0c` then reached Research Backtest
+   with a valid 30-row Holdings Artifact but failed during Artifact publication.
+   `_holdings_match` evaluated a pandas `MultiIndex` as a boolean and raised
+   `ValueError: The truth value of a MultiIndex is ambiguous`. The validator
+   now checks `len(missing)` explicitly.
+4. A completed retry exposed misleading run metadata: an explicitly empty
+   legacy `required_datasets=[]` was treated as the default dataset set by
+   `datasets or DEFAULT_REQUIRED_DATASETS`. `DataManager.check_cache` now
+   distinguishes `None` from `[]`; complete canonical materialization records
+   `cache_status=ready`, an empty missing-range map, and run status `succeeded`.
+5. The task UI previously treated any partial `run_id` as an accurate result.
+   It now separates “Run ID (may be partial)” from “Validated complete result
+   available”, using the task's complete success gate. Pipeline failures persist
+   exact stage, safe exception/cause, bounded input/output shapes, retryability,
+   and retry start. Token-like backend messages remain redacted.
+6. A real browser check found that results opened correctly but full-page
+   refresh discarded the session-only selected run. Result navigation now puts
+   the validated exact `run_id` in the Results query parameters, and Results
+   restores session state from it. Refresh and full application restart retain
+   the exact run.
+
+### Original task timeline
+
+| Stage | Original evidence | Output / first stop | Downstream read |
+| --- | --- | --- | --- |
+| RESEARCH_INPUT | complete; schema `research_input_1.0`; factor input 201x5, 2022-10-21..2023-01-31; 144 universe keys; 162 price rows; 48 formations; 3 eligible securities | 0 duplicate keys, 0 inf; heterogeneous source input contains 57 field-level NaNs | factor/modeling inputs read |
+| FACTOR_COMPUTATION | complete | 144x4, 2022-11-17..2023-01-31, 3 securities, 3 warm-up NaNs, 0 inf/duplicates | modeling hash-equivalent input read |
+| MODELING_PANEL | complete; schema 1.0 | 144x9, 48 dates, 3 securities, 3 feature NaNs, finite label, 0 duplicate keys | ML read |
+| TRAIN_VALIDATION | complete; ElasticNet | 30x7 OOS predictions, 2023-01-11..2023-01-31, 2 folds, finite validation metrics | Signal read |
+| SIGNAL | complete; schema 1.0 | 30x4, 10 dates, 3 securities, finite and unique | Holdings attempted read |
+| HOLDINGS | started, not complete | first exception: requested 10, available 3 on 2023-01-11; no Artifact | no |
+| PORTFOLIO_CONSTRUCTION | entered as `portfolio`, aborted before output | no weights | no |
+| RISK_MODEL | not required by equal-weight strategy | not started / not applicable | no |
+| BACKTEST | not started | none | no |
+| METRICS | not started | none | no |
+| ARTIFACT_WRITE | only factor/modeling/ML/signal partial Artifacts existed | no Holdings/Backtest/run_info | exact-result validation did not run |
+| RUN_PERSISTENCE | partial run directory and non-empty partial run ID existed | no successful run_info | task stayed failed/result_ready false |
+| RESULT_VALIDATION | not completed | no usable complete result | GUI must not offer Results |
+
+### Final real success and data quality
+
+The final evidence task is `432b281e-cb94-406a-9afd-eb04213b5d11`, task schema
+1.3, status `succeeded`, progress 433/433, with exact run
+`20260814_172620_uat_full_lifecycle_custom_600000_sh_000001_sz_600001_sh_000002_sz`.
+It used provider `tushare_proxy`, the existing verified canonical cache, the two
+real factors `amihud_20d` and `bp`, two-fold rolling ElasticNet, equal weights,
+`top_n=3`, 10 bps cost, and `STANDARD_ROBUST`. Provider calls were skipped only
+because every required Ledger/canonical/readback unit was COMPLETE.
+
+Fresh read-only preview proved all adj_factor, daily, daily_basic, index_daily,
+stock_basic, and trade_cal requirement rows READY with zero missing units and a
+reusable materialization. Full context is 2022-10-21 through 2023-02-08; the 48
+formation dates are 2022-11-17 through 2023-01-31. The default history contract
+remains 33 inclusive periods: 20 train + 5 validation + 1 embargo + 1 entry
+lag plus 5 holding + 1 current. First OOS signal is 2023-01-11; first trade is
+2023-01-12; 10 rebalances are available. The configured four-code Custom
+Universe yielded three PIT-eligible securities without survivorship filtering
+or legacy-reference mapping.
+
+Final stage evidence:
+
+- factor output: 144x4, 48 dates, 3 securities; both factor columns non-empty,
+  non-constant and finite after train-fitted imputation; three Amihud warm-up
+  NaNs are explicit, with no inf or duplicate `(trade_date, ts_code)` keys;
+- modeling panel: 144x9; labels include explicit entry/exit dates and prices;
+- ElasticNet: two folds, 60 train and 15 validation rows per fold, validation
+  never used for fit, random seed 42, 30 OOS predictions on 10 dates; RMSE
+  0.039318985660242584, MAE 0.034880684544242556, R2
+  -1.745448619941755 (finite negative performance is valid);
+- signals: 30x4, finite, unique, descending ranks, 2023-01-11..2023-01-31;
+- Holdings/Portfolio: 30x5, 10 dates, 30 non-zero weights, three securities per
+  date, weight sums exactly 1.0; equal weight requires no separate risk model;
+- Backtest: 10x9 daily rows, 2023-01-12..2023-02-01; 30x10 rebalance rows,
+  effective 2023-01-12..2023-02-01; 30 non-zero weight changes;
+- Artifact schemas: research_input 1.0, factor 1, modeling 1.0, ML 1.0, signal
+  1.0, holdings 1.0, Research Backtest 1.0. All native validators and
+  ResultService passed; six materialization hashes and three Modeling hashes
+  matched, and Factor's native hash validator passed. Provenance records proxy
+  endpoint/schema identities, PIT rules, legacy exclusions, and
+  STANDARD_ROBUST degradation explicitly.
+
+Canonical performance is intentionally not optimized for a positive result:
+net total return -0.0034389239463451515, annualized return
+-0.08314893559250258, annualized volatility 0.0926549717818462, maximum
+drawdown -0.016401082062576844, Sharpe -0.8951784799554398, average turnover
+0.10264132033345119, total turnover 1.026413203334512, 10 observations and 10
+rebalances. Total traded notional is 1.0528264066690238 and cost is
+0.0010528264066690237.
+
+### Persistence, GUI, tests, EXE, and security
+
+- ResultService loaded the exact run in fresh Python processes. AppTest loaded
+  and refreshed it with zero exceptions, five result tabs, 13 visible metrics,
+  and five tables. The task page offered Results for the successful task and no
+  Results action for the original failed task.
+- A real local Streamlit browser journey opened the successful task, navigated
+  to `/results?run_id=<exact>`, showed the same run and metrics after browser
+  reload, then showed them again after Streamlit was fully stopped and restarted.
+  No raw translation key, traceback, or Token value was visible.
+- `QuantResearchWorkbench.exe --smoke-test` returned process exit 0 and released
+  its isolated port. The underlying packaged-app route was also exercised by
+  the real Streamlit/browser restart journey.
+- Focused regression included 6 Results/navigation nodes, 41 Workbench E2E
+  nodes, and the 25 long transaction nodes (`25 passed in 954.14s`). The first
+  complete suite found two stale/static test expectations; their exact nodes
+  passed after correction. Final exact command
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed `3252 passed, 4 skipped, 13 warnings in 1304.77s`.
+- Credential scan emitted counts only. Current diff, five UAT task JSON records,
+  and 33,907 SQLite text values each had zero credential-shaped or environment-
+  secret matches; task JSON had zero non-empty sensitive-key values. Across 375
+  tracked source/test/doc files, eight literal-pattern fixtures were counted
+  (three explicit placeholders, five other test literals, one high-entropy test
+  fixture), with zero values equal to an environment secret and zero in this
+  diff. No credential contents were printed.
+
+Local code commits before this documentation record are `22ac2ac` (completion
+gates) and `7950dde` (diagnostics and exact result persistence). No task, run,
+Artifact, `data/`, `-m`, Token, SQLite database, or `.env` was staged.
+
+UAT status: UAT-032 CLOSED (stock_basic canonical/Ledger/readback complete and
+research continued); UAT-028 CLOSED (real success, exact run, GUI open/refresh/
+restart persistence); UAT-033 CLOSED (full normative lifecycle); UAT-009 OPEN
+because the final run used `STANDARD_ROBUST`, not strict `suspend_d` evidence.
+
+Follow-up commands:
+
+```powershell
+E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q
+.\QuantResearchWorkbench.exe --smoke-test
+E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m streamlit run app/streamlit_app.py
+```
