@@ -43,3 +43,22 @@ def test_data_manager_explicit_factory_uses_configured_layer_paths(tmp_path: Pat
     assert service.ledger.path == root / "metadata" / "catalog.sqlite"
     assert service.curated_store.root == root / "curated"
     assert service.raw_store.root == root / "raw"
+
+
+def test_explicit_empty_required_datasets_does_not_probe_legacy_cache(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("data: {}\n", encoding="utf-8")
+    manager = DataManager(config)
+
+    status = manager.prepare_data(
+        {
+            "required_start_date": "2023-01-01",
+            "backtest_end": "2023-02-01",
+            "required_datasets": [],
+        }
+    )
+
+    assert status["cache_status"] == "ready"
+    assert status["missing_ranges"] == {}

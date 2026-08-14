@@ -58,9 +58,15 @@ def invalid_security_code_mask(rows: pd.DataFrame) -> pd.Series:
     """Return the exact mask used by the canonical security identifier gate."""
     if "ts_code" not in rows:
         return pd.Series(False, index=rows.index, dtype=bool)
-    return ~rows["ts_code"].astype("string").map(
-        lambda value: bool(CANONICAL_SECURITY_PATTERN.fullmatch(str(value)))
-        if not pd.isna(value) else False
+    return pd.Series(
+        (
+            not bool(CANONICAL_SECURITY_PATTERN.fullmatch(str(value)))
+            if not pd.isna(value)
+            else True
+            for value in rows["ts_code"]
+        ),
+        index=rows.index,
+        dtype=bool,
     )
 
 

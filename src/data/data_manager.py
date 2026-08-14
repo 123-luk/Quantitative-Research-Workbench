@@ -87,7 +87,9 @@ class DataManager:
         datasets: list[str] | None = None,
     ) -> dict[str, list[list[str]]]:
         """Return missing cache ranges keyed by dataset name."""
-        required_datasets = datasets or DEFAULT_REQUIRED_DATASETS
+        required_datasets = (
+            DEFAULT_REQUIRED_DATASETS if datasets is None else datasets
+        )
         missing_ranges: dict[str, list[list[str]]] = {}
         for dataset_name in required_datasets:
             ranges = self.cache.get_missing_ranges(dataset_name, start_date, end_date)

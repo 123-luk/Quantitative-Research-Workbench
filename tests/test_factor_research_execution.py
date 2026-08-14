@@ -510,6 +510,9 @@ def test_run_pipeline_disabled_preserves_original_summary_and_side_effects(
     assert (run_dir / "config_snapshot.yaml").is_file()
     assert (run_dir / "run_info.json").is_file()
     assert (run_dir / "metrics.json").is_file()
+    run_info = json.loads((run_dir / "run_info.json").read_text(encoding="utf-8"))
+    assert run_info["status"] == "succeeded"
+    assert run_info["cache_status"] == "ready"
 
 
 def test_run_pipeline_enabled_uses_one_existing_run_and_returns_summary(

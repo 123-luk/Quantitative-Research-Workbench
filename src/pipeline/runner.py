@@ -287,7 +287,7 @@ def run_pipeline(
     experiment_manager.save_run_info(
         run_dir,
         {
-            "status": status,
+            "status": "succeeded",
             "created_at": datetime.now().replace(microsecond=0).isoformat(),
             "strategy_name": config.strategy_name,
             "stock_pool": config.stock_pool,

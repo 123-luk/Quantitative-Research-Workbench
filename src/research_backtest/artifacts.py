@@ -625,7 +625,7 @@ def _holdings_match(
         dtype=np.float64
     )
     if suspension_mode == "STANDARD_ROBUST":
-        if missing:
+        if len(missing):
             raise ResearchBacktestArtifactValidationError(
                 "standard-mode rebalances omit upstream holdings keys."
             )
