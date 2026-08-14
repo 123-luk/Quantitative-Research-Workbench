@@ -23,7 +23,7 @@ from src.data.dataset_registry import DatasetRegistry, create_default_dataset_re
 from src.data.fetching import FetchStrategyRegistry, create_default_fetch_strategy_registry, provider_request_parameters
 from src.data.provider_contracts import CoverageGranularity, EndpointContract, ProviderContractRegistry
 from src.data.tushare_client import TushareClient
-from src.data.provider_quality import validate_quality
+from src.data.provider_quality import sanitize_identifier_evidence, validate_quality
 
 
 class MissingCredentialError(RuntimeError):
@@ -417,6 +417,7 @@ class DataPreparationService:
                 safe_message: str | None = None
                 observed_rows: int | None = None
                 observed_fields: tuple[str, ...] = ()
+                quality_evidence: dict[str, object] = {}
                 try:
                     result, successful_attempt = self._fetch_with_retry(
                         spec, task, client, fetch_id=fetch_id,
@@ -426,11 +427,15 @@ class DataPreparationService:
                     frame = result.frame
                     observed_rows = len(frame)
                     observed_fields = tuple(str(field) for field in frame.columns)
+                    quality_evidence = sanitize_identifier_evidence(
+                        result.diagnostics.get("quality_evidence")
+                    )
                     self._record_transition(
                         fetch_id, spec, task, "FETCH_SUCCEEDED",
                         endpoint=contract.api_name, operation="FETCH_MERGED",
                         attempt=successful_attempt, rows=observed_rows,
                         fields=observed_fields, schema_version=spec.schema_version,
+                        quality_evidence=quality_evidence,
                     )
                     retrieved_at = _now()
                     failure_origin = "local"
@@ -549,6 +554,7 @@ class DataPreparationService:
                             type(exc.__cause__).__name__ if exc.__cause__ is not None else None
                         ),
                         safe_message=safe_message or "Coverage transaction did not complete.",
+                        quality_evidence=quality_evidence,
                     )
                     self.ledger.finish_fetch(fetch_id, status="FAILED", finished_at=_now(), error_type=type(exc).__name__)
                     raise DataUnavailableError(

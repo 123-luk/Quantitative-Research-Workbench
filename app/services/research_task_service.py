@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -22,6 +22,7 @@ from app.services.first_run_service import (
 from app.services.result_service import ResultService
 from app.services.research_date_service import require_valid_research_dates
 from src.data.contracts import ResearchFrequency
+from src.data.provider_quality import sanitize_identifier_evidence
 from src.pipeline.config import PipelineConfig
 from src.pipeline.experiment import ExperimentManager
 from src.universe import UniverseSpec
@@ -114,6 +115,7 @@ class ResearchTask:
     transaction_message: str | None = None
     transaction_rows: int | None = None
     transaction_fields: tuple[str, ...] = ()
+    transaction_quality_evidence: Mapping[str, object] = field(default_factory=dict)
     historical: bool = False
 
     @property
@@ -213,6 +215,7 @@ class ResearchTaskService:
         ):
             migrated.setdefault(name, None)
         migrated.setdefault("transaction_fields", [])
+        migrated.setdefault("transaction_quality_evidence", {})
         return migrated
 
     @staticmethod
@@ -266,6 +269,9 @@ class ResearchTaskService:
                 )
                 if isinstance(value.get("transaction_fields"), (list, tuple))
                 else ()
+            ),
+            transaction_quality_evidence=sanitize_identifier_evidence(
+                value.get("transaction_quality_evidence")
             ),
         )
 
@@ -373,6 +379,7 @@ class ResearchTaskService:
             "transaction_message": None,
             "transaction_rows": None,
             "transaction_fields": [],
+            "transaction_quality_evidence": {},
             }
             self._write(record)
             future = _EXECUTOR.submit(self._run, task_id, draft, credential)
@@ -549,6 +556,7 @@ class ResearchTaskService:
                 "transaction_message": exc.diagnostic.transaction_message if exc.diagnostic else None,
                 "transaction_rows": exc.diagnostic.transaction_rows if exc.diagnostic else None,
                 "transaction_fields": list(exc.diagnostic.transaction_fields) if exc.diagnostic else [],
+                "transaction_quality_evidence": dict(exc.diagnostic.transaction_quality_evidence) if exc.diagnostic else {},
                 "updated_at": finished,
                 "finished_at": finished,
                 "elapsed_seconds": _elapsed(started, finished),

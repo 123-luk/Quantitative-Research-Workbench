@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Callable, Mapping
 
@@ -11,6 +11,7 @@ import pandas as pd
 from src.data.canonical_store import CanonicalDataError, normalize_frame
 from src.data.contracts import CoverageKind, DatasetSpec, FetchStrategy
 from src.data.coverage_planner import FetchTask
+from src.data.provider_quality import invalid_security_identifier_evidence
 
 
 class ProviderFetchError(RuntimeError):
@@ -22,6 +23,7 @@ class FetchResult:
     task: FetchTask
     frame: pd.DataFrame
     request_parameters: tuple[Mapping[str, object], ...] = ()
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 class FetchStrategyRegistry:
@@ -45,10 +47,12 @@ class FetchStrategyRegistry:
             if isinstance(exc, (ProviderFetchError, CanonicalDataError)):
                 raise
             raise ProviderFetchError(f"Provider call failed for dataset {spec.dataset_id!r}.") from exc
+        diagnostics = frame.attrs.get("quality_evidence", {})
         return FetchResult(
             task,
             self.completeness.validate(spec, task, frame),
             provider_request_parameters(spec, task),
+            {"quality_evidence": diagnostics} if diagnostics else {},
         )
 
 
@@ -107,11 +111,15 @@ def _entity_month(spec: DatasetSpec, task: FetchTask, client: object) -> pd.Data
 def _reference(spec: DatasetSpec, task: FetchTask, client: object) -> pd.DataFrame:
     del task
     frames: list[pd.DataFrame] = []
+    raw_frames: dict[str, pd.DataFrame] = {}
+    status_row_counts: dict[str, int] = {}
     status_priority = {"D": 0, "P": 1, "L": 2, "G": 3}
     for status in ("L", "D", "P", "G"):
         raw = _method(client, spec)(list_status=status)
         if not isinstance(raw, pd.DataFrame):
             raise CanonicalDataError("stock_basic provider result must be a pandas DataFrame.")
+        raw_frames[status] = raw.copy(deep=True)
+        status_row_counts[status] = len(raw)
         if raw.empty and not set(spec.required_fields).issubset(raw.columns):
             raw = pd.DataFrame(columns=spec.required_fields)
         normalized = normalize_frame(spec, raw)
@@ -122,7 +130,12 @@ def _reference(spec: DatasetSpec, task: FetchTask, client: object) -> pd.DataFra
         frames.append(normalized)
     merged = pd.concat(frames, ignore_index=True, sort=False)
     if merged.empty:
-        return pd.DataFrame(columns=spec.required_fields)
+        result = pd.DataFrame(columns=spec.required_fields)
+        result.attrs["quality_evidence"] = invalid_security_identifier_evidence(
+            result, raw_frames=raw_frames, status_row_counts=status_row_counts,
+            pre_merge_rows=0,
+        )
+        return result
     # A status-scoped response is normalized first, so within-status duplicate
     # conflicts already fail closed. If a provider exposes one code in multiple
     # current-status calls, prefer the terminal lifecycle state, then paused,
@@ -131,7 +144,12 @@ def _reference(spec: DatasetSpec, task: FetchTask, client: object) -> pd.DataFra
     ranked = merged.assign(
         _status_rank=merged["list_status"].astype(str).map(status_priority)
     ).sort_values(["ts_code", "_status_rank"], kind="mergesort")
-    return ranked.drop_duplicates("ts_code", keep="first").drop(columns="_status_rank").reset_index(drop=True)
+    result = ranked.drop_duplicates("ts_code", keep="first").drop(columns="_status_rank").reset_index(drop=True)
+    result.attrs["quality_evidence"] = invalid_security_identifier_evidence(
+        result, raw_frames=raw_frames, status_row_counts=status_row_counts,
+        pre_merge_rows=len(merged),
+    )
+    return result
 
 
 def provider_request_parameters(

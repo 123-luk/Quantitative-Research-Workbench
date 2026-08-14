@@ -459,6 +459,7 @@ _ZH.update({
     "task.transaction_message": "安全诊断",
     "task.transaction_rows": "已观察行数",
     "task.transaction_fields": "已观察字段",
+    "task.transaction_quality_evidence": "受限的证券标识质量证据",
 })
 
 _EN.update({
@@ -471,6 +472,7 @@ _EN.update({
     "task.transaction_message": "Safe diagnostic",
     "task.transaction_rows": "Observed rows",
     "task.transaction_fields": "Observed fields",
+    "task.transaction_quality_evidence": "Bounded security identifier quality evidence",
 })
 
 if set(_ZH) != set(_EN):

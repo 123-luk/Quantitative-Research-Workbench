@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import sqlite3
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Mapping
 from uuid import uuid4
 
 
@@ -47,6 +47,7 @@ class CoverageTransition:
     exception_cause_type: str | None
     safe_message: str | None
     artifact_reference: str | None
+    quality_evidence: str
 
 
 _TRANSITION_STATES = frozenset({
@@ -121,6 +122,7 @@ class CoverageLedger:
                     fields TEXT NOT NULL DEFAULT '[]', schema_version TEXT,
                     error_code TEXT, exception_type TEXT, exception_cause_type TEXT,
                     safe_message TEXT, artifact_reference TEXT,
+                    quality_evidence TEXT NOT NULL DEFAULT '{}',
                     CHECK (state IN (
                         'PLANNED','FETCH_STARTED','FETCH_SUCCEEDED','FETCH_FAILED',
                         'RAW_STAGED','CANONICAL_VALIDATED','CANONICAL_COMMITTED',
@@ -149,6 +151,13 @@ class CoverageLedger:
             for name, declaration in additions.items():
                 if name not in fetch_columns:
                     connection.execute(f"ALTER TABLE fetch_events ADD COLUMN {name} {declaration}")
+            transition_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(coverage_transitions)")
+            }
+            if "quality_evidence" not in transition_columns:
+                connection.execute(
+                    "ALTER TABLE coverage_transitions ADD COLUMN quality_evidence TEXT NOT NULL DEFAULT '{}'"
+                )
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -251,6 +260,7 @@ class CoverageLedger:
         exception_cause_type: str | None = None,
         safe_message: str | None = None,
         artifact_reference: str | None = None,
+        quality_evidence: Mapping[str, object] | None = None,
         connection: sqlite3.Connection | None = None,
     ) -> None:
         if state not in _TRANSITION_STATES:
@@ -267,8 +277,9 @@ class CoverageLedger:
                 """INSERT INTO coverage_transitions(
                     fetch_id,dataset_id,scope_key,unit_key,coverage_identity,provider_id,
                     endpoint,state,operation,occurred_at,attempt,rows,fields,schema_version,
-                    error_code,exception_type,exception_cause_type,safe_message,artifact_reference
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    error_code,exception_type,exception_cause_type,safe_message,artifact_reference,
+                    quality_evidence
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [
                     (
                         fetch_id, dataset_id, scope_key, unit,
@@ -277,6 +288,7 @@ class CoverageLedger:
                         attempt, rows, json.dumps(field_values), schema_version,
                         error_code, exception_type, exception_cause_type,
                         safe_message, artifact_reference,
+                        json.dumps(quality_evidence or {}, sort_keys=True, separators=(",", ":")),
                     )
                     for unit in unit_values
                 ],

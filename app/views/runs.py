@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Mapping
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -14,6 +15,7 @@ from app.services.credential_service import CredentialService
 from app.services.research_task_service import ResearchTask, ResearchTaskService, TaskClearError
 from app.services.run_catalog_service import RunCatalogService
 from app.services.ui_metadata_service import dataset_label, display_value, factor_label
+from src.data.provider_quality import sanitize_identifier_evidence
 from src.pipeline.config import PipelineConfig
 
 
@@ -74,6 +76,11 @@ def _diagnostic_value(kind: str, value: str, locale: str) -> str:
     key = f"task.{kind}.{value}"
     translated = t(key, locale=locale)
     return value if translated == f"〔{key}〕" else translated
+
+
+def _quality_diagnostic_summary(value: Mapping[str, object]) -> dict[str, object]:
+    """Return only bounded, whitelisted evidence for the technical details UI."""
+    return sanitize_identifier_evidence(value)
 
 
 def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTaskService, navigate: object) -> None:
@@ -165,6 +172,9 @@ def _task_card(st: object, task: ResearchTask, locale: str, service: ResearchTas
             for name, value in transaction_details:
                 if value is not None:
                     st.write(f"{t(f'task.{name}', locale=locale)}: {value}")
+            if task.transaction_quality_evidence:
+                st.write(t("task.transaction_quality_evidence", locale=locale))
+                st.json(_quality_diagnostic_summary(task.transaction_quality_evidence))
 
         clear_col, clear_help = st.columns((1, 4))
         clear_requested = st.session_state.get("confirm_clear_task") == task.task_id

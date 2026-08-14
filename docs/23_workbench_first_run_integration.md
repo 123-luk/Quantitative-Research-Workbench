@@ -263,3 +263,36 @@ Targeted node-ID results: `10 passed in 4.40s` and `3 passed in 5.99s`. No real
 provider call, token, task retry, EXE, Streamlit/AppTest, full pytest, test
 directory, or exact-run group was executed. The user should manually retry only
 one failed task once. UAT-032, UAT-009, and UAT-028 remain open.
+
+# UAT-032 bounded invalid-identifier diagnostics
+
+The next real task provided new row-level counts but still no offending value.
+The supplied task ID had a transcription mismatch; the matching persisted task
+is `5e00e5c4-68aa-4c2b-b862-b7503a6a0f4a`, provider `tushare_proxy`, transaction
+`2fcbd31dc3864cd89c7766793eb1f139`. It records L/D/P/G rows
+5542/340/0/0, 5882 merged rows, all stock-basic fields, and a stop at
+`FETCH_FAILED / QUALITY_VALIDATION / INVALID_SECURITY_CODE` before raw staging.
+It does not record an invalid code, invalid count, status/market/exchange,
+raw/normalized values, rule ID, or direct cause.
+
+New failures now carry a bounded `transaction_quality_evidence` summary from the
+coverage transition into the task's Technical Details expander. The summary is
+whitelisted to public security identifiers, capped at 20 stable/deduplicated
+samples, and includes per-status and merge/dedup counts. It cannot include token,
+headers, arbitrary provider payload, or unrelated columns. This is diagnostic
+only: task schema remains backward-compatible 1.2 and historical task JSON is
+not rewritten.
+
+The gate checks post-merge normalized `ts_code` against
+`TS_CODE_6_DIGIT_CN_EXCHANGE_SUFFIX` (`^[0-9]{6}\.(?:SH|SZ|BJ)$`). No rule,
+adapter, filtering, Universe behavior, retry semantics, or main error category
+was changed because no real offender exists in the persisted evidence. The
+quality operation is accurately visible in Technical Details; the existing
+top-level local coverage wording remains a known classification mismatch.
+
+Only four exact offline pytest nodes and Python compilation were run. There was
+no real provider call or token, real task retry/new research, EXE, Streamlit,
+AppTest, full suite/directory, large regression group, or exact run. UAT-032,
+UAT-009, and UAT-028 remain open.
+
+尚未确定完整根因，仅补充违规标识样本诊断，需要用户再重试一次。

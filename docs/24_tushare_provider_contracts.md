@@ -280,3 +280,60 @@ directory, or long exact-run group was executed. One in-memory `compile()` check
 of the ten changed Python files also passed without writing bytecode. UAT-032 remains open. The only
 next action is for the user to manually retry one of the two failed tasks once,
 then inspect its transaction state chain. UAT-009 and UAT-028 remain open.
+
+## UAT-032 second evidence pass: invalid security identifiers
+
+The supplied task ID for this pass was not present verbatim. The matching
+persisted task is `5e00e5c4-68aa-4c2b-b862-b7503a6a0f4a` (rather than
+`5e00e5c4-68aa-4c2b-b862-b7583a6aef4a`), and it points to transaction
+`2fcbd31dc3864cd89c7766793eb1f139`. The task itself confirms provider
+`tushare_proxy`, 432/433 progress, `stock_basic / GLOBAL`, no run ID, and a
+pre-raw quality stop.
+
+The transaction adds stronger fetch facts than the prior records: L returned
+5542 rows, D returned 340, P and G returned zero, and all calls exposed the 11
+registered stock-basic fields. The merged response had 5882 rows. Its terminal
+event is intentionally represented as generic state `FETCH_FAILED`, qualified by
+operation `QUALITY_VALIDATION`; the safe error is `QUALITY_VALIDATION_FAILED`,
+the inner exception is `DataUnavailableError`, direct cause is null, and the
+safe category is `INVALID_SECURITY_CODE`.
+
+The rejecting code is `src/data/provider_quality.py::validate_quality`. It
+normalizes the already merged frame and evaluates `ts_code` only against rule
+`TS_CODE_6_DIGIT_CN_EXCHANGE_SUFFIX`, whose exact pattern is
+`^[0-9]{6}\.(?:SH|SZ|BJ)$`. It does not combine `symbol` and `ts_code`, and does
+not validate a derived exchange identifier. In `src/data/fetching.py::_reference`,
+each L/D/P/G response is normalized and status-checked first; concatenation and
+status-priority `ts_code` deduplication occur next; quality validation occurs
+after that merged result returns to `DataPreparationService.ensure`.
+
+Critically, the persisted task and transaction contain no offending identifier,
+invalid count, invalid status/market/exchange, raw/normalized value pair, rule
+ID, or direct cause. It is impossible to classify the value against the official
+TuShare `stock_basic` contract or the project A-share Universe from the current
+evidence. This pass therefore does not change the regex, provider adapter,
+Universe policy, filtering, or quality gate and does not claim a root-cause fix.
+
+Future quality failures retain only a bounded evidence object in the coverage
+transition and task technical details. It contains invalid and reason counts;
+at most 20 deduplicated, stable-sorted samples of public fields `ts_code`,
+`symbol`, `list_status`, `market`, `exchange`, raw/normalized `ts_code`, and
+rule ID; L/D/P/G row counts; pre/post-merge rows; and dedup count. A whitelist,
+length bound, and second sanitization before GUI display exclude token, headers,
+provider response bodies, names, and unrelated data.
+
+The focused same-rule audit found an equivalent canonical security pattern in
+`src/universe/contracts.py` and consumers in Universe resolvers and adjusted
+price validation. The quality module still owns a duplicate literal rule, while
+`app/services/stock_query_service.py::normalize_ts_code` recognizes SH/SZ but
+not BJ. These are reported as potential consistency points only; without an
+offending real value or failing boundary they were not changed or refactored.
+
+The top-level user classification remains `COVERAGE_VALIDATION` because
+`DataPreparationService.ensure` marks the origin local immediately before the
+quality gate and `classify_data_unavailable_error` prioritizes that origin. The
+transaction operation and safe quality summary are accurate, but the main
+"local coverage" wording is not a provider-quality-specific diagnosis. It is
+deferred rather than guessed in this diagnostic-only pass.
+
+尚未确定完整根因，仅补充违规标识样本诊断，需要用户再重试一次。

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from enum import Enum
 import json
@@ -19,6 +19,7 @@ from app.services.result_service import ResultService
 from app.services.run_service import RunOutcome, RunService, SafeRunError
 from src.data import CoverageLedger, PartitionedParquetStore, RawParquetStore
 from src.data.provider_registry import ProviderClientFactory, ProviderId
+from src.data.provider_quality import sanitize_identifier_evidence
 from src.data.coverage_ledger import CoverageRecord
 from src.data.coverage_planner import scope_key
 from src.data.contracts import CoverageKind, DataRequirement, ResearchFrequency, canonical_date
@@ -112,6 +113,7 @@ class FailureDiagnostic:
     transaction_message: str | None = None
     transaction_rows: int | None = None
     transaction_fields: tuple[str, ...] = ()
+    transaction_quality_evidence: Mapping[str, object] = field(default_factory=dict)
 
 
 def _network_category(exc: BaseException | None) -> str | None:
@@ -670,6 +672,7 @@ class FirstRunOrchestrator:
                 except (AttributeError, sqlite3.Error, ValueError):
                     transition = None
                 transition_fields: tuple[str, ...] = ()
+                transition_quality_evidence: dict[str, object] = {}
                 if transition is not None:
                     try:
                         parsed_fields = json.loads(transition.fields)
@@ -679,6 +682,13 @@ class FirstRunOrchestrator:
                         transition_fields = tuple(
                             str(value) for value in parsed_fields if isinstance(value, str)
                         )
+                    try:
+                        parsed_evidence = json.loads(transition.quality_evidence)
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        parsed_evidence = {}
+                    transition_quality_evidence = sanitize_identifier_evidence(
+                        parsed_evidence
+                    )
                 diagnostic = FailureDiagnostic(
                     ledger_status=ledger_status,
                     canonical_status=canonical_status,
@@ -699,6 +709,7 @@ class FirstRunOrchestrator:
                     transaction_message=transition.safe_message if transition else None,
                     transaction_rows=transition.rows if transition else None,
                     transaction_fields=transition_fields,
+                    transaction_quality_evidence=transition_quality_evidence,
                 )
             raise WorkbenchRunError(
                 code,

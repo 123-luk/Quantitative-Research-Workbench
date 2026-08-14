@@ -4044,3 +4044,40 @@ override，V4-E3 为 CLI + YAML + docs。
   complete pytest, test directory, or long exact-run group was executed. UAT-032
   remains open; the user should manually retry exactly one failed task once.
   UAT-009 and UAT-028 remain open.
+
+## 2026-08-14 UAT-032 invalid-identifier evidence follow-up
+
+- The requested task ID `5e00e5c4-68aa-4c2b-b862-b7583a6aef4a` is not a
+  persisted task. Exact read-only lookup found the matching record under
+  `5e00e5c4-68aa-4c2b-b862-b7503a6a0f4a`; its transaction ID is
+  `2fcbd31dc3864cd89c7766793eb1f139` and its recorded provider is
+  `tushare_proxy`. No task, ledger, raw, canonical, or artifact data was changed.
+- The transaction recorded L=5542, D=340, P=0, and G=0 rows, then a 5882-row
+  merged result with all 11 registered fields. It stopped before raw staging at
+  `FETCH_FAILED / QUALITY_VALIDATION / QUALITY_VALIDATION_FAILED`, with inner
+  `DataUnavailableError`, no direct cause type, and safe category
+  `INVALID_SECURITY_CODE`.
+- The existing record contains no offending value, invalid count, lifecycle
+  status, market/exchange, raw/normalized pair, rule ID, or direct cause. The
+  complete payload root cause is therefore still unknown; no identifier regex,
+  adapter, Universe filter, or error classification was changed.
+- Future stock-basic fetches now persist bounded public identifier evidence:
+  total invalid count, reason count, at most 20 stable/deduplicated samples,
+  L/D/P/G counts, pre/post-merge counts, and dedup count. Samples contain only
+  `ts_code`, `symbol`, `list_status`, `market`, `exchange`, raw/normalized
+  `ts_code`, and rule ID. Whitelisting excludes token, headers, provider payload,
+  and unrelated fields; the same safe summary is copied to task technical details.
+- The quality gate validates normalized, post-L/D/P/G-merge `ts_code` only with
+  rule ID `TS_CODE_6_DIGIT_CN_EXCHANGE_SUFFIX` and pattern
+  `^[0-9]{6}\.(?:SH|SZ|BJ)$`. The equivalent Universe contract is duplicated in
+  `src/universe/contracts.py`; `app/services/stock_query_service.py` separately
+  recognizes SH/SZ but not BJ. Neither was changed without an observed offender.
+- `FETCH_FAILED` is the transaction's intentional generic terminal state while
+  `operation=QUALITY_VALIDATION` identifies the stop. The user-level
+  `COVERAGE_VALIDATION` wording remains explained by the existing `origin=local`
+  mapping; changing that classification is deferred until the actual invalid
+  sample establishes root cause.
+- Four exact offline nodes passed. No provider call, credential, task retry,
+  EXE, Streamlit/AppTest, complete pytest, test directory, large regression
+  group, or exact run was executed. UAT-032, UAT-009, and UAT-028 remain open.
+  The user must manually retry once to populate the new evidence.
