@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from src.data.canonical_store import PartitionedParquetStore, content_hash, normalize_frame
-from src.data.contracts import canonical_date, normalize_scope
+from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, canonical_date, normalize_scope
 from src.data.coverage_ledger import CoverageLedger
 from src.data.coverage_planner import scope_key
 from src.data.dataset_registry import DatasetRegistry
@@ -105,7 +105,7 @@ class CanonicalPipelineMarketClient:
         return self._read("index_daily", normalize_scope({"index_code": ts_code}), units)
 
     def get_stock_basic(self, list_status: str = "L") -> pd.DataFrame:
-        frame = self._read("stock_basic", STOCK_BASIC_SCOPE, (self.stock_basic_as_of,))
+        frame = self._read("stock_basic", STOCK_BASIC_SCOPE, (GLOBAL_SNAPSHOT_UNIT,))
         return frame.loc[frame["list_status"].eq(list_status)].reset_index(drop=True)
 
     def get_suspend_d(

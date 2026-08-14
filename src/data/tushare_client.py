@@ -49,6 +49,8 @@ class TushareClient:
 
     def get_stock_basic(self, list_status: str = "L") -> pd.DataFrame:
         """Fetch stock lifecycle basics for one explicit listing status."""
+        if list_status not in {"L", "D", "P", "G"}:
+            raise ValueError("stock_basic list_status must be one of L/D/P/G.")
         fields = (
             "ts_code,symbol,name,area,industry,market,exchange,curr_type,list_status,"
             "list_date,delist_date"

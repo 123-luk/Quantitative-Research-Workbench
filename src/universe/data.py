@@ -9,7 +9,7 @@ from typing import Protocol
 import pandas as pd
 
 from src.data.canonical_store import PartitionedParquetStore, content_hash, normalize_frame
-from src.data.contracts import canonical_date, normalize_scope
+from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, canonical_date, normalize_scope
 from src.data.coverage_ledger import CoverageLedger
 from src.data.coverage_planner import scope_key
 from src.data.dataset_registry import DatasetRegistry
@@ -57,7 +57,7 @@ class CanonicalUniverseDataSource:
         self.stock_basic_as_of = canonical_date(stock_basic_as_of)
         self.index_weight_start = canonical_date(index_weight_start)
 
-    def _read(self, dataset_id: str, scope: tuple[tuple[str, str], ...], units: tuple[str, ...], source_as_of: str) -> CanonicalUniverseSlice:
+    def _read(self, dataset_id: str, scope: tuple[tuple[str, str], ...], units: tuple[str, ...], source_as_of: str | None) -> CanonicalUniverseSlice:
         spec = self.registry.get(dataset_id)
         if not units:
             raise UniverseDataUnavailable(f"No explicit units requested for {dataset_id}.")
@@ -76,10 +76,12 @@ class CanonicalUniverseDataSource:
             identities.append(f"{unit}:{record.content_hash}")
         frame = normalize_frame(spec, pd.concat(frames, ignore_index=True))
         identity_hash = sha256("|".join(identities).encode("utf-8")).hexdigest()
+        if source_as_of is None:
+            source_as_of = max(canonical_date(records[unit].completed_at[:10]) for unit in units)
         return CanonicalUniverseSlice(frame, dataset_id, spec.schema_version, source_as_of, f"{dataset_id}:{spec.schema_version}:{identity_hash}")
 
     def stock_basic(self) -> CanonicalUniverseSlice:
-        return self._read("stock_basic", STOCK_BASIC_SCOPE, (self.stock_basic_as_of,), self.stock_basic_as_of)
+        return self._read("stock_basic", STOCK_BASIC_SCOPE, (GLOBAL_SNAPSHOT_UNIT,), None)
 
     def index_weight(self, index_code: str, through_date: str) -> CanonicalUniverseSlice:
         through = canonical_date(through_date)

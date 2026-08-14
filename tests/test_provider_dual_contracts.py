@@ -9,7 +9,7 @@ from app.services.credential_service import CredentialService
 from app.services.research_task_service import ResearchTaskService, TASK_SCHEMA_VERSION
 from src.data import CoverageLedger, PartitionedParquetStore
 from src.data.dataset_registry import create_default_dataset_registry
-from src.data.provider_contracts import OFFICIAL_NOT_STATED, PROXY_RULE_UNKNOWN, ProviderContractRegistry
+from src.data.provider_contracts import CoverageGranularity, OFFICIAL_NOT_STATED, PROXY_RULE_UNKNOWN, ProviderContractRegistry
 from src.data.provider_quality import compare_providers, validate_quality
 from src.data.provider_registry import PROXY_HTTPS_ENDPOINT, ProviderCompatibilityError, TushareProxyClient
 
@@ -35,6 +35,10 @@ def test_contract_registry_keeps_unknown_rules_and_proxy_claim_separate() -> Non
     }
     assert registry.get("tushare_official", "index_daily").doc_id == OFFICIAL_NOT_STATED
     assert registry.get("tushare_official", "monthly").official_url == OFFICIAL_NOT_STATED
+    stock = registry.get("tushare_official", "stock_basic")
+    assert stock.coverage_granularity is CoverageGranularity.GLOBAL_SNAPSHOT
+    assert stock.contract_version == "1.1" and stock.max_rows == 6000
+    assert registry.get("tushare_proxy", "stock_basic").coverage_granularity is CoverageGranularity.GLOBAL_SNAPSHOT
 
 
 def test_proxy_private_sdk_fields_are_fixed_and_incompatibility_is_explicit() -> None:
@@ -94,3 +98,35 @@ def test_task_1_0_read_migration_is_in_memory_and_adds_formal_diagnostics(tmp_pa
     assert task.provider_id == "tushare_official" and task.ledger_status is None
     assert json.loads(service._path(task_id).read_text())["schema_version"] == "1.0"
     assert TASK_SCHEMA_VERSION == "1.1"
+
+
+def test_legacy_retry_reuses_successful_migrated_child_without_rewriting_source(tmp_path) -> None:
+    service = ResearchTaskService(tmp_path)
+    service.root.mkdir(parents=True)
+    source_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    child_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    source = {
+        "schema_version": "1.0", "task_id": source_id,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-01T00:00:01+00:00", "status": "failed",
+        "current_stage": "download", "completed_stages": [],
+        "failure_dataset": "stock_basic",
+        "failure_range": ["2024-01-30", "2024-01-30"],
+        "config_summary": {}, "retry_of": None,
+    }
+    child = {
+        "schema_version": TASK_SCHEMA_VERSION, "task_id": child_id,
+        "created_at": "2024-01-01T00:01:00+00:00",
+        "updated_at": "2024-01-01T00:02:00+00:00", "status": "succeeded",
+        "current_stage": "complete", "completed_stages": ["complete"],
+        "config_summary": {}, "retry_of": source_id,
+        "run_id": "20240101_000100_snapshot_retry", "result_ready": True,
+    }
+    service._path(source_id).write_text(json.dumps(source), encoding="utf-8")
+    service._path(child_id).write_text(json.dumps(child), encoding="utf-8")
+
+    result = service.retry(source_id, credential=None)
+
+    assert result.task_id == child_id
+    assert len(tuple(service.root.glob("*.json"))) == 2
+    assert json.loads(service._path(source_id).read_text(encoding="utf-8")) == source

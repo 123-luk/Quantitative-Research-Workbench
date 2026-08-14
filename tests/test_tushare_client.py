@@ -51,7 +51,7 @@ def _client(pro: _FakePro) -> TushareClient:
     return client
 
 
-@pytest.mark.parametrize("list_status", ["L", "D", "P"])
+@pytest.mark.parametrize("list_status", ["L", "D", "P", "G"])
 def test_get_stock_basic_passes_explicit_lifecycle_status(list_status: str) -> None:
     pro = _FakePro()
     result = _client(pro).get_stock_basic(list_status=list_status)

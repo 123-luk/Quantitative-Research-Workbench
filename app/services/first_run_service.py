@@ -21,7 +21,7 @@ from src.data import CoverageLedger, PartitionedParquetStore, RawParquetStore
 from src.data.provider_registry import ProviderClientFactory, ProviderId
 from src.data.coverage_ledger import CoverageRecord
 from src.data.coverage_planner import scope_key
-from src.data.contracts import DataRequirement, ResearchFrequency, canonical_date
+from src.data.contracts import CoverageKind, DataRequirement, ResearchFrequency, canonical_date
 from src.data.dataset_registry import DatasetRegistry, create_default_dataset_registry
 from src.data.canonical_store import CanonicalDataError
 from src.data.preparation import CuratedTradingCalendarResolver, DataPreparationResult, DataPreparationService, DataUnavailableError, MissingCredentialError
@@ -336,7 +336,7 @@ def _pipeline_requirements(draft: WorkbenchRunDraft, plan: ResearchInputPlan, ca
     requirements = [DataRequirement.create("daily", scope="CN_A", required_start=start, required_end=end, required_fields=("ts_code", "trade_date", "pct_chg"), reason="existing Portfolio/Research Backtest security returns", as_of_cutoff=end)]
     if config.research_backtest.enabled:
         requirements.extend((
-            DataRequirement.create("stock_basic", scope=STOCK_BASIC_SCOPE, required_start=end, required_end=end, required_fields=("ts_code", "list_status", "list_date", "delist_date"), reason="existing Research Backtest security lifecycle", as_of_cutoff=end),
+            DataRequirement.create("stock_basic", scope=STOCK_BASIC_SCOPE, required_start=end, required_end=end, required_fields=("ts_code", "list_status", "list_date", "delist_date"), reason="existing Research Backtest security lifecycle"),
             DataRequirement.create("index_daily", scope={"index_code": config.research_backtest.benchmark.benchmark_code}, required_start=plan.formation_dates[0], required_end=end, required_fields=("ts_code", "trade_date", "pct_chg"), reason="existing Research Backtest benchmark returns", as_of_cutoff=end),
         ))
         if config.research_backtest.suspension_mode == "STRICT_EVENT":
@@ -626,7 +626,12 @@ class FirstRunOrchestrator:
             raise WorkbenchRunError(WorkbenchErrorCode.CREDENTIAL_MISSING, "download") from None
         except DataUnavailableError as exc:
             code = classify_data_unavailable_error(exc)
-            missing_range = (exc.units[0], exc.units[-1]) if exc.units else None
+            missing_range = (
+                None
+                if exc.dataset_id
+                and runtime.registry.get(exc.dataset_id).coverage_kind is CoverageKind.GLOBAL_SNAPSHOT
+                else (exc.units[0], exc.units[-1]) if exc.units else None
+            )
             diagnostic = None
             if exc.dataset_id and exc.units:
                 unit = exc.units[0]

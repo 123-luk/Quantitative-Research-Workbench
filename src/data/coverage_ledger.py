@@ -56,6 +56,11 @@ class CoverageLedger:
                     started_at TEXT NOT NULL, finished_at TEXT,
                     status TEXT NOT NULL, rows INTEGER NOT NULL DEFAULT 0,
                     error_type TEXT, provider_id TEXT NOT NULL DEFAULT 'tushare_official',
+                    endpoint TEXT, request_parameters TEXT NOT NULL DEFAULT '[]',
+                    requested_statuses TEXT NOT NULL DEFAULT '[]', retrieved_at TEXT,
+                    schema_version TEXT, contract_version TEXT, canonical_hash TEXT,
+                    raw_reference TEXT, canonical_reference TEXT, manifest_reference TEXT,
+                    sdk_version TEXT, quality_conclusion TEXT,
                     CHECK (status IN ('STARTED','COMPLETE','FAILED')),
                     CHECK (rows >= 0)
                 );
@@ -66,6 +71,17 @@ class CoverageLedger:
             fetch_columns = {row[1] for row in connection.execute("PRAGMA table_info(fetch_events)")}
             if "provider_id" not in fetch_columns:
                 connection.execute("ALTER TABLE fetch_events ADD COLUMN provider_id TEXT NOT NULL DEFAULT 'tushare_official'")
+            additions = {
+                "endpoint": "TEXT", "request_parameters": "TEXT NOT NULL DEFAULT '[]'",
+                "requested_statuses": "TEXT NOT NULL DEFAULT '[]'", "retrieved_at": "TEXT",
+                "schema_version": "TEXT", "contract_version": "TEXT",
+                "canonical_hash": "TEXT", "raw_reference": "TEXT",
+                "canonical_reference": "TEXT", "manifest_reference": "TEXT",
+                "sdk_version": "TEXT", "quality_conclusion": "TEXT",
+            }
+            for name, declaration in additions.items():
+                if name not in fetch_columns:
+                    connection.execute(f"ALTER TABLE fetch_events ADD COLUMN {name} {declaration}")
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -123,19 +139,51 @@ class CoverageLedger:
             if owner:
                 target.close()
 
-    def start_fetch(self, dataset_id: str, scope_key: str, units: Iterable[str], started_at: str) -> str:
+    def start_fetch(self, dataset_id: str, scope_key: str, units: Iterable[str], started_at: str, *, endpoint: str | None = None, request_parameters: Iterable[object] = (), contract_version: str | None = None) -> str:
         fetch_id = uuid4().hex
+        parameters = tuple(request_parameters)
+        statuses = tuple(
+            str(item["list_status"])
+            for item in parameters
+            if isinstance(item, dict) and "list_status" in item
+        )
         with self._connect() as connection:
-            connection.execute("INSERT INTO fetch_events(fetch_id,dataset_id,scope_key,requested_units,started_at,status,provider_id) VALUES (?,?,?,?,?,'STARTED',?)", (fetch_id, dataset_id, scope_key, json.dumps(tuple(units)), started_at, self.provider_id))
+            connection.execute("""INSERT INTO fetch_events(
+                fetch_id,dataset_id,scope_key,requested_units,started_at,status,provider_id,
+                endpoint,request_parameters,requested_statuses,contract_version
+                ) VALUES (?,?,?,?,?,'STARTED',?,?,?,?,?)""", (
+                    fetch_id, dataset_id, scope_key, json.dumps(tuple(units)), started_at,
+                    self.provider_id, endpoint, json.dumps(parameters, sort_keys=True),
+                    json.dumps(statuses), contract_version,
+                ))
         return fetch_id
 
-    def finish_fetch(self, fetch_id: str, *, status: str, finished_at: str, rows: int = 0, error_type: str | None = None) -> None:
+    def finish_fetch(self, fetch_id: str, *, status: str, finished_at: str, rows: int = 0, error_type: str | None = None, connection: sqlite3.Connection | None = None, retrieved_at: str | None = None, schema_version: str | None = None, canonical_hash: str | None = None, raw_reference: str | None = None, canonical_reference: str | None = None, manifest_reference: str | None = None, sdk_version: str | None = None, quality_conclusion: str | None = None) -> None:
         if status not in {"COMPLETE", "FAILED"}:
             raise ValueError("fetch status must be COMPLETE or FAILED.")
-        with self._connect() as connection:
-            cursor = connection.execute("UPDATE fetch_events SET finished_at=?,status=?,rows=?,error_type=? WHERE fetch_id=?", (finished_at, status, rows, error_type, fetch_id))
+        owner = connection is None
+        target = self._connect() if owner else connection
+        assert target is not None
+        try:
+            cursor = target.execute("""UPDATE fetch_events SET
+                finished_at=?,status=?,rows=?,error_type=?,retrieved_at=?,schema_version=?,
+                canonical_hash=?,raw_reference=?,canonical_reference=?,manifest_reference=?,
+                sdk_version=?,quality_conclusion=? WHERE fetch_id=?""", (
+                    finished_at, status, rows, error_type, retrieved_at, schema_version,
+                    canonical_hash, raw_reference, canonical_reference, manifest_reference,
+                    sdk_version, quality_conclusion, fetch_id,
+                ))
             if cursor.rowcount != 1:
                 raise KeyError("Unknown fetch_id.")
+            if owner:
+                target.commit()
+        except Exception:
+            if owner:
+                target.rollback()
+            raise
+        finally:
+            if owner:
+                target.close()
 
     def fetch_events(self) -> tuple[dict[str, object], ...]:
         with self._connect() as connection:

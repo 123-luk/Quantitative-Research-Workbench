@@ -19,7 +19,7 @@ from src.data.dataset_registry import DatasetRegistry, create_default_dataset_re
 
 EXPECTED = {
     "trade_cal": (("exchange", "cal_date"), NativeFrequency.CALENDAR_DAY, ScopeKind.ENTITY_SERIES, CoverageKind.CALENDAR_DATE, ("year",), FetchStrategy.ENTITY_DATE_RANGE),
-    "stock_basic": (("ts_code",), NativeFrequency.REFERENCE_SNAPSHOT, ScopeKind.REFERENCE_SNAPSHOT, CoverageKind.REFERENCE_EFFECTIVE_THROUGH, ("snapshot",), FetchStrategy.REFERENCE_SNAPSHOT),
+    "stock_basic": (("ts_code",), NativeFrequency.REFERENCE_SNAPSHOT, ScopeKind.REFERENCE_SNAPSHOT, CoverageKind.GLOBAL_SNAPSHOT, ("snapshot",), FetchStrategy.REFERENCE_SNAPSHOT),
     "daily": (("ts_code", "trade_date"), NativeFrequency.TRADING_DAY, ScopeKind.MARKET_SNAPSHOT, CoverageKind.TRADE_DATE, ("year", "month"), FetchStrategy.MARKET_SNAPSHOT_BY_DATE),
     "daily_basic": (("ts_code", "trade_date"), NativeFrequency.TRADING_DAY, ScopeKind.MARKET_SNAPSHOT, CoverageKind.TRADE_DATE, ("year", "month"), FetchStrategy.MARKET_SNAPSHOT_BY_DATE),
     "adj_factor": (("ts_code", "trade_date"), NativeFrequency.TRADING_DAY, ScopeKind.MARKET_SNAPSHOT, CoverageKind.TRADE_DATE, ("year", "month"), FetchStrategy.MARKET_SNAPSHOT_BY_DATE),
@@ -35,7 +35,9 @@ def test_registry_contains_exact_eight_frozen_specs() -> None:
     for dataset_id, expected in EXPECTED.items():
         spec = registry.get(dataset_id)
         assert (spec.primary_key, spec.native_frequency, spec.scope_kind, spec.coverage_kind, spec.storage_partition, spec.fetch_strategy) == expected
-        assert spec.schema_version == ("1.1" if dataset_id == "stock_basic" else "1.0")
+        assert spec.schema_version == {
+            "stock_basic": "1.2", "daily_basic": "1.1",
+        }.get(dataset_id, "1.0")
         assert spec.revision_policy in {RevisionPolicy.MISSING_ONLY, RevisionPolicy.EXPLICIT_REFRESH}
 
 

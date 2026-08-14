@@ -7,13 +7,41 @@ from datetime import date, timedelta
 import json
 from typing import Callable, Iterable
 
-from src.data.contracts import CoverageKind, DataRequirement, DatasetSpec, canonical_date, coalesce_requirements
+from src.data.contracts import GLOBAL_SNAPSHOT_UNIT, CoverageKind, DataRequirement, DatasetSpec, canonical_date, coalesce_requirements
 from src.data.coverage_ledger import CoverageLedger
 from src.data.dataset_registry import DatasetRegistry
 
 
 def scope_key(scope: tuple[tuple[str, str], ...]) -> str:
     return json.dumps(dict(scope), ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+
+def coalesce_coverage_requirements(
+    registry: DatasetRegistry, requirements: Iterable[DataRequirement]
+) -> tuple[DataRequirement, ...]:
+    """Coalesce global snapshots across dates, fields, reasons, and cutoffs."""
+    ordinary: list[DataRequirement] = []
+    snapshots: dict[tuple[str, tuple[tuple[str, str], ...]], list[DataRequirement]] = {}
+    for requirement in coalesce_requirements(requirements):
+        if registry.get(requirement.dataset_id).coverage_kind is CoverageKind.GLOBAL_SNAPSHOT:
+            snapshots.setdefault((requirement.dataset_id, requirement.scope), []).append(requirement)
+        else:
+            ordinary.append(requirement)
+    for values in snapshots.values():
+        cutoffs = tuple(item.as_of_cutoff for item in values if item.as_of_cutoff is not None)
+        ordinary.append(DataRequirement.create(
+            values[0].dataset_id,
+            scope=values[0].scope,
+            required_start=min(item.required_start for item in values),
+            required_end=max(item.required_end for item in values),
+            required_fields=tuple(sorted({field for item in values for field in item.required_fields})),
+            reason="; ".join(sorted({reason for item in values for reason in item.reason.split("; ")})),
+            as_of_cutoff=max(cutoffs) if cutoffs else None,
+        ))
+    return tuple(sorted(ordinary, key=lambda item: (
+        item.dataset_id, item.scope, item.required_start, item.required_end,
+        item.required_fields, item.as_of_cutoff or "",
+    )))
 
 
 @dataclass(frozen=True)
@@ -47,6 +75,8 @@ class MissingDataPlanner:
         self.complete_units_resolver = complete_units_resolver
 
     def _units(self, requirement: DataRequirement, spec: DatasetSpec) -> tuple[str, ...]:
+        if spec.coverage_kind is CoverageKind.GLOBAL_SNAPSHOT:
+            return (GLOBAL_SNAPSHOT_UNIT,)
         start = date.fromisoformat(requirement.required_start)
         end = date.fromisoformat(requirement.required_end)
         if spec.coverage_kind is CoverageKind.CALENDAR_DATE:
@@ -89,7 +119,7 @@ class MissingDataPlanner:
 
     def plan(self, requirements: Iterable[DataRequirement]) -> tuple[MissingDataPlan, ...]:
         plans: list[MissingDataPlan] = []
-        for requirement in coalesce_requirements(requirements):
+        for requirement in coalesce_coverage_requirements(self.registry, requirements):
             spec = self.registry.get(requirement.dataset_id)
             if requirement.required_fields and not set(requirement.required_fields).issubset(spec.required_fields):
                 raise ValueError(f"Requirement fields are outside dataset {spec.dataset_id!r} schema.")

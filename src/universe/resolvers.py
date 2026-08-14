@@ -21,7 +21,7 @@ class UniverseResolver(Protocol):
 
 
 def _stock_requirement(start: str, end: str, reason: str, fields: tuple[str, ...]) -> DataRequirement:
-    return DataRequirement.create("stock_basic", scope=dict(STOCK_BASIC_SCOPE), required_start=start, required_end=end, required_fields=fields, reason=reason, as_of_cutoff=end)
+    return DataRequirement.create("stock_basic", scope=dict(STOCK_BASIC_SCOPE), required_start=start, required_end=end, required_fields=fields, reason=reason)
 
 
 def _stock_frame(source: CanonicalUniverseSlice) -> pd.DataFrame:

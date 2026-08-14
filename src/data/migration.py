@@ -27,6 +27,11 @@ class LegacyCoverageMigrator:
         frame = normalize_frame(spec, pd.read_parquet(source))
         if spec.coverage_kind is CoverageKind.TRADE_DATE:
             return ()
+        if spec.coverage_kind is CoverageKind.GLOBAL_SNAPSHOT:
+            # A legacy date-labelled reference file cannot prove when the
+            # current provider snapshot was retrieved. Do not relabel it as a
+            # GLOBAL snapshot or preserve a fictitious PIT date.
+            return ()
         if spec.coverage_kind is CoverageKind.REFERENCE_EFFECTIVE_THROUGH:
             if effective_through is None or set(frame.get("list_status", ())) != {"L", "D", "P"}:
                 return ()

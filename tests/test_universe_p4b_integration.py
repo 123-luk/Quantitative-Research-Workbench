@@ -64,7 +64,7 @@ def test_index_requirements_prepare_missing_only_then_resolve_same_snapshot(tmp_
     first = preparation.ensure(requirements, client=provider)
     assert first.provider_calls == 3
     assert [name for name, _ in provider.calls].count("index_weight") == 2
-    assert [name for name, _ in provider.calls].count("stock_basic") == 3
+    assert [name for name, _ in provider.calls].count("stock_basic") == 4
 
     source = CanonicalUniverseDataSource(registry=registry, ledger=ledger, store=curated, stock_basic_as_of="2024-01-31", index_weight_start="2023-12-01")
     before = UniverseService().resolve(spec, "2024-01-31", source)

@@ -1,11 +1,10 @@
 # TuShare Provider Contracts and Audit
 
-Audit date: 2026-08-13. Branch: `feature/research-workbench`.
+Audit date: 2026-08-14. Branch: `feature/research-workbench`.
 
-The official documentation pages timed out from the development environment
-during this audit. The links below are the current official locations supplied
-for the audit. Endpoint facts already present in those pages are encoded in
-`src/data/provider_contracts.py`; anything not stated is deliberately
+The `stock_basic` official page was read successfully on 2026-08-14. Other
+endpoint facts retain the preceding audit evidence. Facts present in the
+official pages are encoded in `src/data/provider_contracts.py`; anything not stated is deliberately
 `OFFICIAL_NOT_STATED` or `UNKNOWN`. The obsolete suspension page `doc_id=31`
 returning 404 is not evidence that `suspend_d` was retired: the current endpoint
 is documented at `doc_id=214`.
@@ -36,7 +35,7 @@ There are no `pro.query(...)` calls.
 
 | API | Official document | Minimum points/permission | Rate | Rows | Update |
 |---|---|---:|---|---:|---|
-| stock_basic | [doc 25](https://tushare.pro/document/2?doc_id=25) | 2000 | 50/min | 5000 | OFFICIAL_NOT_STATED |
+| stock_basic | [doc 25](https://tushare.pro/document/2?doc_id=25) | 2000 | 50/min | 6000 per call | OFFICIAL_NOT_STATED |
 | trade_cal | [doc 26](https://tushare.pro/document/2?doc_id=26) | 2000 | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
 | daily | [doc 27](https://tushare.pro/document/2?doc_id=27) | BASIC_DAILY_PERMISSION | OFFICIAL_NOT_STATED | 6000 | after close; exact time OFFICIAL_NOT_STATED |
 | adj_factor | [doc 28](https://tushare.pro/document/2?doc_id=28) | 2000 | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED | OFFICIAL_NOT_STATED |
@@ -52,6 +51,51 @@ General references: [permissions](https://tushare.pro/document/1?doc_id=108),
 [FAQ](https://tushare.pro/document/1?doc_id=122). Endpoint documents take
 precedence. Proxy rate/quota fields remain `PROXY_RULE_UNKNOWN`; the provider's
 advertised “5000-level” claim is not official proof.
+
+## `stock_basic` global-snapshot contract (UAT-032)
+
+The GUI label `证券基础信息` maps to canonical dataset and provider endpoint
+`stock_basic`. TuShare doc 25 defines optional `ts_code`, `name`, `market`,
+`list_status`, `exchange`, and `is_hs` inputs; it does not define
+`trade_date`, `start_date`, or `end_date`. The default `list_status` is `L`.
+Consequently, the application makes four separate calls with
+`list_status=L/D/P/G`, validates each response against the requested status,
+then publishes one non-empty, deduplicated snapshot keyed by `ts_code`. A
+single status may be empty. If sequential status calls expose one code more
+than once, the explicit application deduplication priority is `D`, `P`, `L`,
+then `G`; conflicting duplicates within one status fail closed.
+
+Provider contract version 1.1 declares `GLOBAL_SNAPSHOT`; canonical schema
+1.2 uses the fixed logical unit `GLOBAL`. Research interval length therefore
+cannot change the number of `stock_basic` coverage units. The adapter never
+passes a date argument, the canonical partition is `snapshot=GLOBAL`, and the
+Ledger records only `stock_basic / GLOBAL`. A lightweight preflight checks the
+Provider Contract, Dataset Registry, planned unit, fetch strategy, and token-
+free request parameters before client creation or any provider call.
+
+The result is a current reference snapshot retrieved by the application, not a
+historical PIT snapshot. Historical eligibility is derived only as
+`list_date <= T < delist_date`, with a null `delist_date` treated as no known
+upper boundary. Current `list_status`, name, and industry are not represented
+as historical PIT factor fields. Quotes, the trading calendar, and the
+configured suspension policy remain responsible for final tradability.
+
+Raw and canonical Parquet are staged, fsynced, verified, and atomically
+replaced before the Ledger transaction marks `COMPLETE`. The canonical
+manifest and fetch event record provider ID, endpoint, requested statuses,
+actual token-free parameters, retrieval time, schema/contract versions, row
+count, canonical hash, raw/canonical/manifest references, SDK version, and
+quality conclusion. The merged whole-market snapshot must be non-empty and
+cannot use an empty marker. Official and proxy roots, Ledgers, manifests, and
+credentials stay isolated; there is no cross-provider fallback or repair.
+
+Snapshot freshness is application policy, not an official TuShare update
+frequency: one integrity-verified `GLOBAL` snapshot is reused within its UTC
+retrieval day for the selected provider. A later day replans the same logical
+unit and atomically replaces it. Legacy date-labelled schema 1.0/1.1
+`stock_basic` units remain untouched as diagnostic evidence but cannot satisfy
+the new contract. Retry replans one `GLOBAL` unit, preserves other verified
+dataset units, and recomputes progress from the new coverage plan.
 
 ## Dependency map
 

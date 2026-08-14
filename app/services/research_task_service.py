@@ -346,15 +346,24 @@ class ResearchTaskService:
             _ACTIVE.pop(task_id, None)
 
     def retry(self, task_id: str, *, credential: str | None) -> ResearchTask:
-        raw = self._read_raw(task_id)
-        if str(raw.get("status")) not in TERMINAL_STATUSES:
-            return self._view(raw)
-        draft = WorkbenchRunDraft(
-            PipelineConfig.from_dict(raw["pipeline_config"]),  # type: ignore[arg-type]
-            UniverseSpec.from_dict(raw["universe_spec"]),  # type: ignore[arg-type]
-            ResearchFrequency(str(raw["research_frequency"])),
-        )
-        return self.submit(draft, credential=credential, retry_of=task_id)
+        with _SUBMIT_LOCK:
+            raw = self._read_raw(task_id)
+            if str(raw.get("status")) not in TERMINAL_STATUSES:
+                return self._view(raw)
+            # Repeated clicks for the same failed record reuse the already
+            # active/successful migrated retry. A failed retry remains
+            # retryable after its diagnostics have been reviewed.
+            for existing in self.list_tasks(reconcile_interrupted=False):
+                if existing.retry_of == task_id and (
+                    existing.active or existing.status == "succeeded"
+                ):
+                    return existing
+            draft = WorkbenchRunDraft(
+                PipelineConfig.from_dict(raw["pipeline_config"]),  # type: ignore[arg-type]
+                UniverseSpec.from_dict(raw["universe_spec"]),  # type: ignore[arg-type]
+                ResearchFrequency(str(raw["research_frequency"])),
+            )
+            return self.submit(draft, credential=credential, retry_of=task_id)
 
     def clear(self, task_id: str) -> TaskClearResult:
         """Remove only one terminal task record; exact run artifacts are retained."""

@@ -3951,3 +3951,48 @@ override，V4-E3 为 CLI + YAML + docs。
 - Targeted results: 70 provider/backtest tests and 177 artifact/config tests
   passed. A broader GUI group reached 34 passes before a long AppTest was
   interrupted and is not claimed as a completed pass.
+
+## 2026-08-14 UAT-032 stock_basic snapshot coverage
+
+- Root cause: the GUI label `证券基础信息` correctly mapped to `stock_basic`, and
+  the raw wrapper did not pass dates, but Dataset Registry coverage was
+  `REFERENCE_EFFECTIVE_THROUGH`. Coverage Planner therefore used the research
+  end date as a real unit; canonical paths, Ledger lookups, progress, and
+  failure ranges repeated that fictitious date. The fetch strategy also omitted
+  the official `G` lifecycle status.
+- `stock_basic` is now Provider Contract 1.1 `GLOBAL_SNAPSHOT`, canonical schema
+  1.2, and fixed Ledger/partition unit `GLOBAL`. One task has at most one such
+  dependency regardless of research interval or overlapping required fields.
+  The provider adapter makes four date-free `L/D/P/G` calls and atomically
+  publishes a non-empty, `ts_code`-deduplicated whole-market snapshot.
+- Historical security eligibility is exactly `list_date <= T < delist_date`;
+  null `delist_date` has no known upper boundary. Current `list_status`, name,
+  and industry are not historical PIT factor fields. Quotes, `trade_cal`, and
+  the existing suspension policy still decide final tradability.
+- Official/proxy Token, raw, canonical, manifest, Ledger, and provenance remain
+  isolated with no failover or mutual repair. Snapshot manifests/fetch events
+  contain token-free actual parameters, status set, retrieval time,
+  schema/contract versions, counts, hash, storage references, SDK version, and
+  quality result. `COMPLETE` is transactional and last; a whole-market empty
+  result fails data quality and never creates an empty marker.
+- Application freshness is explicitly separate from TuShare rules: a verified
+  snapshot is reused only on its UTC retrieval day for the selected provider.
+  Old date-labelled schema 1.0/1.1 stock units are retained but ignored; retry
+  requests one new `GLOBAL` unit, reuses other verified units, recalculates the
+  denominator, and repeated clicks reuse an active/successful migrated retry.
+- Minimal commands actually run:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_stock_basic_snapshot_uat032.py`
+  (`5 passed in 2.85s`),
+  the same command for `test_data_layer_2_contracts.py`,
+  `test_data_layer_2_coverage.py`, `test_data_layer_2_preparation.py`,
+  `test_tushare_client.py`, `test_universe_p4b_integration.py`, and
+  `test_provider_dual_contracts.py`, plus `test_universe_1_0.py`
+  (`63 passed in 15.61s`), and the same
+  command for `test_research_input_p4b_integration.py`
+  (`1 passed in 10.28s`). A 20-file Python 3.12 in-memory `compile()` check also
+  passed. Earlier attempts through the PATH pytest launcher were Python 3.8;
+  their results are not used as final verification.
+- No real official/proxy call, real Token, real task creation/retry, EXE,
+  Streamlit/AppTest, complete pytest, or 398-second exact-run test was run.
+  Manual packaged-app UAT is still required. UAT-009 and UAT-028 remain open;
+  offline checks do not close them.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Callable
+from typing import Callable, Mapping
 
 import pandas as pd
 
@@ -21,6 +21,7 @@ class ProviderFetchError(RuntimeError):
 class FetchResult:
     task: FetchTask
     frame: pd.DataFrame
+    request_parameters: tuple[Mapping[str, object], ...] = ()
 
 
 class FetchStrategyRegistry:
@@ -44,7 +45,11 @@ class FetchStrategyRegistry:
             if isinstance(exc, (ProviderFetchError, CanonicalDataError)):
                 raise
             raise ProviderFetchError(f"Provider call failed for dataset {spec.dataset_id!r}.") from exc
-        return FetchResult(task, self.completeness.validate(spec, task, frame))
+        return FetchResult(
+            task,
+            self.completeness.validate(spec, task, frame),
+            provider_request_parameters(spec, task),
+        )
 
 
 class CompletenessStrategyRegistry:
@@ -100,8 +105,59 @@ def _entity_month(spec: DatasetSpec, task: FetchTask, client: object) -> pd.Data
 
 
 def _reference(spec: DatasetSpec, task: FetchTask, client: object) -> pd.DataFrame:
-    frames = [_method(client, spec)(list_status=status) for status in ("L", "D", "P")]
-    return pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame(columns=spec.required_fields)
+    del task
+    frames: list[pd.DataFrame] = []
+    status_priority = {"D": 0, "P": 1, "L": 2, "G": 3}
+    for status in ("L", "D", "P", "G"):
+        raw = _method(client, spec)(list_status=status)
+        if not isinstance(raw, pd.DataFrame):
+            raise CanonicalDataError("stock_basic provider result must be a pandas DataFrame.")
+        if raw.empty and not set(spec.required_fields).issubset(raw.columns):
+            raw = pd.DataFrame(columns=spec.required_fields)
+        normalized = normalize_frame(spec, raw)
+        if not normalized.empty and set(normalized["list_status"].astype(str)) != {status}:
+            raise CanonicalDataError(
+                f"stock_basic rows do not match requested list_status={status}."
+            )
+        frames.append(normalized)
+    merged = pd.concat(frames, ignore_index=True, sort=False)
+    if merged.empty:
+        return pd.DataFrame(columns=spec.required_fields)
+    # A status-scoped response is normalized first, so within-status duplicate
+    # conflicts already fail closed. If a provider exposes one code in multiple
+    # current-status calls, prefer the terminal lifecycle state, then paused,
+    # listed, and approved-not-yet-traded. This rule is application policy, not
+    # an assertion about TuShare's update frequency.
+    ranked = merged.assign(
+        _status_rank=merged["list_status"].astype(str).map(status_priority)
+    ).sort_values(["ts_code", "_status_rank"], kind="mergesort")
+    return ranked.drop_duplicates("ts_code", keep="first").drop(columns="_status_rank").reset_index(drop=True)
+
+
+def provider_request_parameters(
+    spec: DatasetSpec, task: FetchTask
+) -> tuple[Mapping[str, object], ...]:
+    """Describe the exact token-free adapter calls made for audit/preflight."""
+    fields = ",".join(spec.required_fields)
+    if spec.fetch_strategy is FetchStrategy.REFERENCE_SNAPSHOT:
+        return tuple(
+            {"exchange": "", "list_status": status, "fields": fields}
+            for status in ("L", "D", "P", "G")
+        )
+    if spec.fetch_strategy is FetchStrategy.MARKET_SNAPSHOT_BY_DATE:
+        return ({"ts_code": None, "trade_date": task.start.replace("-", ""), "start_date": None, "end_date": None},)
+    if spec.fetch_strategy is FetchStrategy.ENTITY_DATE_RANGE:
+        scope = dict(task.scope)
+        if spec.coverage_kind is CoverageKind.CALENDAR_DATE:
+            return ({"start_date": task.start.replace("-", ""), "end_date": task.end.replace("-", "")},)
+        return ({"ts_code": scope.get("index_code") or scope.get("ts_code"), "trade_date": None, "start_date": task.start.replace("-", ""), "end_date": task.end.replace("-", "")},)
+    if spec.fetch_strategy is FetchStrategy.ENTITY_MONTH_SNAPSHOT:
+        code = dict(task.scope).get("index_code")
+        year, month = (int(item) for item in task.start.split("-"))
+        start = date(year, month, 1)
+        next_month = date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+        return ({"index_code": code, "start_date": start.strftime("%Y%m%d"), "end_date": (next_month - timedelta(days=1)).strftime("%Y%m%d")},)
+    raise ValueError(f"Unsupported fetch strategy: {spec.fetch_strategy.value}")
 
 
 def create_default_fetch_strategy_registry() -> FetchStrategyRegistry:

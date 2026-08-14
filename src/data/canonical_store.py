@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from typing import Iterable
+from typing import Iterable, Mapping
 
 import pandas as pd
 
@@ -209,7 +209,7 @@ class PartitionedParquetStore:
             temp.unlink(missing_ok=True)
             raise
 
-    def merge(self, spec: DatasetSpec, frame: pd.DataFrame, *, units: Iterable[str], scope: tuple[tuple[str, str], ...]) -> tuple[Path, ...]:
+    def merge(self, spec: DatasetSpec, frame: pd.DataFrame, *, units: Iterable[str], scope: tuple[tuple[str, str], ...], provenance: Mapping[str, object] | None = None) -> tuple[Path, ...]:
         normalized = normalize_frame(spec, frame)
         paths: list[Path] = []
         by_path: dict[Path, list[str]] = {}
@@ -219,7 +219,7 @@ class PartitionedParquetStore:
             if normalized.empty:
                 continue
             date_col = "cal_date" if spec.coverage_kind is CoverageKind.CALENDAR_DATE else "trade_date"
-            if spec.coverage_kind is CoverageKind.REFERENCE_EFFECTIVE_THROUGH:
+            if spec.coverage_kind in {CoverageKind.GLOBAL_SNAPSHOT, CoverageKind.REFERENCE_EFFECTIVE_THROUGH}:
                 incoming = normalized
             elif spec.coverage_kind is CoverageKind.ENTITY_MONTH:
                 incoming = normalized.loc[normalized[date_col].str[:7].isin(partition_units)]
@@ -227,7 +227,11 @@ class PartitionedParquetStore:
                 incoming = normalized.loc[normalized[date_col].isin(partition_units)]
             if incoming.empty:
                 continue
-            merged = merge_canonical(spec, self.load_partition(target, spec), incoming)
+            merged = (
+                incoming
+                if spec.coverage_kind is CoverageKind.GLOBAL_SNAPSHOT
+                else merge_canonical(spec, self.load_partition(target, spec), incoming)
+            )
             temp = self._write_temp(merged, target)
             try:
                 verified = normalize_frame(spec, pd.read_parquet(temp, engine=self.engine))
@@ -241,9 +245,11 @@ class PartitionedParquetStore:
                 os.close(descriptor)
                 manifest_temp = Path(raw_manifest)
                 manifest_temp.write_text(json.dumps({
+                    **dict(provenance or {}),
                     "provider_id": self.provider_id,
                     "dataset_id": spec.dataset_id,
                     "schema_version": spec.schema_version,
+                    "row_count": len(verified),
                     "content_hash": content_hash(spec, verified),
                 }, sort_keys=True, separators=(",", ":")), encoding="utf-8")
                 try:
@@ -259,7 +265,7 @@ class PartitionedParquetStore:
 
     def rows_for_unit(self, spec: DatasetSpec, *, unit: str, scope: tuple[tuple[str, str], ...]) -> pd.DataFrame:
         frame = self.load_partition(self.partition_path(spec, unit=unit, scope=scope), spec)
-        if frame.empty or spec.coverage_kind is CoverageKind.REFERENCE_EFFECTIVE_THROUGH:
+        if frame.empty or spec.coverage_kind in {CoverageKind.GLOBAL_SNAPSHOT, CoverageKind.REFERENCE_EFFECTIVE_THROUGH}:
             return frame
         column = "cal_date" if spec.coverage_kind is CoverageKind.CALENDAR_DATE else "trade_date"
         mask = frame[column].str[:7].eq(unit) if spec.coverage_kind is CoverageKind.ENTITY_MONTH else frame[column].eq(unit)
@@ -277,5 +283,16 @@ class RawParquetStore:
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             raise FileExistsError("raw fetch identity already exists.")
-        frame.to_parquet(target, index=False, engine=self.engine)
+        descriptor, raw_path = tempfile.mkstemp(
+            prefix=f".{target.stem}.", suffix=".tmp.parquet", dir=target.parent
+        )
+        os.close(descriptor)
+        temp = Path(raw_path)
+        try:
+            frame.to_parquet(temp, index=False, engine=self.engine)
+            with temp.open("r+b") as handle:
+                os.fsync(handle.fileno())
+            os.replace(temp, target)
+        finally:
+            temp.unlink(missing_ok=True)
         return target
