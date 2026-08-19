@@ -3435,3 +3435,853 @@ override，V4-E3 为 CLI + YAML + docs。
   rebase, reset, cherry-pick, or tag was performed; HEAD remains the P2 commit.
 - Final status: **LOCAL RELEASE READY**. Next: user commits P3, then follows the
   PR/release workflow.
+
+## 2026-08-11 V9-P1 Registry-Driven Research Workbench GUI Core
+
+- Target release: `v0.10.0`.
+- Added a wide-layout Streamlit Research Workbench with the five main pages
+  Overview, New Run, Results, Runs, and Data; the prior dashboard remains in a
+  separate backward-compatibility surface.
+- Factor selection is driven by the default FactorRegistry; the audited names
+  are `momentum_20d` and `volatility_20d`. Legacy YAML-only `pe`, `pb`, and
+  `roe` values are not advertised as runnable capabilities.
+- Model selection is driven by ModelRegistry for `elastic_net`,
+  `hist_gradient_boosting`, and `ridge`. All model controls are generated from
+  backend `parameter_schema()`, preserving defaults, bounds, choices, canonical
+  keys, optional values, and advanced fields.
+- Portfolio and risk controls consume the Portfolio Construction, Risk
+  Estimator, and Constraint registries. Equal Weight, Rank Weight, Inverse
+  Volatility, Minimum Variance, Sample Covariance, Ledoit-Wolf, and Max Weight
+  remain backend-owned capabilities.
+- New Run has the fixed five sections Data & Universe, Factor / Modeling,
+  Signal & Selection, Portfolio Construction, and Research Backtest.
+- `pipeline_config_service.py` is the sole detached UI-to-PipelineConfig
+  boundary. Backend config/model/portfolio validators remain the business
+  source of truth; no factor, ranking, weighting, covariance, optimizer, or
+  backtest calculations were added to `app/**`.
+- Added thin RunService and safe ErrorPresenter contracts. RunService calls the
+  existing runner once and returns exact run/experiment identity, status,
+  elapsed time, stage/artifact summaries, or sanitized errors.
+- Added a generic optional `run_created_callback` to `run_pipeline()` so a
+  later failure retains its exact run ID without latest/mtime/glob discovery.
+  The returned summary, CLI, stage order, and quant semantics are unchanged.
+- Session state is limited to current page, draft config, current/selected run
+  IDs, and last status. Results routing requires exact `selected_run_id`.
+- Audited Signal, Holdings, and Research Backtest Artifact file/column sets and
+  all 20 canonical Research Backtest metric keys for P2 Artifact-backed views.
+- ExperimentManager has no exact reader or safe enumeration API; Runs remains a
+  P2 placeholder. DataManager has read-only readiness checks but no full data
+  dashboard metadata API; Data remains a P2 placeholder.
+- P1 focused UI suite: `77 passed`; Gate A/B/C focused regression:
+  `289 passed`; identity cross-stage regression: `116 passed, 2 skipped`.
+- Full pytest: `2993 passed, 4 skipped, 11 warnings`; +28 passed over v0.9.0,
+  unchanged skips/warnings, and no new xfail.
+- Compile/import, Streamlit AppTest, UI purity, protected production diff,
+  dependency drift, and Git hygiene gates passed.
+- No commit, staging, remote Git, dependency installation, merge, rebase,
+  reset, cherry-pick, or tag operation was performed. P2 remains Results,
+  Runs, and Data backed by exact public Artifact/catalog APIs.
+
+## 2026-08-11 V9-P2 Artifact-Backed Results + Runs + Data
+
+- Target release: `v0.10.0`.
+- Completed exact-run `ResultService`: every request resolves one validated
+  canonical run identity and reads only that run's configured, validator-backed
+  Artifacts. There is no latest, mtime, glob, or cross-run fallback.
+- Results now has substantive Overview, Holdings, Returns, Config, and Artifacts
+  tabs. Metric truth comes directly from Research Backtest `metrics.json`; NAV
+  comes from `daily_portfolio.parquet`, and benchmark NAV comes from
+  `benchmark.parquet` with exact date alignment.
+- Drawdown is derived only for chart display from canonical net NAV and never
+  replaces `net_max_drawdown`. Monthly returns are explicitly a display-only
+  calendar-month compounding of canonical daily `net_return`.
+- Holdings reads the exact five-column Holdings Artifact, preserves canonical
+  order and selected zero-weight rows, and adds only formation-date filtering
+  and a weight chart.
+- Config reads the exact run snapshot rather than UI draft state. Artifact
+  identity, schema version, validation status, and recorded ML/Signal/Holdings/
+  Research Backtest lineage are shown when canonically available.
+- Added minimal generic read-only `ExperimentManager.list_run_ids()` and
+  `resolve_run_dir()` APIs with direct-child, syntax, existence, directory, and
+  symbolic-link checks.
+- Added a deterministic `RunCatalogService` and substantive Runs page. Catalog
+  chronology uses only canonical `run_info.json.created_at`; missing metadata is
+  `N/A`, and opening Results always carries the exact selected run ID.
+- Added read-only `DataStatusService` and Data page backed by DataManager,
+  DataCache, and ParquetStore readiness/path/existence contracts. There are no
+  download, update, repair, delete, provider, network, or write actions.
+- Overview, New Run, Results, Runs, and Data are now all substantive while the
+  legacy dashboard surface remains available and existing backend/public
+  contracts remain backward compatible.
+- Focused cross-version regression: `414 passed`. Syntax/import smoke passed.
+  Streamlit started successfully and all five Workbench routes passed AppTest.
+- Full pytest: `3037 passed, 4 skipped, 11 warnings in 225.81s`; +44 passes over
+  the V9-P1 baseline, with unchanged skips/warnings and no new xfail.
+- No commit, staging, remote Git, dependency change, push, fetch, pull, merge,
+  rebase, reset, cherry-pick, or tag operation was performed.
+- Next: V9-P3 GUI E2E + v0.10.0 Release Readiness.
+
+## 2026-08-11 V9-P3 completed — v0.10.0 Release Readiness
+
+- Product: Quant Research Workbench 1.0 with substantive Overview, New Run,
+  Results, Runs, and Data pages.
+- Proved the offline user journey through canonical UI mapping and the real
+  Modeling -> ML -> Signal -> Holdings -> Research Backtest pipeline, then
+  exact Artifact-backed Results, Runs catalog reopen, and read-only Data status.
+- Generated two distinct real runs and verified exact isolation of metrics,
+  NAV, Holdings, config snapshots, ML experiment identity, and lineage with no
+  latest, mtime, glob, nearest, prefix, fuzzy, or cross-run fallback.
+- Confirmed all Results metric truth comes directly from canonical
+  `metrics.json`; NAV and benchmark preserve exact Artifact series and dates;
+  drawdown/monthly returns remain presentation-only derivations.
+- Confirmed canonical Holdings order, selection, and zero-weight rows remain
+  preserved and detached across result reads.
+- Config always reopens the exact run's snapshot rather than a changed UI
+  draft. ML -> Signal -> Holdings -> Research Backtest lineage uses only actual
+  validated Artifact identities, paths, and schema versions.
+- Corrupt Holdings, missing Research Backtest payload, wrong schema version,
+  and integrity failures fail closed. Missing Research Backtest retains valid
+  Holdings, Config, and earlier lineage with an explicit unavailable state.
+- RunCatalog uses only canonical `run_info.json.created_at` for Latest
+  semantics. Missing historical metadata remains `N/A` and is never inferred
+  from directory identity or filesystem timestamps.
+- DataStatus and Data UI remained read-only: no provider/network call,
+  download, refresh, repair, cache write, Parquet write, or large-file scan.
+- Current-session failure returned a safe failed outcome with the exact
+  callback-created run ID, did not select fake Results, and preserved the
+  documented limitation that early historical failures may have no persisted
+  status/stage/reason/timestamp.
+- Streamlit five-route AppTest passed. Headless Streamlit started on random
+  local port 24022 and was intentionally stopped without provider access.
+- Gate L: `18 passed`; Gate M: `8 passed`; Gate N: `15 passed`; combined P3:
+  `41 passed in 11.75s`.
+- V5–V9 focused regression: `879 passed in 63.74s`.
+- Full pytest: `3078 passed, 4 skipped, 11 warnings in 164.62s`; +41 passes over
+  P2 with unchanged skips/warnings and no new xfail.
+- In-memory compile/import covered 175 production Python files. Protected
+  production and dependency diffs remained empty; quant/business semantics,
+  pipeline stages, and Artifact schemas are unchanged.
+- No production code, dependency, commit, staging, remote Git, push, fetch,
+  pull, merge, rebase, reset, cherry-pick, or tag operation was performed.
+- Decision: **LOCAL RELEASE READY = YES**.
+
+## 2026-08-11 V9-P4B Data Layer 2.0 Core
+
+- Added frozen L0 RAW and L1 CURATED architecture without creating research
+  panels or changing Factor, ML, Signal, Holdings, Portfolio, Risk, Backtest,
+  pipeline-order, or Artifact semantics.
+- Added `ResearchFrequency` and a fresh registry containing the eight canonical
+  `trade_cal`, `stock_basic`, `daily`, `daily_basic`, `adj_factor`, `suspend_d`,
+  `index_daily`, and `index_weight` dataset contracts.
+- Replaced min/max completeness truth with a transactional SQLite coverage
+  ledger keyed by exact dataset, scope, and unit. Legacy JSON remains read-only
+  compatibility data and is never trusted by the new planner.
+- Added exact-unit missing planning, registry-driven TuShare fetch strategies,
+  provider completeness checks, token-free fetch auditing, RAW capture,
+  partitioned CURATED Parquet, deterministic hashes, and conservative migration.
+- Canonical merge is primary-key aware: identical duplicates are idempotent and
+  conflicting payloads fail closed. Temporary writes are reread and validated
+  before atomic replacement; ledger completion follows replacement only.
+- Removed TuShare global `set_token` mutation in favor of instance-level
+  `pro_api(token)` injection. Tokens are never included in data or metadata.
+- GUI navigation/i18n, ResearchInputBuilder, research panels, and New Run
+  integration remain explicitly deferred to P4A/P4C/P4D.
+- Final focused cross-version regression: `1223 passed in 106.73s`.
+- The single monolithic full-suite invocation reached `3088 passed, 4 skipped`
+  but 21 unchanged Histogram Gradient Boosting tests failed because joblib's
+  Windows physical-core probe was denied by the restricted runner; it also
+  emitted one extra loky warning. Test bootstrap now sets the documented
+  `LOKY_MAX_CPU_COUNT=1` limit. The complete affected set then passed without
+  a manual environment override: `259 passed, 2 skipped in 20.63s`.
+- In-memory compile covered 184 production Python files. Static security,
+  protected-quant-diff, dependency, formatting, and Git hygiene checks passed.
+- No commit, staging, remote Git operation, dependency change, or `.env`
+  modification was performed. Next: P4C ResearchInputBuilder.
+
+## 2026-08-11 V9-P4C1 Universe 1.0
+
+- Added immutable `UniverseSpec` and `UniverseSnapshot` contracts for CUSTOM,
+  INDEX, and ALL_A_SHARES membership, with a fresh resolver registry and
+  explicit canonical-data service boundary.
+- CUSTOM accepts canonical `ts_code` values or a bare six-digit symbol only
+  when canonical `stock_basic` proves exactly one match. First-occurrence order
+  is preserved after canonicalization and lifecycle filtering.
+- INDEX selects only the latest provider snapshot date on or before formation;
+  there is no current-member history backfill, future snapshot backward fill,
+  nearest-date selection, or filesystem discovery. Provider weights are source
+  diagnostics only and never portfolio target weights.
+- ALL_A_SHARES uses the stock endpoint's equity contract plus canonical market,
+  exchange, and CNY metadata for Shanghai/Shenzhen main boards, ChiNext, STAR,
+  and Beijing A shares. ST, suspension, liquidity, and listing-age filters are
+  explicitly outside Universe membership.
+- All resolvers apply `list_date <= T < delist_date`. The exclusive membership
+  boundary is separate from V6 delist-date observation-return handling.
+- Universe-owned requirements are exactly stock_basic for CUSTOM/ALL and
+  stock_basic plus scoped index_weight for INDEX; no daily/factor datasets are
+  requested. P4B integration proves identical second preparation makes zero
+  provider calls and produces the same snapshot.
+- Extended canonical stock_basic schema to 1.1 with provider `exchange` and
+  `curr_type`, enabling classification without exchange-prefix guessing while
+  preserving the existing lifecycle adapter fields.
+- No current PipelineConfig/runner, quant semantics, stage ordering, or
+  Artifact schema was changed. Next: P4C2 AdjustedPriceService and research
+  frequency/calendar semantics.
+- Universe/P4B dedicated verification: `15 passed in 3.26s`; focused P4B and
+  V5–V9 cross-layer regression: `1230 passed in 114.52s`.
+- The single final full-suite invocation passed: `3124 passed, 4 skipped, 11
+  warnings in 259.80s`, exactly +15 passes with unchanged skips/warnings versus
+  the frozen P4B baseline.
+- In-memory compile covered 190 production Python files. Static discovery,
+  provider-boundary, eligibility-filter, target-weight, formatting, protected
+  quant-diff, dependency, and Git hygiene checks passed.
+
+## 2026-08-11 V9-P4C2 Adjusted Price + Factor Frequency
+
+- Added canonical `ResearchCalendar` DAILY/monthly formation resolution and
+  typed `TRADING_DAYS`, `CALENDAR_MONTHS`, and `LATEST_AS_OF` history contracts.
+- Trading-day windows include formation T as their final observation and never
+  approximate open dates with calendar-day subtraction. Partial final months
+  without complete evidence are not mislabeled as monthly formations.
+- Extended the existing `FactorMetadata` source of truth with strict
+  `FactorFrequencySpec` values and generic requirements. Legacy factors remain
+  DAILY-only unless explicit; five valuation/size factors support DAILY and
+  MONTHLY as-of observations without monthly averaging.
+- Added CURATED-only adjusted prices using exact same-key
+  `raw OHLC * adj_factor`. Missing, duplicate, non-finite, bool, or nonpositive
+  adjustment data fails closed; volume and amount remain unadjusted.
+- No dynamic end anchor, generic fill, global monthly aggregation, Universe
+  reimplementation, provider call, or RAW access exists in research services.
+  MonthlyMarketBar remains deferred because P4C3 has no unambiguous need yet.
+- P4B integration proves repeated identical daily + adj_factor preparation
+  performs zero provider calls and returns identical adjusted observations.
+- Research Backtest security and benchmark returns remain on `pct_chg / 100`;
+  factor formulas, accounting, portfolio/risk, Signal/Holdings, ML, pipeline
+  stages, and Artifact schemas are unchanged.
+- P4C2 dedicated verification: `21 passed in 6.98s`; P4B/P4C1, Factors, and
+  V5–V8 focused regression: `2011 passed, 11 warnings in 215.33s`.
+- The single final full-suite invocation passed: `3145 passed, 4 skipped, 11
+  warnings in 270.39s`, exactly +21 passes with unchanged skips/warnings versus
+  the frozen P4C1 baseline.
+- In-memory compile covered 194 production Python files. Static no-anchor,
+  no-fill, no-global-resample, backtest-source, Universe-boundary, protected
+  diff, dependency, formatting, and Git hygiene checks passed.
+- Next: P4C3 ResearchInputBuilder plus ForwardReturn / Modeling Panel
+  materialization.
+
+## 2026-08-11 V9-P4C3 ResearchInputBuilder 1.0
+
+- Added immutable, serializable `ResearchInputPlan` and strict
+  `ForwardReturnSpec` contracts. The planner composes point-in-time Universe,
+  factor-owned warmup, adjusted-price, forward-label horizon, and trade-calendar
+  requirements without conflating different as-of cutoffs.
+- Added a CURATED-only `ResearchInputBuilder` that resolves every formation's
+  exact Universe snapshot, constructs the existing wide factor input and
+  adjusted-close price compatibility panels, and reuses the existing Factor
+  Research, Forward Return, Modeling Panel, and ML Dataset validators.
+- The existing forward-return formula remains exactly
+  `exit_price / entry_price - 1`. Trading-period entry/exit dates come from the
+  canonical open calendar. Research Backtest remains on provider
+  `pct_chg / 100`; no accounting or Artifact schema changed.
+- Added a label availability sidecar and `TrainingLabelAvailabilityGuard`.
+  Labels become trainable only at `exit_trade_date`, and adversarial tests prove
+  future-realized labels are excluded at an earlier cutoff.
+- Repository audit proved historical `score_panel.parquet` is the Factor
+  Research formation/universe key input. Builder therefore writes exactly
+  `trade_date, ts_code` and never fabricates predictions, scores, ranks, or
+  signals.
+- Added source/config/calculator-aware content identities, exact manifest/hash
+  validation, safe reuse without factor recomputation, staged Parquet reread,
+  and atomic directory publication. Failed builds publish no partial identity
+  and leave an older valid materialization intact.
+- Daily and monthly end-to-end, cutoff, future-perturbation, source-invalidation,
+  atomicity, missing-observation, and real P4B-to-P4C3 integration tests passed:
+  `8 passed in 11.10s`. Repeated P4B preparation made zero provider calls.
+- Focused P4B/P4C1/P4C2/P4C3 plus Modeling, Forward Return, ML, Signal,
+  Holdings, Research Backtest, Portfolio, Risk, Optimizer, and historical-return
+  regression passed: `1545 passed, 2 skipped, 2 warnings in 118.88s`.
+- In-memory compile covered 197 production Python files. Static provider/RAW,
+  latest/mtime/glob/fuzzy, generic-fill, fake-score, protected-quant,
+  dependency, formatting, and Git hygiene checks passed.
+- The single final full-suite invocation passed:
+  `3153 passed, 4 skipped, 11 warnings in 268.11s`, exactly +8 passes with
+  unchanged skips/warnings and no new xfail versus the frozen P4C2 baseline.
+- No dependency, `.env`, commit, staging, remote Git, push, fetch, pull, merge,
+  rebase, reset, cherry-pick, or tag operation was performed. Next: P4D
+  Workbench First-Run Integration.
+
+## 2026-08-11 V9-P4D Workbench First-Run Integration
+
+- Replaced the competing native-pages/custom/legacy routing surfaces with one
+  explicit `st.Page` / `st.navigation` entry registering exactly Overview, New
+  Run, Results, Runs, and Data. All visible legacy dashboard compatibility
+  controls were removed; every direct route renders a substantive state.
+- Added strict centralized `zh-CN`/`en` catalogs with equal key sets, visible
+  missing-key markers, Chinese default, and session-persistent language state.
+- Added session-memory password credential handling with session > environment
+  > none resolution, provider-boundary reveal, typed provider error classes,
+  and no secret persistence or display.
+- New Run now owns canonical `UniverseSpec` and `ResearchFrequency` controls,
+  local-only readiness preview, missing-only P4B preparation, and automatic
+  P4C3 materialization. The five prepared Parquet paths are internal bindings,
+  not user inputs.
+- The thin `FirstRunOrchestrator` binds exact generated files into the existing
+  Factor Research/Modeling contracts and runs the unchanged ML, Signal,
+  Holdings, Portfolio, Risk, and Research Backtest stages. `score_panel`
+  remains the exact formation/universe key schedule.
+- Research planning includes the configured walk-forward training, validation,
+  embargo, and forward-label maturity history, preserving the existing
+  no-lookahead guard while enabling a genuine first run.
+- Empty-local CUSTOM/DAILY, INDEX/MONTHLY, and ALL_A_SHARES flows use offline
+  TuShare-shaped providers and complete through exact artifact-backed Results.
+  The identical CUSTOM rerun requires zero provider calls; INDEX fetches only
+  its selected scope and ALL_A_SHARES requests no `index_weight`.
+- Data and Overview are read-only and do not fetch or mutate canonical state on
+  render. Neutralization continues to fail closed until canonical point-in-time
+  exposure materialization exists.
+
+## 2026-08-12 GUI UAT Consolidated Fix
+
+- Phase: GUI UAT Consolidated Fix for `UAT-000` through `UAT-021`; visual-only
+  `UAT-020` remains deferred and `v0.10.0` remains unpublished.
+- Exact failure evidence: runs `20260811_114943_research_workbench_hs300`,
+  `20260811_115619_research_workbench_hs300`, and
+  `20260811_134409_research_workbench_hs300` were created before failure with
+  no `run_info.json` or config snapshot, explaining the old Runs page's `N/A`
+  rows and missing stage/reason metadata.
+- The Coverage Ledger proved that the reported `daily_basic=330` and
+  `index_daily=331` counts were COMPLETE trading-day units, not remaining
+  misses. The blocking fetch event was `suspend_d / 2023-11-16`, failed with
+  `CanonicalDataError` because a legitimate zero-event/no-column provider
+  response was normalized before the registry's `allow_empty_complete` policy.
+- Fixed the empty-event ordering narrowly: only datasets explicitly allowing
+  empty completeness receive the canonical empty schema. All ordinary empty
+  data remains a strict error; ledger completion still follows validated
+  atomic canonical publication.
+- Added safe structured preparation failures covering missing/invalid token,
+  permission/points, rate limiting, network, empty response, data incomplete,
+  coverage validation, provider, and Pipeline failures. Dataset, range, stage,
+  blocking impact, attempted action, and recovery are persisted and localized;
+  provider text, traceback, scope JSON, and Token are excluded.
+- Added schema-versioned, atomic `ResearchTaskService` lifecycle records and a
+  single Windows-compatible background worker. Submit returns immediately,
+  duplicate active configuration clicks reuse one task fingerprint, reruns do
+  not restart work, orphaned tasks become `PROCESS_INTERRUPTED`, and only a
+  succeeded exact run with validated result Artifacts enables View Results.
+- Added observation-only canonical runner callbacks for real Factor, Modeling,
+  ML, Signal, Portfolio/Holdings, and Research Backtest stage boundaries. No
+  quantitative calculation, Pipeline ordering, Artifact schema, adjusted-price
+  logic, or Research Backtest `pct_chg / 100` behavior changed.
+- Reworked Overview into a state-aware start page and Runs into user-facing
+  Research Tasks. Historical incomplete records remain explicitly historical;
+  missing metadata is never invented. Internal paths/config/schema/IDs are
+  collapsed under Technical Details.
+- Data Readiness is explicit, draft-fingerprint-bound, consolidated by dataset
+  and scope, localized, and displays missing counts with units, next action,
+  and research impact. COMPLETE units remain missing-only and identical reruns
+  make zero provider calls.
+- Centralized UI parameter/dataset/factor explanation metadata. Factor formulas
+  and fields were audited against the registry and implementations. Annual
+  risk-free rate is entered as `%/year` and converted once at the UI boundary;
+  initial NAV remains dimensionless.
+- Performance: the deterministic synchronous first-run workload measured
+  `198.56s`; background submit returns in `<0.5s`. Combined five-route AppTest
+  rendering measured `2.42s`. Readiness no longer replans on every widget rerun.
+- Verification: targeted GUI/Run/Data/i18n `85 passed`; data-root-cause
+  regression `58 passed`; extended Workbench/Data/Pipeline/ResearchInput
+  regression `162 passed in 669.71s`; heavy first-run/retry/offline exact-run
+  E2E `1 passed in 204.67s`; GUI exact-run E2E `41 passed in 16.93s`.
+- Final full pytest with the required interpreter:
+  `3172 passed, 4 skipped, 11 warnings, 0 failed in 914.29s`. No skip or xfail
+  was added. UAT-000 through UAT-019 and UAT-021 are fixed in automated
+  coverage; real-account TuShare error copy and subjective responsiveness still
+  require user manual UAT.
+- Token boundary: the secret exists only in Streamlit/session or worker memory
+  and provider calls. It is absent from task JSON, Pipeline config, Artifacts,
+  SQLite, logs, exception messages, Git, and CLI arguments.
+
+## 2026-08-12 Windows One-Click Launcher
+
+- `QuantResearchWorkbench.exe` is the local Windows one-click launcher. Double-
+  click it to start `app\streamlit_app.py` with the project Python environment
+  and open `http://127.0.0.1:8501` in the default browser.
+- The launcher preserves the existing Python/Streamlit path: it runs
+  `python.exe -m streamlit run app\streamlit_app.py`. It first checks
+  `.venv\Scripts\python.exe`, then the workstation environment at
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe`.
+- Repeated clicks reuse a healthy server on port 8501 instead of starting a
+  duplicate. Startup runs without a console window; launch failures display a
+  Windows error dialog and `run_app.ps1` remains available for console details.
+- Rebuild from the repository root with:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows_launcher.ps1`.
+- A non-browser startup verification is available as
+  `.\QuantResearchWorkbench.exe --smoke-test`; it starts the real Streamlit
+  entry on the isolated test port 18501, waits for the health endpoint, stops
+  its child process, and returns a nonzero exit code on failure.
+
+## 2026-08-12 GUI UAT Follow-up: UAT-009 Reopened, UAT-022--UAT-025
+
+- Real evidence: tasks `acb63909-e8c0-44e9-8b11-dda9da834c43` and its retry
+  persisted `download / suspend_d / 2023-11-16 / 0 of 331` with no run ID.
+  Ledger history showed an original `CanonicalDataError`, then two roughly
+  30-second `ProviderFetchError` events. The worker and tests both use
+  `WorkbenchRuntime.preparation()` and the registry `DataPreparationService`;
+  there is no alternate worker download path.
+- TuShare's explicit zero-row/no-column `suspend_d` DataFrame is now normalized
+  at the real adapter boundary before strict completeness. Only the registry
+  event endpoint permits zero rows; it records COMPLETE with a canonical empty
+  hash and is missing-only/offline on rerun. Non-empty missing fields remain a
+  Provider response-structure failure, and local store/Ledger failures remain
+  coverage validation failures.
+- Central `page_path` keys include `runs`; submit navigates to Research Tasks
+  without `KeyError`. Atomic fingerprinted submit protects repeated clicks,
+  reruns, and refreshes from duplicate active tasks.
+- Central display metadata localizes models, all model parameters and choices,
+  factors, composition, signal, portfolio/risk methods, status/stage/errors,
+  result settings, and table columns. Canonical values remain unchanged.
+  Chinese ordinary-user pages omit raw config JSON, absolute paths, snake_case,
+  traceback, Provider repr, and sensitive parameters; English remains complete.
+- Shared `Asia/Shanghai` validation caps both date widgets at business today and
+  requires end strictly after start. Invalid dates disable Run and are rejected
+  by `ResearchTaskService.submit()` before task storage or worker creation.
+- Terminal-task clearing deletes only the selected validated direct-child task
+  JSON after confirmation. Active tasks cannot be cleared. Successful exact
+  runs and Artifacts are preserved as historical results. Clearing is
+  idempotent and never touches shared market data, Coverage Ledger, Token,
+  research inputs, other tasks, or arbitrary user `data/` content.
+- Historical run-only entries use a validated, idempotent hide marker under the
+  task store. Their legacy run directories and any result files are retained;
+  refresh does not re-list the hidden record.
+- Targeted results: follow-up service/AppTest `21 passed`; Provider/Data `29
+  passed`; consolidated GUI UAT `9 passed`; Workbench/first-run `33 passed`;
+  extended Workbench/config/Pipeline `82 passed`; launcher smoke exit `0` with
+  isolated port released. Full pytest was not run.
+- Manual rerun remains required with the user's real TuShare account to prove
+  `2023-11-16` becomes COMPLETE and progress advances, and to review natural
+  Chinese copy, Research Tasks navigation, and clear-confirm UX at the user's
+  display scale. Existing real task records were not modified or deleted.
+
+## 2026-08-13 GUI UAT Second Follow-up: UAT-009 and UAT-026--UAT-029
+
+- UAT-009 is reopened and remains unresolved in real-provider UAT. Read-only
+  inspection found no `suspend_d / 2023-11-16` COMPLETE record, canonical
+  partition, zero-row file, manifest, or empty marker. Five persisted fetch
+  events failed, so there is no evidence from which to manufacture an
+  empty-day completion. The same date blocked tasks
+  `27840ee4-d685-4a69-a50a-d011b597906d` and
+  `73b16e6a-593d-4974-a86f-69e600125066`.
+- Empty event completeness now requires a schema- and scope-bound JSON marker
+  under the canonical root. It is staged, fsynced, and atomically replaced
+  before the Coverage Ledger transaction records COMPLETE. Planning, calendar
+  resolution, first-run, and retry all use the same verifier: row count,
+  schema version, content hash, readable canonical data, and an exact marker
+  for a zero-row event must agree. A legacy COMPLETE record without proof is
+  idempotently replanned as one missing unit; non-empty malformed data still
+  fails strictly. No global data or ledger reset is used.
+- The repeated `2023-11-16` requirement is valid warm-up. A research start of
+  `2024-01-01` resolves its first open formation to `2024-01-02`; the default
+  ML split needs 20 training + 5 validation + 1 embargo + 1 entry-lag + 5
+  holding + 1 current period = 33 trading periods. The inclusive 33-period
+  window starts on `2023-11-16`; this is not a global missing-range leak.
+- Task `c51ac40b-0189-4bde-bed6-c58986be671b` failed during planning because
+  the dividend-yield factor required provider-native `dv_ttm`, while the
+  `daily_basic` registry/client contract exposed only `dv_ratio`. Schema 1.1
+  now requests and stores numeric `dv_ttm`. Existing schema 1.0 units remain
+  reusable for requirements that do not need `dv_ttm`; dividend requirements
+  target only the affected units for upgrade.
+- Task `c84081fc-701c-43e9-85f3-24d25690e3c2` was a genuine read timeout on
+  `daily_basic / 2026-01-14` after prior dates had completed. Its displayed
+  `0/2345` was a task-progress publication defect, not loss of the data-layer
+  checkpoint. The progress denominator is now every actual required coverage
+  unit for the task; the numerator is every unit whose local proof verifies,
+  including reusable checkpoints, plus each newly persisted unit. Updates are
+  atomically stored after validation and never decrease on refresh or failure.
+- UAT-026 uses UTC for persistence and converts presentation to
+  `Asia/Shanghai`: Chinese `YYYY-MM-DD HH:MM:SS`, English the same with `CST`;
+  microseconds, `T`, and raw offsets are hidden. Durations are natural Chinese
+  (`11 分 0 秒`) or English (`11 min 0 s`). Chinese task diagnostics translate
+  data-provider and coverage-record terminology and do not render raw internal
+  status/action strings.
+- UAT-027 uses Streamlit 1.58's local `st.fragment(run_every="3s")` only while
+  a task is active. It rereads atomic JSON without submitting a task or
+  starting a worker. On succeeded, failed, or cancelled state it performs one
+  app-scope rerun and the fragment is no longer installed; button and
+  confirmation session keys remain stable.
+- UAT-029 retries only transient connection/read timeout, DNS, proxy, socket,
+  and network failures, at most three total attempts. Delays before attempts 2
+  and 3 are 0.5 and 1.0 seconds with a 0.9--1.1 jitter multiplier. Token,
+  authentication, permission/points, rate limit/frequency, schema, and response
+  structure failures are not retried. Retry replans verified completeness and
+  resumes at the first missing unit without concurrent duplicate requests.
+- Real service/worker validation created task
+  `21b2d569-7109-4317-b0fe-79ce538b2f99`. It reused 229 of 264 verified units,
+  attempted only `stock_basic / 2024-01-30` three times, and after 170.10s
+  persisted `NETWORK_ERROR / READ_TIMEOUT`, attempts `3`, progress `229/264`,
+  no `run_id`, and no result readiness. The workstation's normal network route
+  repeatedly timed out at the external TuShare boundary. Therefore UAT-028's
+  real-success gate is not met: no real task produced a readable exact run and
+  Artifact in this round. UAT-026, UAT-027, and UAT-029 are implemented and
+  covered; UAT-009 and UAT-028 remain blocked pending provider availability.
+- Verification: second-follow-up plus GUI/Data/Research Input integration
+  `85 passed in 21.78s`; two heavy offline service-to-exact-run tests `2 passed
+  in 398.91s`. No skip/xfail was added. Existing user task records, `data/`,
+  `-m`, caches, and build output were not deleted or mass-rewritten.
+
+## 2026-08-13 TuShare dual-provider audit
+
+- Official document URLs and unknown-rule policy are recorded in
+  `docs/24_tushare_provider_contracts.md`. The official site timed out from this
+  development network. Obsolete suspension `doc_id=31` does not retire current
+  `suspend_d` at `doc_id=214`.
+- Real wrappers are `stock_basic`, `trade_cal`, `index_weight`, `monthly`,
+  `daily`, `index_daily`, `suspend_d`, `daily_basic`, and `adj_factor`;
+  `stk_limit` is capability-only. There are no `pro.query` calls.
+- Providers are `tushare_official` and `tushare_proxy`, with no failover or
+  mixing. Proxy uses fixed HTTPS `https://tuaremax.top` and isolated storage.
+  Ledger, canonical manifest, empty marker, task, exact run and provenance carry
+  provider identity.
+- Runtime TuShare 1.4.29 is pinned. Private SDK fields exist only in the proxy
+  adapter. A true 1.4.24 runtime probe remains UAT.
+- Tokens are masked, session/process-only and provider-specific; only official
+  may resolve the environment credential.
+- `STANDARD_ROBUST` freezes unavailable trades and verified holding value;
+  `STRICT_EVENT` requires `suspend_d`. More than 20% unexplained daily missing
+  blocks standard mode.
+- Task schema 1.1 migrates 1.0 in memory and formally contains diagnostics.
+  UAT-030 is implemented but requires EXE recheck. UAT-009 and UAT-028 stay open.
+- Targeted results: 70 provider/backtest tests and 177 artifact/config tests
+  passed. A broader GUI group reached 34 passes before a long AppTest was
+  interrupted and is not claimed as a completed pass.
+
+## 2026-08-14 UAT-032 stock_basic snapshot coverage
+
+- Root cause: the GUI label `证券基础信息` correctly mapped to `stock_basic`, and
+  the raw wrapper did not pass dates, but Dataset Registry coverage was
+  `REFERENCE_EFFECTIVE_THROUGH`. Coverage Planner therefore used the research
+  end date as a real unit; canonical paths, Ledger lookups, progress, and
+  failure ranges repeated that fictitious date. The fetch strategy also omitted
+  the official `G` lifecycle status.
+- `stock_basic` is now Provider Contract 1.1 `GLOBAL_SNAPSHOT`, canonical schema
+  1.2, and fixed Ledger/partition unit `GLOBAL`. One task has at most one such
+  dependency regardless of research interval or overlapping required fields.
+  The provider adapter makes four date-free `L/D/P/G` calls and atomically
+  publishes a non-empty, `ts_code`-deduplicated whole-market snapshot.
+- Historical security eligibility is exactly `list_date <= T < delist_date`;
+  null `delist_date` has no known upper boundary. Current `list_status`, name,
+  and industry are not historical PIT factor fields. Quotes, `trade_cal`, and
+  the existing suspension policy still decide final tradability.
+- Official/proxy Token, raw, canonical, manifest, Ledger, and provenance remain
+  isolated with no failover or mutual repair. Snapshot manifests/fetch events
+  contain token-free actual parameters, status set, retrieval time,
+  schema/contract versions, counts, hash, storage references, SDK version, and
+  quality result. `COMPLETE` is transactional and last; a whole-market empty
+  result fails data quality and never creates an empty marker.
+- Application freshness is explicitly separate from TuShare rules: a verified
+  snapshot is reused only on its UTC retrieval day for the selected provider.
+  Old date-labelled schema 1.0/1.1 stock units are retained but ignored; retry
+  requests one new `GLOBAL` unit, reuses other verified units, recalculates the
+  denominator, and repeated clicks reuse an active/successful migrated retry.
+- Minimal commands actually run:
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_stock_basic_snapshot_uat032.py`
+  (`5 passed in 2.85s`),
+  the same command for `test_data_layer_2_contracts.py`,
+  `test_data_layer_2_coverage.py`, `test_data_layer_2_preparation.py`,
+  `test_tushare_client.py`, `test_universe_p4b_integration.py`, and
+  `test_provider_dual_contracts.py`, plus `test_universe_1_0.py`
+  (`63 passed in 15.61s`), and the same
+  command for `test_research_input_p4b_integration.py`
+  (`1 passed in 10.28s`). A 20-file Python 3.12 in-memory `compile()` check also
+  passed. Earlier attempts through the PATH pytest launcher were Python 3.8;
+  their results are not used as final verification.
+- No real official/proxy call, real Token, real task creation/retry, EXE,
+  Streamlit/AppTest, complete pytest, or 398-second exact-run test was run.
+  Manual packaged-app UAT is still required. UAT-009 and UAT-028 remain open;
+  offline checks do not close them.
+
+## 2026-08-14 UAT-032 reopened: coverage transaction diagnostics
+
+- Commit `ec26791cabc4eb990d8217e008b8cbce861f589c` fixed the fictitious dated
+  planner semantics but did not pass real-provider UAT. Read-only investigation
+  covered tasks `e463823c-96ca-408e-ac61-2f16f8db738d` (432/433) and
+  `4b311baa-7867-4330-b87b-e64716bf59a7` (491/492). Both are distinct retry
+  children, use task schema 1.1 and provider `tushare_proxy`, and have no run ID.
+- Their proxy ledger events are `306f9953629044d59510b2297fa54af8`
+  and `5ee09f43065246c8bb97cf51d84f4a40`. Planner and fetch agree on dataset
+  `stock_basic`, scope `CN_STOCK_REFERENCE`, unit `GLOBAL`, endpoint
+  `stock_basic`, schema 1.2, contract 1.1, and L/D/P/G token-free requests.
+  No proxy stock_basic coverage row, raw, canonical, manifest, empty marker, or
+  temp file exists. Official-provider dated stock data is unrelated and isolated.
+- The first demonstrated deviation is the merged-response quality gate before
+  raw staging. Control flow plus persisted `DataUnavailableError` excludes a
+  provider-call/normalization exception; raw absence excludes the later empty-
+  canonical branch. `stock_basic` has only one applicable quality category,
+  `INVALID_SECURITY_CODE`. The old events do not retain per-status row counts,
+  fields, offending values, or call timestamps, so this round does not claim a
+  complete payload root cause and does not change provider or quality behavior.
+- Added diagnostic-only `coverage_transitions` rows for each normalized unit:
+  PLANNED, fetch attempt and provider subcall start/success/failure, raw staged,
+  canonical temp validated, canonical/manifest committed, ledger committed, and
+  readback verified. Metadata is limited to provider/endpoint/identity, attempt,
+  row/field/schema data, safe error code, exception and direct cause types, safe
+  summary, and artifact reference. Token, headers, sensitive URL parameters, and
+  arbitrary provider exception text are never persisted.
+- Task schema 1.2 migrates 1.0/1.1 only in memory and copies the latest safe
+  transition into GUI technical details. Historical real task JSON was not
+  rewritten. Future manifests explicitly include the same normalized coverage
+  identities as provenance; legacy manifests/data remain untouched.
+- A registry-driven offline audit covered all eight registered datasets and five
+  registered granularities. Planner, fetch task, partition path, transition/
+  ledger, manifest provenance, and readback use the same dataset/scope/unit
+  identity. No additional functional identity split was found; the missing
+  explicit identity in old manifests was an audit-provenance gap only.
+- Exact node-ID commands: the three nodes in
+  `tests/test_coverage_transaction_diagnostics.py` (`10 passed in 4.40s`), and
+  `test_four_status_snapshot_has_no_date_calls_and_persists_provenance`,
+  `test_task_1_0_read_migration_is_in_memory_and_adds_formal_diagnostics`, and
+  `test_task_record_is_atomic_json_and_never_persists_token`
+  (`3 passed in 5.99s`). A one-time in-memory `compile()` check of all ten changed
+  Python files also passed without writing bytecode.
+- No real provider call, Token, real task retry/mutation, EXE, Streamlit/AppTest,
+  complete pytest, test directory, or long exact-run group was executed. UAT-032
+  remains open; the user should manually retry exactly one failed task once.
+  UAT-009 and UAT-028 remain open.
+
+## 2026-08-14 UAT-032 invalid-identifier evidence follow-up
+
+- The requested task ID `5e00e5c4-68aa-4c2b-b862-b7583a6aef4a` is not a
+  persisted task. Exact read-only lookup found the matching record under
+  `5e00e5c4-68aa-4c2b-b862-b7503a6a0f4a`; its transaction ID is
+  `2fcbd31dc3864cd89c7766793eb1f139` and its recorded provider is
+  `tushare_proxy`. No task, ledger, raw, canonical, or artifact data was changed.
+- The transaction recorded L=5542, D=340, P=0, and G=0 rows, then a 5882-row
+  merged result with all 11 registered fields. It stopped before raw staging at
+  `FETCH_FAILED / QUALITY_VALIDATION / QUALITY_VALIDATION_FAILED`, with inner
+  `DataUnavailableError`, no direct cause type, and safe category
+  `INVALID_SECURITY_CODE`.
+- The existing record contains no offending value, invalid count, lifecycle
+  status, market/exchange, raw/normalized pair, rule ID, or direct cause. The
+  complete payload root cause is therefore still unknown; no identifier regex,
+  adapter, Universe filter, or error classification was changed.
+- Future stock-basic fetches now persist bounded public identifier evidence:
+  total invalid count, reason count, at most 20 stable/deduplicated samples,
+  L/D/P/G counts, pre/post-merge counts, and dedup count. Samples contain only
+  `ts_code`, `symbol`, `list_status`, `market`, `exchange`, raw/normalized
+  `ts_code`, and rule ID. Whitelisting excludes token, headers, provider payload,
+  and unrelated fields; the same safe summary is copied to task technical details.
+- The quality gate validates normalized, post-L/D/P/G-merge `ts_code` only with
+  rule ID `TS_CODE_6_DIGIT_CN_EXCHANGE_SUFFIX` and pattern
+  `^[0-9]{6}\.(?:SH|SZ|BJ)$`. The equivalent Universe contract is duplicated in
+  `src/universe/contracts.py`; `app/services/stock_query_service.py` separately
+  recognizes SH/SZ but not BJ. Neither was changed without an observed offender.
+- `FETCH_FAILED` is the transaction's intentional generic terminal state while
+  `operation=QUALITY_VALIDATION` identifies the stop. The user-level
+  `COVERAGE_VALIDATION` wording remains explained by the existing `origin=local`
+  mapping; changing that classification is deferred until the actual invalid
+  sample establishes root cause.
+- Four exact offline nodes passed. No provider call, credential, task retry,
+  EXE, Streamlit/AppTest, complete pytest, test directory, large regression
+  group, or exact run was executed. UAT-032, UAT-009, and UAT-028 remain open.
+  The user must manually retry once to populate the new evidence.
+
+## 2026-08-14 UAT-032 legacy provider-reference identifiers
+
+- Real retry task `8d75acc7-30be-4f2d-a6ce-7f013adf956f`, transaction
+  `4a9b7ca2f81047b19483259475900c3c`, confirmed two non-canonical D references:
+  `T600018.SH` and `TS0018.SH`. The bounded task evidence did not retain names or
+  lifecycle dates. Read-only legacy official-provider cache independently
+  contains `T600018.SH / T600018 / 上港集箱(退) / D / SSE / 2000-07-19 /
+  2006-10-20`; `TS0018.SH` is absent from that cache. Neither fact proves a
+  mapping to a six-digit canonical tradable code.
+- The complete task-dependent interval is `2022-11-17` through `2023-02-08`,
+  including 33 ML/history periods, the research formations, one entry-lag
+  period, and five holding periods. The evidenced T reference is outside this
+  interval. The TS dates remain unknown until a new response is quarantined.
+- Dataset Registry now declares identifier contracts. `stock_basic` is
+  `PROVIDER_REFERENCE`; daily, daily_basic, adj_factor, and suspend_d remain
+  `CANONICAL_TRADABLE`; trade_cal, index_daily, and index_weight do not apply the
+  stock ts_code contract at this generic gate. The downstream canonical security
+  regex remains exactly `^[0-9]{6}\.(?:SH|SZ|BJ)$`.
+- Provider-reference classification is centralized as `CANONICAL_TRADABLE`,
+  `LEGACY_REFERENCE`, or `INVALID`. A non-canonical row is legacy-only when it
+  is D, has valid ordered list/delist dates, and its validity interval does not
+  overlap the complete required interval. It is retained in the provider
+  reference snapshot with exclusion evidence and never converted. An overlapping
+  legacy reference blocks with `UNSUPPORTED_LEGACY_SECURITY_IDENTIFIER`; L/P/G
+  or insufficient lifecycle proof continues to block as invalid.
+- No D rows are blanket-deleted. Canonical numeric D rows remain available for
+  `list_date <= T < delist_date`, preserving delisted history and preventing
+  survivorship bias. Universe reads reclassify cached GLOBAL reference rows for
+  the current complete interval, so an old safe exclusion cannot be reused for
+  a later overlapping task. Universe snapshots continue to contain only strict
+  canonical tradable identifiers.
+- The normalized provider frame is now atomically staged before quality under
+  `RAW_STAGED / UNVERIFIED_QUARANTINE`. This raw path is audit-only: it creates
+  neither canonical data nor Ledger COMPLETE and is not consulted by reuse.
+  Quality success alone permits canonical publication; failed quarantine remains
+  attached to the failed fetch event. It contains registered data fields only,
+  never Token, headers, or request credentials.
+- Provider quality failures now use origin `provider_quality`, stage
+  `quality_validation`, and user category `PROVIDER_DATA_QUALITY` or the precise
+  unsupported-legacy category. After quality passes, canonical/manifest/ledger/
+  readback failures return to local Coverage classification.
+- Seven distinct exact offline pytest nodes passed; four affected nodes were
+  rerun after tightening origin boundaries and also passed. No real call, Token,
+  task retry/create, EXE, Streamlit/AppTest, whole file/directory, full suite, or
+  exact run was executed. UAT-032, UAT-009, and UAT-028 remain open pending one
+  real manual retry.
+
+## 2026-08-14 UAT-033 full research lifecycle
+
+UAT-033 completed one real, cache-backed TuShare proxy lifecycle without
+synthetic data, provider fallback, or result fabrication. Historical task
+`8761b3a7-46c8-49c6-96d7-3eb21e553a08` and all existing data, tasks, runs,
+quarantine evidence, manifests, Ledger rows, SQLite history, and credentials
+were preserved.
+
+### Root-cause chain
+
+1. The original task completed canonical input, factor, modeling, ElasticNet,
+   and signal stages. Its exact partial run is
+   `20260814_162402_research_workbench_custom_600000_sh_000001_sz_600001_sh_000002_sz`.
+   The first post-signal exception is
+   `HoldingsDataError: insufficient universe on trade_date 2023-01-11:
+   requested top_n=10, available_count=3`. The configured custom universe had
+   four codes, but point-in-time eligibility supplied three securities per
+   formation. Signal was valid and non-empty; Holdings produced no Artifact.
+2. The task configuration was contradictory under
+   `insufficient_universe_policy=error`. A creation-time feasibility gate now
+   rejects Custom Universe `Top N` greater than the configured security count
+   and states requested/current counts and safe remedies. The original failed
+   record remains unchanged. UAT clones used `top_n=3`; no statistical,
+   embargo, holding, entry-lag, or anti-leakage rule was relaxed.
+3. Clone `49bd6db5-1d44-43b3-92f7-db4289aabc0c` then reached Research Backtest
+   with a valid 30-row Holdings Artifact but failed during Artifact publication.
+   `_holdings_match` evaluated a pandas `MultiIndex` as a boolean and raised
+   `ValueError: The truth value of a MultiIndex is ambiguous`. The validator
+   now checks `len(missing)` explicitly.
+4. A completed retry exposed misleading run metadata: an explicitly empty
+   legacy `required_datasets=[]` was treated as the default dataset set by
+   `datasets or DEFAULT_REQUIRED_DATASETS`. `DataManager.check_cache` now
+   distinguishes `None` from `[]`; complete canonical materialization records
+   `cache_status=ready`, an empty missing-range map, and run status `succeeded`.
+5. The task UI previously treated any partial `run_id` as an accurate result.
+   It now separates “Run ID (may be partial)” from “Validated complete result
+   available”, using the task's complete success gate. Pipeline failures persist
+   exact stage, safe exception/cause, bounded input/output shapes, retryability,
+   and retry start. Token-like backend messages remain redacted.
+6. A real browser check found that results opened correctly but full-page
+   refresh discarded the session-only selected run. Result navigation now puts
+   the validated exact `run_id` in the Results query parameters, and Results
+   restores session state from it. Refresh and full application restart retain
+   the exact run.
+
+### Original task timeline
+
+| Stage | Original evidence | Output / first stop | Downstream read |
+| --- | --- | --- | --- |
+| RESEARCH_INPUT | complete; schema `research_input_1.0`; factor input 201x5, 2022-10-21..2023-01-31; 144 universe keys; 162 price rows; 48 formations; 3 eligible securities | 0 duplicate keys, 0 inf; heterogeneous source input contains 57 field-level NaNs | factor/modeling inputs read |
+| FACTOR_COMPUTATION | complete | 144x4, 2022-11-17..2023-01-31, 3 securities, 3 warm-up NaNs, 0 inf/duplicates | modeling hash-equivalent input read |
+| MODELING_PANEL | complete; schema 1.0 | 144x9, 48 dates, 3 securities, 3 feature NaNs, finite label, 0 duplicate keys | ML read |
+| TRAIN_VALIDATION | complete; ElasticNet | 30x7 OOS predictions, 2023-01-11..2023-01-31, 2 folds, finite validation metrics | Signal read |
+| SIGNAL | complete; schema 1.0 | 30x4, 10 dates, 3 securities, finite and unique | Holdings attempted read |
+| HOLDINGS | started, not complete | first exception: requested 10, available 3 on 2023-01-11; no Artifact | no |
+| PORTFOLIO_CONSTRUCTION | entered as `portfolio`, aborted before output | no weights | no |
+| RISK_MODEL | not required by equal-weight strategy | not started / not applicable | no |
+| BACKTEST | not started | none | no |
+| METRICS | not started | none | no |
+| ARTIFACT_WRITE | only factor/modeling/ML/signal partial Artifacts existed | no Holdings/Backtest/run_info | exact-result validation did not run |
+| RUN_PERSISTENCE | partial run directory and non-empty partial run ID existed | no successful run_info | task stayed failed/result_ready false |
+| RESULT_VALIDATION | not completed | no usable complete result | GUI must not offer Results |
+
+### Final real success and data quality
+
+The final evidence task is `432b281e-cb94-406a-9afd-eb04213b5d11`, task schema
+1.3, status `succeeded`, progress 433/433, with exact run
+`20260814_172620_uat_full_lifecycle_custom_600000_sh_000001_sz_600001_sh_000002_sz`.
+It used provider `tushare_proxy`, the existing verified canonical cache, the two
+real factors `amihud_20d` and `bp`, two-fold rolling ElasticNet, equal weights,
+`top_n=3`, 10 bps cost, and `STANDARD_ROBUST`. Provider calls were skipped only
+because every required Ledger/canonical/readback unit was COMPLETE.
+
+Fresh read-only preview proved all adj_factor, daily, daily_basic, index_daily,
+stock_basic, and trade_cal requirement rows READY with zero missing units and a
+reusable materialization. Full context is 2022-10-21 through 2023-02-08; the 48
+formation dates are 2022-11-17 through 2023-01-31. The default history contract
+remains 33 inclusive periods: 20 train + 5 validation + 1 embargo + 1 entry
+lag plus 5 holding + 1 current. First OOS signal is 2023-01-11; first trade is
+2023-01-12; 10 rebalances are available. The configured four-code Custom
+Universe yielded three PIT-eligible securities without survivorship filtering
+or legacy-reference mapping.
+
+Final stage evidence:
+
+- factor output: 144x4, 48 dates, 3 securities; both factor columns non-empty,
+  non-constant and finite after train-fitted imputation; three Amihud warm-up
+  NaNs are explicit, with no inf or duplicate `(trade_date, ts_code)` keys;
+- modeling panel: 144x9; labels include explicit entry/exit dates and prices;
+- ElasticNet: two folds, 60 train and 15 validation rows per fold, validation
+  never used for fit, random seed 42, 30 OOS predictions on 10 dates; RMSE
+  0.039318985660242584, MAE 0.034880684544242556, R2
+  -1.745448619941755 (finite negative performance is valid);
+- signals: 30x4, finite, unique, descending ranks, 2023-01-11..2023-01-31;
+- Holdings/Portfolio: 30x5, 10 dates, 30 non-zero weights, three securities per
+  date, weight sums exactly 1.0; equal weight requires no separate risk model;
+- Backtest: 10x9 daily rows, 2023-01-12..2023-02-01; 30x10 rebalance rows,
+  effective 2023-01-12..2023-02-01; 30 non-zero weight changes;
+- Artifact schemas: research_input 1.0, factor 1, modeling 1.0, ML 1.0, signal
+  1.0, holdings 1.0, Research Backtest 1.0. All native validators and
+  ResultService passed; six materialization hashes and three Modeling hashes
+  matched, and Factor's native hash validator passed. Provenance records proxy
+  endpoint/schema identities, PIT rules, legacy exclusions, and
+  STANDARD_ROBUST degradation explicitly.
+
+Canonical performance is intentionally not optimized for a positive result:
+net total return -0.0034389239463451515, annualized return
+-0.08314893559250258, annualized volatility 0.0926549717818462, maximum
+drawdown -0.016401082062576844, Sharpe -0.8951784799554398, average turnover
+0.10264132033345119, total turnover 1.026413203334512, 10 observations and 10
+rebalances. Total traded notional is 1.0528264066690238 and cost is
+0.0010528264066690237.
+
+### Persistence, GUI, tests, EXE, and security
+
+- ResultService loaded the exact run in fresh Python processes. AppTest loaded
+  and refreshed it with zero exceptions, five result tabs, 13 visible metrics,
+  and five tables. The task page offered Results for the successful task and no
+  Results action for the original failed task.
+- A real local Streamlit browser journey opened the successful task, navigated
+  to `/results?run_id=<exact>`, showed the same run and metrics after browser
+  reload, then showed them again after Streamlit was fully stopped and restarted.
+  No raw translation key, traceback, or Token value was visible.
+- `QuantResearchWorkbench.exe --smoke-test` returned process exit 0 and released
+  its isolated port. The underlying packaged-app route was also exercised by
+  the real Streamlit/browser restart journey.
+- Focused regression included 6 Results/navigation nodes, 41 Workbench E2E
+  nodes, and the 25 long transaction nodes (`25 passed in 954.14s`). The first
+  complete suite found two stale/static test expectations; their exact nodes
+  passed after correction. Final exact command
+  `E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q`
+  completed `3252 passed, 4 skipped, 13 warnings in 1304.77s`.
+- Credential scan emitted counts only. Current diff, five UAT task JSON records,
+  and 33,907 SQLite text values each had zero credential-shaped or environment-
+  secret matches; task JSON had zero non-empty sensitive-key values. Across 375
+  tracked source/test/doc files, eight literal-pattern fixtures were counted
+  (three explicit placeholders, five other test literals, one high-entropy test
+  fixture), with zero values equal to an environment secret and zero in this
+  diff. No credential contents were printed.
+
+Local code commits before this documentation record are `22ac2ac` (completion
+gates) and `7950dde` (diagnostics and exact result persistence). No task, run,
+Artifact, `data/`, `-m`, Token, SQLite database, or `.env` was staged.
+
+UAT status: UAT-032 CLOSED (stock_basic canonical/Ledger/readback complete and
+research continued); UAT-028 CLOSED (real success, exact run, GUI open/refresh/
+restart persistence); UAT-033 CLOSED (full normative lifecycle); UAT-009 OPEN
+because the final run used `STANDARD_ROBUST`, not strict `suspend_d` evidence.
+
+Follow-up commands:
+
+```powershell
+E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest -q
+.\QuantResearchWorkbench.exe --smoke-test
+E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m streamlit run app/streamlit_app.py
+```

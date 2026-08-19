@@ -1,5 +1,30 @@
 # quant-factor-system
 
+## Research Workbench (v0.10.0)
+
+The Quant Research Workbench is the only default Streamlit UI. One explicit
+navigation registers **Overview**, **New Run**, **Results**, **Runs**, and
+**Data**; the legacy dashboard is not exposed. Results and run navigation use
+one exact canonical `run_id`, with no latest/mtime fallback.
+
+### First use
+
+1. Run `streamlit run app/streamlit_app.py` from the repository root.
+2. Keep the default Chinese UI or switch the single global selector to English.
+3. Optionally enter a TuShare token in the password field. It stays in session
+   memory; an existing environment token is the fallback and is never shown.
+4. In New Run, select CUSTOM, INDEX, or ALL_A_SHARES; DAILY or MONTHLY; then
+   configure factors, ML, selection, portfolio construction, and backtest.
+5. Review the local-only Data Readiness plan and run. Missing canonical units
+   are downloaded automatically, research inputs are materialized, and the
+   existing pipeline opens the exact successful run in Results.
+
+Complete local coverage requires no token, and an identical repeat makes zero
+provider calls. Prepared Parquet paths are no longer manual first-run inputs.
+The Data page remains read-only. See
+`docs/23_workbench_first_run_integration.md` for the complete contract; older
+dashboard descriptions below are historical and are not registered UI routes.
+
 A 股多因子选股、回测、单股研究与 Streamlit 可视化 App。
 
 ## 1. 项目简介
@@ -337,3 +362,50 @@ Artifact. Run the standard config-only CLI with
 `config/minimum_variance_pipeline.example.yaml` and see
 [Risk Model and Minimum Variance](docs/14_risk_model_optimizer.md) for the
 frozen covariance, dependency, optimization, and compatibility semantics.
+
+## V9 Research Workbench development
+
+The registry-driven Streamlit Research Workbench is under development for
+v0.10.0. P1 provides the five-page shell and canonical New Run execution
+foundation; Artifact-backed Results, Runs, and Data views remain P2 work.
+
+    streamlit run app/streamlit_app.py
+
+See [V9 Quant Research Workbench](docs/16_research_workbench.md) for the audited
+registries, exact run handoff, artifact contracts, and phase boundaries.
+
+### Data Layer 2.0 core
+
+The P4B core separates immutable-ish TuShare RAW responses from canonical,
+partitioned CURATED Parquet. Exact coverage truth lives in transactional SQLite
+at `data/metadata/catalog.sqlite`; legacy min/max metadata is compatibility-only.
+Ordinary preparation fetches only missing coverage units, never refreshes
+completed history, and uses instance-injected credentials. See
+[Data Layer 2.0](docs/19_data_layer_2_0.md).
+
+### Universe 1.0
+
+The first L2 Research Data contract resolves immutable point-in-time membership
+for CUSTOM, INDEX, and ALL_A_SHARES universes. Historical index snapshots never
+use current or future members, while custom and all-A-share membership applies
+explicit listing/delisting lifecycle boundaries. Eligibility and observation
+availability remain separate downstream concerns. See
+[Universe 1.0](docs/20_universe_1_0.md).
+
+### Adjusted Price and Factor Frequency
+
+P4C2 adds a canonical ResearchCalendar, typed trading-day/month/as-of history,
+factor-owned DAILY/MONTHLY metadata, and anchor-free research adjusted OHLC via
+exact `raw * adj_factor`. Research Backtest accounting remains on provider
+`pct_chg / 100`; frequency never implies global monthly resampling. See
+[Adjusted Price and Factor Frequency](docs/21_adjusted_price_factor_frequency.md).
+
+### Research Input Materialization
+
+P4C3 composes Data Layer 2.0, point-in-time Universe, ResearchCalendar, factor
+frequency metadata, and adjusted prices into content-addressed inputs for the
+existing Factor Research and Modeling contracts. It preserves the existing
+forward-return formula, records label realization in an availability sidecar,
+and reuses only hash-validated exact materializations. Data preparation and
+first-run GUI orchestration remain separate. See
+[ResearchInputBuilder 1.0](docs/22_research_input_builder.md).

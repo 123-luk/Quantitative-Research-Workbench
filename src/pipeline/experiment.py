@@ -47,6 +47,39 @@ class ExperimentManager:
         run_dir.mkdir(parents=False, exist_ok=False)
         return run_dir
 
+    def list_run_ids(self) -> tuple[str, ...]:
+        """Return valid direct-child run identities in stable lexical order."""
+        if not self.runs_root.exists():
+            return ()
+        if self.runs_root.is_symlink() or not self.runs_root.is_dir():
+            raise ValueError("runs root must be a regular directory.")
+        result: list[str] = []
+        for entry in self.runs_root.iterdir():
+            if (
+                entry.is_dir()
+                and not entry.is_symlink()
+                and _RUN_ID_RE.fullmatch(entry.name)
+            ):
+                result.append(entry.name)
+        return tuple(sorted(result))
+
+    def resolve_run_dir(self, run_id: str) -> Path:
+        """Resolve one exact existing direct-child run directory safely."""
+        if not isinstance(run_id, str) or not _RUN_ID_RE.fullmatch(run_id):
+            raise ValueError("run_id is not a valid canonical run identity.")
+        root = self.runs_root.resolve()
+        candidate = root / run_id
+        if candidate.is_symlink():
+            raise ValueError("run directory must not be a symbolic link.")
+        run_dir = candidate.resolve()
+        if run_dir.parent != root:
+            raise ValueError("run_id must resolve to a direct child of runs root.")
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Run not found: {run_id}")
+        if run_dir.is_symlink() or not run_dir.is_dir():
+            raise ValueError("run directory must be a regular directory.")
+        return run_dir
+
     def save_config_snapshot(self, run_dir: Path, config: PipelineConfig) -> Path:
         """Save the pipeline configuration snapshot as YAML."""
         path = run_dir / "config_snapshot.yaml"
@@ -83,3 +116,6 @@ def slugify(value: str) -> str:
     """Convert a string into a filesystem-friendly lowercase slug."""
     slug = re.sub(r"[^A-Za-z0-9]+", "_", str(value).strip().lower())
     return slug.strip("_") or "run"
+
+
+_RUN_ID_RE = re.compile(r"\d{8}_\d{6}_[a-z0-9]+(?:_[a-z0-9]+)+")

@@ -506,6 +506,7 @@ def resolve_security_return(
     ts_code: object,
     status: object,
     observed_return: object | None,
+    suspension_mode: str = "STRICT_EVENT",
 ) -> float:
     """Use an observation or resolve only a proven suspension to research zero.
 
@@ -545,7 +546,9 @@ def resolve_security_return(
                 f"observed return conflicts with classified status for {identity}."
             )
         return result
-    if status_value == SUSPENDED:
+    if status_value == SUSPENDED or (
+        suspension_mode == "STANDARD_ROBUST" and status_value == UNKNOWN_MISSING
+    ):
         return 0.0
     raise MissingSecurityReturnError(
         f"missing security return has no permitted resolution for {identity}."

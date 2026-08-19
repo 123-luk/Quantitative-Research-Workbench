@@ -15,6 +15,8 @@ from src.holdings import (
 )
 from src.research_backtest.availability import (
     SECURITY_STATUS_COLUMNS,
+    SUSPENDED,
+    UNKNOWN_MISSING,
     resolve_security_return,
 )
 from src.research_backtest.calendar import (
@@ -189,6 +191,7 @@ def _drift_one_day(
     trade_date: pd.Timestamp,
     returns: dict[tuple[pd.Timestamp, str], float],
     statuses: dict[tuple[pd.Timestamp, str], str],
+    suspension_mode: str = "STRICT_EVENT",
 ) -> tuple[dict[str, float], float]:
     drifted, drifted_cash, _ = _drift_one_day_with_return(
         weights,
@@ -196,6 +199,7 @@ def _drift_one_day(
         trade_date,
         returns,
         statuses,
+        suspension_mode,
     )
     return drifted, drifted_cash
 
@@ -206,6 +210,7 @@ def _drift_one_day_with_return(
     trade_date: pd.Timestamp,
     returns: dict[tuple[pd.Timestamp, str], float],
     statuses: dict[tuple[pd.Timestamp, str], str],
+    suspension_mode: str = "STRICT_EVENT",
 ) -> tuple[dict[str, float], float, float]:
     """Resolve one day's returns once and return drift plus gross return."""
     values: dict[str, float] = {}
@@ -225,6 +230,7 @@ def _drift_one_day_with_return(
             ts_code=code,
             status=statuses[key],
             observed_return=returns.get(key),
+            suspension_mode=suspension_mode,
         )
         if daily_return < -1.0:
             raise WeightDriftError(
@@ -275,10 +281,13 @@ class RebalanceAccountingEngine:
     """Drift holdings and account complete half-L1 turnover at each close."""
 
     trading_calendar: TradingCalendar
+    suspension_mode: str = "STRICT_EVENT"
 
     def __post_init__(self) -> None:
         if not isinstance(self.trading_calendar, TradingCalendar):
             raise TypeError("trading_calendar must be a canonical TradingCalendar.")
+        if self.suspension_mode not in {"STRICT_EVENT", "STANDARD_ROBUST"}:
+            raise ValueError("invalid suspension_mode")
 
     def run(
         self,
@@ -322,15 +331,29 @@ class RebalanceAccountingEngine:
                         drift_date,
                         returns,
                         statuses,
+                        self.suspension_mode,
                     )
             _complete_state(old_weights, old_cash, context="pre-rebalance")
             _complete_state(targets, 0.0, context="target")
             codes = sorted(set(old_weights) | set(targets))
+            target_cash = 0.0
+            if self.suspension_mode == "STANDARD_ROBUST":
+                unavailable = {
+                    code for code in codes
+                    if statuses.get((effective_date, code)) in {SUSPENDED, UNKNOWN_MISSING}
+                }
+                frozen = {code: old_weights.get(code, 0.0) for code in unavailable}
+                tradable = {code: weight for code, weight in targets.items() if code not in unavailable}
+                remaining = max(0.0, 1.0 - sum(frozen.values()))
+                desired = sum(tradable.values())
+                scaled = ({code: weight * remaining / desired for code, weight in tradable.items()} if desired > WEIGHT_TOLERANCE else {})
+                targets = {**scaled, **{code: weight for code, weight in frozen.items() if weight > WEIGHT_TOLERANCE}}
+                target_cash = max(0.0, 1.0 - sum(targets.values()))
             asset_changes = {
                 code: targets.get(code, 0.0) - old_weights.get(code, 0.0)
                 for code in codes
             }
-            cash_change = -old_cash
+            cash_change = target_cash - old_cash
             turnover = 0.5 * (
                 sum(abs(item) for item in asset_changes.values()) + abs(cash_change)
             )
@@ -346,13 +369,13 @@ class RebalanceAccountingEngine:
                         "target_weight": targets.get(code, 0.0),
                         "weight_change": asset_changes[code],
                         "pre_cash_weight": old_cash,
-                        "target_cash_weight": 0.0,
+                        "target_cash_weight": target_cash,
                         "cash_weight_change": cash_change,
                         "turnover": turnover,
                     }
                 )
             old_weights = dict(targets)
-            old_cash = 0.0
+            old_cash = target_cash
             previous_effective = effective_date
 
         ledger = pd.DataFrame(output, columns=list(REBALANCE_OUTPUT_COLUMNS))

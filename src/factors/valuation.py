@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from src.factors.base import FactorMetadata, FunctionFactor
+from src.factors.frequency import point_in_time_frequency_specs
 from src.factors.registry import FactorRegistry
 
 
@@ -58,6 +59,7 @@ EP_TTM = FunctionFactor(
         availability_lag_days=0,
         description="Earnings yield from positive pe_ttm values: 1 / pe_ttm.",
         version="1.0",
+        frequency_specs=point_in_time_frequency_specs(dataset="daily_basic", fields=("pe_ttm",), calculator_id="ep_ttm"),
     ),
     _compute_ep_ttm,
 )
@@ -74,6 +76,7 @@ BP = FunctionFactor(
         availability_lag_days=0,
         description="Book-to-price ratio from positive pb values: 1 / pb.",
         version="1.0",
+        frequency_specs=point_in_time_frequency_specs(dataset="daily_basic", fields=("pb",), calculator_id="bp"),
     ),
     _compute_bp,
 )
@@ -90,6 +93,7 @@ SP_TTM = FunctionFactor(
         availability_lag_days=0,
         description="Sales yield from positive ps_ttm values: 1 / ps_ttm.",
         version="1.0",
+        frequency_specs=point_in_time_frequency_specs(dataset="daily_basic", fields=("ps_ttm",), calculator_id="sp_ttm"),
     ),
     _compute_sp_ttm,
 )
@@ -125,6 +129,7 @@ LOG_TOTAL_MV = FunctionFactor(
             "for relative size comparison."
         ),
         version="1.0",
+        frequency_specs=point_in_time_frequency_specs(dataset="daily_basic", fields=("total_mv",), calculator_id="log_total_mv"),
     ),
     _compute_log_total_mv,
 )
@@ -144,6 +149,7 @@ LOG_CIRC_MV = FunctionFactor(
             "for relative circulating-market-value comparison."
         ),
         version="1.0",
+        frequency_specs=point_in_time_frequency_specs(dataset="daily_basic", fields=("circ_mv",), calculator_id="log_circ_mv"),
     ),
     _compute_log_circ_mv,
 )

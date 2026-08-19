@@ -310,28 +310,28 @@ def test_pre_run_summary_is_derived_from_effective_config() -> None:
 
 
 def test_streamlit_v5_surface_is_separate_from_legacy_top_n() -> None:
-    source = STREAMLIT_APP.read_text(encoding="utf-8")
-    canonical = source.split("def render_legacy_pipeline_controls", 1)[0]
-    assert "value=get_default_holdings_top_n()" in canonical
-    assert "max_value=100" not in canonical
-    assert "run_canonical_pipeline(effective_config)" in canonical
+    root = STREAMLIT_APP.parent
+    canonical = "\n".join((root / path).read_text(encoding="utf-8") for path in ("views/new_run.py", "services/pipeline_config_service.py", "i18n/catalog.py"))
+    assert "get_default_holdings_top_n" in canonical
+    assert 't("new.top_n"' in canonical
+    assert "service.run(draft" in canonical
     assert "run_research_pipeline_from_app(" not in canonical
     assert '"--top-n"' not in canonical
     for forbidden in ("sort_values(", "nlargest(", "nsmallest(", "1.0 /"):
         assert forbidden not in canonical
-    assert '"组合构建方法"' in canonical
-    assert "build_effective_pipeline_config(" in canonical
+    assert '"new.portfolio"' in canonical
+    assert "build_pipeline_config(" in canonical
     assert "PortfolioConstructionEngine" not in canonical
 
 
 def test_streamlit_v6_surface_has_no_second_owner_or_unsupported_controls() -> None:
-    source = STREAMLIT_APP.read_text(encoding="utf-8")
-    canonical = source.split("def render_legacy_pipeline_controls", 1)[0]
+    root = STREAMLIT_APP.parent
+    canonical = "\n".join((root / path).read_text(encoding="utf-8") for path in ("views/new_run.py", "views/results.py", "i18n/catalog.py"))
     assert '"Enable Research Backtest"' in canonical
-    assert '"Transaction cost (bps)"' in canonical
-    assert '"Benchmark code"' in canonical
-    assert '"Annual risk-free rate"' in canonical
-    assert "Research Portfolio NAV" in canonical
+    assert '"Transaction Cost (bps)"' in canonical
+    assert '"Benchmark Code"' in canonical
+    assert '"Annual Risk-Free Rate"' in canonical
+    assert "Portfolio Net NAV vs Benchmark NAV" in canonical
     assert "Research Backtest End Date" not in canonical
     assert "Backtest frequency" not in canonical
     assert "source dropdown" not in canonical.lower()

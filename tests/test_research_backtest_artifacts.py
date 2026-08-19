@@ -212,6 +212,26 @@ def _publish(tmp_path: Path, name: str = "backtest"):
     return holdings, result
 
 
+def test_standard_robust_publish_accepts_complete_multiindex_match(
+    tmp_path: Path,
+) -> None:
+    holdings = _holdings_artifact(tmp_path)
+    config_values = _config().to_dict()
+    config_values["suspension_mode"] = "STANDARD_ROBUST"
+    portfolio = _portfolio()
+
+    result = ResearchBacktestArtifactStore().publish(
+        artifact_dir=tmp_path / "standard-robust",
+        rebalances=_rebalances(),
+        portfolio=portfolio,
+        analytics=_analytics(portfolio),
+        config=ResearchBacktestPipelineConfig.from_dict(config_values),
+        holdings_artifact_dir=holdings.artifact_dir,
+    )
+
+    assert result.validation.is_valid
+
+
 def test_contract_constants_are_exact() -> None:
     assert RESEARCH_BACKTEST_ARTIFACT_SCHEMA_VERSION == "1.0"
     assert RESEARCH_BACKTEST_ARTIFACT_TYPE == "research_backtest"

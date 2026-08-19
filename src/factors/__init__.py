@@ -7,6 +7,12 @@ from src.factors.examples import (
     register_example_factors,
 )
 from src.factors.registry import FactorRegistry, create_default_registry
+from src.factors.frequency import (
+    FactorDependencyPlanner,
+    FactorFrequencyError,
+    FactorFrequencySpec,
+    point_in_time_frequency_specs,
+)
 
 __all__ = [
     "Factor",
@@ -17,6 +23,10 @@ __all__ = [
     "VOLATILITY_20D",
     "create_default_registry",
     "register_example_factors",
+    "FactorDependencyPlanner",
+    "FactorFrequencyError",
+    "FactorFrequencySpec",
+    "point_in_time_frequency_specs",
 ]
 
 from src.factors.contracts import (

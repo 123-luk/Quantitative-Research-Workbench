@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import tushare as ts
-from dotenv import load_dotenv
+
+from src.data.credentials import CredentialProvider, EnvironmentCredentialProvider
 
 
 logger = logging.getLogger(__name__)
@@ -19,24 +19,40 @@ class TushareClient:
     """Lazy TuShare Pro client initialized from environment configuration."""
 
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    provider_id = "tushare_official"
 
-    def __init__(self) -> None:
-        """Load the TuShare token and initialize the TuShare Pro API client."""
-        load_dotenv(self.PROJECT_ROOT / ".env", override=False)
-        token = os.getenv("TUSHARE_TOKEN")
-        if not token:
+    def __init__(
+        self,
+        token: str | None = None,
+        *,
+        credential_provider: CredentialProvider | None = None,
+    ) -> None:
+        """Initialize one instance client without mutating TuShare global state."""
+        if token is not None and (not isinstance(token, str) or not token.strip()):
+            raise ValueError("TuShare token must be a non-empty string when provided.")
+        provider = credential_provider or EnvironmentCredentialProvider(self.PROJECT_ROOT)
+        resolved = token.strip() if token is not None else provider.tushare_token()
+        if not resolved:
             raise ValueError(
-                "TUSHARE_TOKEN not found. Please check the project .env file "
-                "or system environment variables."
+                "TuShare credential is unavailable. Provide an instance token or "
+                "configure the supported environment credential source."
             )
+        try:
+            pro: Any = ts.pro_api(resolved)
+        except Exception:
+            raise RuntimeError("TuShare client initialization failed.") from None
+        self.pro = self._configure_client(pro, resolved)
 
-        ts.set_token(token)
-        self.pro: Any = ts.pro_api()
+    def _configure_client(self, pro: object, token: str) -> object:
+        """Official client hook; intentionally leaves the SDK endpoint unchanged."""
+        return pro
 
     def get_stock_basic(self, list_status: str = "L") -> pd.DataFrame:
         """Fetch stock lifecycle basics for one explicit listing status."""
+        if list_status not in {"L", "D", "P", "G"}:
+            raise ValueError("stock_basic list_status must be one of L/D/P/G.")
         fields = (
-            "ts_code,symbol,name,area,industry,market,list_status,"
+            "ts_code,symbol,name,area,industry,market,exchange,curr_type,list_status,"
             "list_date,delist_date"
         )
         return self.pro.stock_basic(
@@ -170,7 +186,7 @@ class TushareClient:
     ) -> pd.DataFrame:
         """Fetch raw daily suspension/resumption records from TuShare Pro."""
         fields = "ts_code,trade_date,suspend_timing,suspend_type"
-        return self.pro.suspend_d(
+        result = self.pro.suspend_d(
             ts_code=ts_code,
             trade_date=trade_date,
             start_date=start_date,
@@ -178,6 +194,12 @@ class TushareClient:
             suspend_type=suspend_type,
             fields=fields,
         )
+        # TuShare represents a proven zero-event day as an empty DataFrame and
+        # may omit every column. Normalize only that explicit protocol shape;
+        # non-empty malformed responses remain subject to strict validation.
+        if isinstance(result, pd.DataFrame) and result.empty:
+            return pd.DataFrame(columns=fields.split(","))
+        return result
 
     def get_daily_basic(
         self,
@@ -189,7 +211,7 @@ class TushareClient:
         """Fetch daily valuation and liquidity indicators from TuShare Pro."""
         fields = (
             "ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pe_ttm,"
-            "pb,ps,ps_ttm,dv_ratio,total_mv,circ_mv"
+            "pb,ps,ps_ttm,dv_ratio,dv_ttm,total_mv,circ_mv"
         )
         return self.pro.daily_basic(
             ts_code=ts_code,
@@ -197,6 +219,38 @@ class TushareClient:
             start_date=start_date,
             end_date=end_date,
             fields=fields,
+        )
+
+    def get_adj_factor(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch raw daily adjustment factors without applying adjustments."""
+        return self.pro.adj_factor(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields="ts_code,trade_date,adj_factor",
+        )
+
+    def get_stk_limit(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Fetch daily price-limit bands for capability and quality checks."""
+        return self.pro.stk_limit(
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields="trade_date,ts_code,pre_close,up_limit,down_limit",
         )
 
     @staticmethod

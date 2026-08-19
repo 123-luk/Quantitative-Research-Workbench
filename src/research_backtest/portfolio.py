@@ -200,8 +200,6 @@ def _canonical_rebalances(
             atol=WEIGHT_TOLERANCE,
         ):
             raise PortfolioDailyInputError("event target state must sum to 1.")
-        if not np.isclose(target_cash, 0.0, rtol=0.0, atol=WEIGHT_TOLERANCE):
-            raise PortfolioDailyInputError("target_cash_weight must be zero.")
         expected_change = group["target_weight"] - group["pre_rebalance_weight"]
         if not np.isclose(
             group["weight_change"],
@@ -342,6 +340,7 @@ class PortfolioDailyAccountingEngine:
     trading_calendar: TradingCalendar
     portfolio_config: PortfolioAccountingConfig
     transaction_cost_config: TransactionCostConfig
+    suspension_mode: str = "STRICT_EVENT"
 
     def __post_init__(self) -> None:
         from src.pipeline.research_backtest_config import (
@@ -361,6 +360,8 @@ class PortfolioDailyAccountingEngine:
             "transaction_cost_config",
             TransactionCostConfig.from_dict(self.transaction_cost_config),
         )
+        if self.suspension_mode not in {"STRICT_EVENT", "STANDARD_ROBUST"}:
+            raise ValueError("invalid suspension_mode")
 
     def run(
         self,
@@ -413,6 +414,7 @@ class PortfolioDailyAccountingEngine:
                     trade_date,
                     returns,
                     statuses,
+                    self.suspension_mode,
                 )
             except RebalanceInputError as exc:
                 raise PortfolioDailyInputError(str(exc)) from exc

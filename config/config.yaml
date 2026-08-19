@@ -4,6 +4,8 @@ project:
 data:
   root: "data"
   raw_dir: "data/raw"
+  curated_dir: "data/curated"
+  metadata_dir: "data/metadata"
   processed_dir: "data/processed"
   cache_dir: "data/cache"
   output_dir: "data/output"
