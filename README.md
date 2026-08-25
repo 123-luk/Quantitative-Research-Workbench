@@ -8,7 +8,7 @@ This is an end-to-end quantitative research workbench for China A-shares. It bri
 
 ## 项目概览
 
-平台面向希望搭建严谨研究流程的量化研究者、开发者和学习者。它覆盖从 TuShare 数据接入到 Artifact 结果查看的完整研究链路，并通过历史时点股票池、Coverage Ledger、walk-forward 划分和 exact `run_id` 降低常见的数据与复现风险。
+平台面向希望搭建严谨研究流程的量化研究者、开发者和学习者。它覆盖从TuShare数据接入到Artifact结果查看的完整研究链路，并通过历史时点股票池、Coverage Ledger、walk-forward 划分和 exact `run_id` 降低常见的数据与复现风险。
 
 The platform is intended for researchers, developers, and learners who need a disciplined quantitative workflow. It covers the path from TuShare ingestion to Artifact-backed results, using point-in-time universes, a Coverage Ledger, walk-forward splits, and exact `run_id` resolution to reduce common data and reproducibility risks.
 
@@ -18,11 +18,11 @@ This is a local research platform, not a live trading system. It does not connec
 
 ## 主要功能
 
-- 在工作台中显式选择 TuShare 官方接口或第三方代理接口；Provider 彼此隔离，不自动切换。
+- 在工作台中选择 TuShare 官方接口或第三方代理接口；Provider彼此隔离，不自动切换。
   Explicit selection between the official TuShare API and a third-party proxy; providers remain isolated and never fail over automatically.
-- 使用数据契约、主键与字段校验、Provider 质量检查和安全错误分类保护数据边界。
+- 使用数据契约、主键与字段校验、Provider质量检查和安全错误分类保护数据边界。
   Data contracts, key and field validation, provider quality checks, and sanitized error classification protect the ingestion boundary.
-- 分离 RAW 响应与分区 CURATED Parquet，并使用 SQLite Coverage Ledger 记录精确覆盖单元。
+- 分离 RAW 响应与分区 CURATED Parquet，并使用 SQLite Coverage Ledger记录精确覆盖单元。
   RAW responses are separated from partitioned CURATED Parquet, while a SQLite Coverage Ledger records exact coverage units.
 - 支持 CUSTOM、INDEX 和 ALL_A_SHARES 历史时点股票池，按上市与退市生命周期解析成员，避免用当前成分回填历史。
   Point-in-time CUSTOM, INDEX, and ALL_A_SHARES universes apply listing and delisting lifecycles without backfilling history from current constituents.
@@ -45,7 +45,7 @@ This is a local research platform, not a live trading system. It does not connec
 
 ## 工作流程
 
-平台 UI 只负责配置、调度和展示；因子、模型、组合、风险与回测计算仍由后端模块及其契约负责。
+平台UI只负责配置、调度和展示；因子、模型、组合、风险与回测计算仍由后端模块及其契约负责。
 
 The UI is limited to configuration, orchestration, and presentation. Factor, model, portfolio, risk, and backtest calculations remain owned by backend modules and their contracts.
 
