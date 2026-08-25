@@ -1,411 +1,186 @@
-# quant-factor-system
+# Quantitative Research Workbench
 
-## Research Workbench (v0.10.0)
+A Share Quantitative Research Platform
 
-The Quant Research Workbench is the only default Streamlit UI. One explicit
-navigation registers **Overview**, **New Run**, **Results**, **Runs**, and
-**Data**; the legacy dashboard is not exposed. Results and run navigation use
-one exact canonical `run_id`, with no latest/mtime fallback.
+这是一个面向 A 股研究的端到端量化研究工作台。项目将数据准备、因子研究、机器学习、信号与持仓、组合构建、风险估计和历史回测整合在同一条可审计流程中，重点处理数据可信度、时序泄漏、实验复现和研究任务管理。
 
-### First use
+This is an end-to-end quantitative research workbench for China A-shares. It brings data preparation, factor research, machine learning, signals and holdings, portfolio construction, risk estimation, and historical backtesting into one auditable workflow, with an emphasis on data integrity, temporal leakage prevention, experiment reproducibility, and research task management.
 
-1. Run `streamlit run app/streamlit_app.py` from the repository root.
-2. Keep the default Chinese UI or switch the single global selector to English.
-3. Optionally enter a TuShare token in the password field. It stays in session
-   memory; an existing environment token is the fallback and is never shown.
-4. In New Run, select CUSTOM, INDEX, or ALL_A_SHARES; DAILY or MONTHLY; then
-   configure factors, ML, selection, portfolio construction, and backtest.
-5. Review the local-only Data Readiness plan and run. Missing canonical units
-   are downloaded automatically, research inputs are materialized, and the
-   existing pipeline opens the exact successful run in Results.
+## 项目概览
 
-Complete local coverage requires no token, and an identical repeat makes zero
-provider calls. Prepared Parquet paths are no longer manual first-run inputs.
-The Data page remains read-only. See
-`docs/23_workbench_first_run_integration.md` for the complete contract; older
-dashboard descriptions below are historical and are not registered UI routes.
+平台面向希望搭建严谨研究流程的量化研究者、开发者和学习者。它覆盖从 TuShare 数据接入到 Artifact 结果查看的完整研究链路，并通过历史时点股票池、Coverage Ledger、walk-forward 划分和 exact `run_id` 降低常见的数据与复现风险。
 
-A 股多因子选股、回测、单股研究与 Streamlit 可视化 App。
+The platform is intended for researchers, developers, and learners who need a disciplined quantitative workflow. It covers the path from TuShare ingestion to Artifact-backed results, using point-in-time universes, a Coverage Ledger, walk-forward splits, and exact `run_id` resolution to reduce common data and reproducibility risks.
 
-## 1. 项目简介
+项目是本地研究平台，不是实盘交易系统。它不连接券商、不提交订单，也不提供实时行情或生产级交易风控。
 
-本项目是一个面向 A 股市场的本地量化研究系统，覆盖从数据获取到可视化展示的完整研究链路。
+This is a local research platform, not a live trading system. It does not connect to brokers, submit orders, provide real-time market data, or implement production trading controls.
 
-系统支持 TuShare 数据获取、因子构建、因子检验、多因子打分选股、组合回测、单股研究和 Streamlit 可视化展示。项目定位是学习、研究和展示用途，不构成投资建议。
+## 主要功能
 
-## 2. 核心功能
+- 在工作台中显式选择 TuShare 官方接口或第三方代理接口；Provider 彼此隔离，不自动切换。
+  Explicit selection between the official TuShare API and a third-party proxy; providers remain isolated and never fail over automatically.
+- 使用数据契约、主键与字段校验、Provider 质量检查和安全错误分类保护数据边界。
+  Data contracts, key and field validation, provider quality checks, and sanitized error classification protect the ingestion boundary.
+- 分离 RAW 响应与分区 CURATED Parquet，并使用 SQLite Coverage Ledger 记录精确覆盖单元。
+  RAW responses are separated from partitioned CURATED Parquet, while a SQLite Coverage Ledger records exact coverage units.
+- 支持 CUSTOM、INDEX 和 ALL_A_SHARES 历史时点股票池，按上市与退市生命周期解析成员，避免用当前成分回填历史。
+  Point-in-time CUSTOM, INDEX, and ALL_A_SHARES universes apply listing and delisting lifecycles without backfilling history from current constituents.
+- 计算并预处理因子，执行 RankIC、分组收益等因子评价，并支持静态或动态因子组合。
+  Factor calculation and preprocessing feed RankIC, grouped-return evaluation, and static or dynamic factor composition.
+- 提供 `ridge`、`elastic_net` 和 `hist_gradient_boosting` 三种已注册的 scikit-learn 模型。
+  The registered scikit-learn models are `ridge`, `elastic_net`, and `hist_gradient_boosting`.
+- 使用 walk-forward 训练、Purge、Embargo、标签可用性约束和严格样本外预测控制时序泄漏。
+  Walk-forward training, purge and embargo windows, label-availability guards, and strict out-of-sample predictions control temporal leakage.
+- 从预测生成信号、Top-N 选择和目标持仓，并保留上游 Artifact 血缘。
+  Predictions flow into signals, Top-N selection, and target holdings with upstream Artifact lineage preserved.
+- 支持等权、排序加权、逆波动率和最小方差组合；风险估计包括样本协方差和 Ledoit-Wolf。
+  Portfolio weighting includes equal weight, rank weight, inverse volatility, and minimum variance, with sample covariance and Ledoit-Wolf risk estimators.
+- 研究回测处理再平衡、交易成本、净值、基准和风险指标，并区分严格停牌事件与标准稳健模式。
+  The research backtest handles rebalancing, transaction costs, NAV, benchmarks, and risk metrics, with distinct strict-event and standard-robust suspension modes.
+- Streamlit 工作台提供中英文界面、后台研究任务、真实阶段进度、安全失败诊断、重试、任务记录和结果页。
+  The bilingual Streamlit workbench provides background research tasks, real stage progress, safe failure diagnostics, retries, task history, and result views.
+- 通过 `run_id`、配置快照、manifest、内容 hash 和经校验的 Artifact 精确复查结果。
+  Exact result review is based on `run_id`, configuration snapshots, manifests, content hashes, and validated Artifacts.
 
-1. 数据获取
-   - TuShare 股票基础信息、交易日历、沪深300成分、月线行情、日频基础指标等。
+## 工作流程
 
-2. 因子工程
-   - 估值、规模、流动性、动量、波动率等月频因子。
+平台 UI 只负责配置、调度和展示；因子、模型、组合、风险与回测计算仍由后端模块及其契约负责。
 
-3. 因子有效性检验
-   - RankIC、ICIR、分组收益、多空收益。
+The UI is limited to configuration, orchestration, and presentation. Factor, model, portfolio, risk, and backtest calculations remain owned by backend modules and their contracts.
 
-4. 多因子评分选股
-   - 因子方向设定、标准化评分、Top N 模型组合。
-
-5. 组合回测
-   - 月度调仓、等权持仓、交易成本、净值曲线、回撤、换手率。
-
-6. 单只股票研究
-   - 股票名称/代码查询、模型评级、趋势参考、研究摘要、因子暴露、价格与收益走势。
-
-7. Streamlit App
-   - 一键运行研究流水线、推荐组合页面、单股分析页面、回测结果页面、因子研究页面。
-
-8. 一键启动脚本
-   - 支持 `run_app.bat` 和 `run_app.ps1` 启动本地 App。
-
-## 3. App 页面说明
-
-- 首页 Dashboard
-  - 展示历史样本回测核心指标和主要回测图表，用于快速查看系统输出概览。
-
-- 运行研究流水线
-  - 在 App 内设置研究区间、股票池、Top N、交易成本等参数，并调用本地研究流水线。
-
-- 推荐投资组合
-  - 展示最新一期模型组合、组合概览、行业分布、个股权重分布和组合研究说明。
-
-- 单只股票分析
-  - 支持按股票名称或代码查询，展示模型评分、趋势参考、研究摘要、因子暴露、价格走势和历史入选情况。
-
-- 回测结果
-  - 展示历史样本回测指标、净值曲线、月度收益、回撤、换手率和相关数据表。
-
-- 因子研究
-  - 展示因子 IC 排名、Top 因子、历史分组收益、历史多空收益和原始因子研究表。
-
-## 4. 项目结构
-
-```text
-quant-factor-system/
-├── app/
-│   ├── streamlit_app.py
-│   └── services/
-├── src/
-│   ├── data/
-│   ├── factors/
-│   ├── models/
-│   └── backtest/
-├── scripts/
-├── docs/
-├── data/
-├── reports/
-├── config/
-├── run_app.bat
-├── run_app.ps1
-├── README.md
-└── AGENT.md
+```mermaid
+flowchart LR
+    A[Data Preparation] --> B[Research Inputs]
+    B --> C[Factor Research]
+    C --> D[Model Training and Validation]
+    D --> E[Signals and Target Holdings]
+    E --> F[Portfolio and Risk]
+    F --> G[Research Backtest and Results]
 ```
 
-`data/raw`、`data/processed` 和 `reports` 通常用于本地运行输出。不建议提交真实数据、Token 或大体积研究结果到 GitHub。
+数据准备 → 研究输入 → 因子研究 → 模型训练与验证 → 信号与目标持仓 → 组合与风险 → 研究回测与结果
 
-## 5. 环境配置
+Data preparation → research inputs → factor research → model training and validation → signals and target holdings → portfolio and risk → research backtest and results
 
-1. 创建虚拟环境
+## 项目结构
 
-```bash
-python -m venv .venv
-```
+- `app/`：Streamlit 入口、五页工作台、双语界面和任务服务。
+  Streamlit entry point, five-page workbench, bilingual UI, and task services.
+- `src/data/`：Provider、数据契约、准备流程、Parquet 存储和 Coverage Ledger。
+  Providers, data contracts, preparation, Parquet storage, and the Coverage Ledger.
+- `src/universe/` 与 `src/research_data/`：历史时点股票池、研究日历、复权价格和研究输入物化。
+  Point-in-time universes, research calendars, adjusted prices, and research-input materialization.
+- `src/factors/`：因子注册、计算、预处理、评价和组合。
+  Factor registration, calculation, preprocessing, evaluation, and composition.
+- `src/ml/`：数据集契约、walk-forward 划分、模型训练、评价和 Artifact。
+  Dataset contracts, walk-forward splitting, model training, evaluation, and Artifacts.
+- `src/signals/` 与 `src/holdings/`：信号排序、选择和目标持仓。
+  Signal ranking, selection, and target holdings.
+- `src/portfolio_construction/` 与 `src/risk_model/`：权重策略、约束、协方差估计和最小方差优化。
+  Weighting strategies, constraints, covariance estimation, and minimum-variance optimization.
+- `src/research_backtest/`：再平衡、可交易性、收益核算、成本、指标和结果 Artifact。
+  Rebalancing, availability, return accounting, costs, analytics, and result Artifacts.
+- `docs/`：数据层、股票池、工作台和各研究阶段的详细设计说明。
+  Detailed design notes for the data layer, universes, workbench, and research stages.
+- `tests/`：单元、集成和界面契约测试。
+  Unit, integration, and UI contract tests.
 
-2. 激活虚拟环境
+## 快速开始
 
-```bash
-.venv\Scripts\activate
-```
+仓库当前验证环境为 Windows 和 Python 3.12.2；Python 版本尚未通过 `pyproject.toml` 强制限定，其他版本和平台需要单独验证。详细依赖策略见 [Dependency Policy](docs/06_dependency_policy.md)。
 
-3. 安装依赖
+The repository is currently validated on Windows with Python 3.12.2. A Python range is not enforced through `pyproject.toml`, so other versions and platforms require separate validation. See the [Dependency Policy](docs/06_dependency_policy.md) for details.
 
-```bash
-pip install -r requirements.txt
-```
+1. 创建并激活虚拟环境。
+   Create and activate a virtual environment.
 
-4. 配置 `.env`
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
 
-```text
-TUSHARE_TOKEN=your_token_here
-```
+2. 按仓库已验证的核心约束安装依赖。
+   Install dependencies with the repository's validated core constraints.
 
-不要把真实 Token 提交到 GitHub。Token 应仅通过本地 `.env` 文件或系统环境变量读取。
+   ```powershell
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt -c constraints-v3-core.txt
+   ```
 
-## 6. 启动 App
+3. 安全配置 TuShare Token。推荐在工作台侧栏的密码输入框中本地输入，Token 仅保留在当前会话。官方接口也支持复制示例文件后在本地填写 `.env`；该文件已被 Git 忽略。不要提交、截图或记录真实 Token。
+   Configure the TuShare token securely. Prefer entering it locally in the workbench password field, where it remains session-only. The official provider can also read a local `.env` copied from the example; Git already ignores that file. Never commit, capture, or log a real token.
 
-### 方式一：双击启动
+   ```powershell
+   Copy-Item .env.example .env
+   ```
 
-在 Windows 文件夹中双击：
+   ```text
+   TUSHARE_TOKEN=your_tushare_token_here
+   ```
 
-```text
-run_app.bat
-```
+4. 启动 Streamlit 工作台。
+   Start the Streamlit workbench.
 
-### 方式二：PowerShell 启动
+   ```powershell
+   python -m streamlit run app/streamlit_app.py
+   ```
 
-在项目根目录运行：
+   也可以运行 `run_app.bat`、`run_app.ps1`，或在 Windows 资源管理器中启动仓库自带的 `QuantResearchWorkbench.exe`。这些入口最终都启动同一个 `app/streamlit_app.py`。
+   You can also run `run_app.bat`, `run_app.ps1`, or launch the included `QuantResearchWorkbench.exe` from Windows Explorer. All of these entry points start the same `app/streamlit_app.py` application.
 
-```powershell
-.\run_app.ps1
-```
+## 使用方法
 
-如果 PowerShell 执行策略阻止脚本运行，可以改用 `run_app.bat`。
+1. 在侧栏选择中文或 English，并明确选择官方或代理 Provider；代理是第三方服务，工作台不会自动回退或切换。
+   Choose Chinese or English in the sidebar and explicitly select the official or proxy provider. The proxy is third-party, and the workbench never switches providers automatically.
+2. 在本地密码框输入对应 Token；如果本地规范数据已完整，可在不调用 Provider 的情况下复用。
+   Enter the matching token locally. Complete canonical local coverage can be reused without a provider call.
+3. 打开 New Run 创建研究任务。任务在后台执行，页面切换或刷新不会中断当前进程中的任务。
+   Open New Run and create a research task. It runs in the background, so navigation or refresh does not interrupt it within the current process.
+4. 配置研究日期、CUSTOM/INDEX/ALL_A_SHARES 股票池、DAILY/MONTHLY 频率、因子、模型、Top-N、组合方式和回测参数。
+   Configure dates, a CUSTOM/INDEX/ALL_A_SHARES universe, DAILY/MONTHLY frequency, factors, model, Top-N selection, portfolio method, and backtest settings.
+5. 在 Data Readiness 和任务页查看缺失覆盖、数据准备、因子、建模、信号、组合和回测的真实阶段进度。
+   Review missing coverage in Data Readiness and follow real preparation, factor, modeling, signal, portfolio, and backtest stages on the task page.
+6. 如果任务失败，查看经过脱敏的失败阶段、数据集、区间和恢复建议；修复权限、网络、数据或配置问题后使用 Retry。
+   If a task fails, inspect the sanitized stage, dataset, range, and recovery guidance, then use Retry after correcting credential, network, data, or configuration issues.
+7. 对成功任务选择 View Results，或从 Research Tasks 使用精确 `run_id` 重新打开结果，检查指标、持仓、收益、配置和 Artifact 血缘。
+   For a successful task, choose View Results or reopen it from Research Tasks by exact `run_id` to inspect metrics, holdings, returns, configuration, and Artifact lineage.
 
-### 方式三：手动启动
+工作台的完整交互与结果读取契约见 [Workbench First-Run Integration](docs/23_workbench_first_run_integration.md) 和 [Artifact-Backed Results](docs/17_research_workbench_results.md)。
 
-在项目根目录运行：
+See [Workbench First-Run Integration](docs/23_workbench_first_run_integration.md) and [Artifact-Backed Results](docs/17_research_workbench_results.md) for the full interaction and result-loading contracts.
 
-```bash
-streamlit run app/streamlit_app.py
-```
+## 数据与可复现性
 
-`run_app.bat` 和 `run_app.ps1` 会尝试自动检测并激活项目根目录下的 `.venv`。如果没有 `.venv`，则使用当前 Python 环境启动。如果依赖未安装，请先运行：
+Provider 标识参与数据身份，官方与代理数据不会静默混用。Coverage Ledger 以数据集、scope 和精确时间单元记录完成状态，重复研究只补充缺失覆盖。历史指数成分和股票生命周期按 formation date 解析，避免把未来可见信息带回过去。
 
-```bash
-pip install -r requirements.txt
-```
+Provider identity is part of data identity, preventing silent mixing of official and proxy data. The Coverage Ledger records completion by dataset, scope, and exact time unit, so repeated research requests only missing coverage. Historical index membership and security lifecycles are resolved at each formation date rather than filled from future knowledge.
 
-## 7. 数据与研究流水线运行
+数据与研究输入先写入临时位置、重新读取并校验，再原子发布。每次成功运行保存配置快照、manifest、schema、内容 hash 和上游 lineage；结果页只解析指定 `run_id` 下经过验证的 Artifact，不使用文件时间或模糊的 latest 回退。
 
-### 方式一：命令行运行
+Data and research inputs are staged, read back, validated, and then published atomically. Each successful run records configuration snapshots, manifests, schemas, content hashes, and upstream lineage. Results resolve only validated Artifacts under the requested `run_id`, without filesystem-time or fuzzy latest fallbacks.
 
-```bash
-python scripts/run_research_pipeline.py --start 20240101 --end 20241231 --universe hs300 --max-stocks 50 --top-n 10
-```
+更多实现细节见 [Data Layer](docs/19_data_layer_2_0.md)、[Point-in-Time Universe](docs/20_universe_1_0.md) 和 [TuShare Provider Contracts](docs/24_tushare_provider_contracts.md)。
 
-### 方式二：Streamlit App 内运行
+For implementation details, see the [Data Layer](docs/19_data_layer_2_0.md), [Point-in-Time Universe](docs/20_universe_1_0.md), and [TuShare Provider Contracts](docs/24_tushare_provider_contracts.md).
 
-启动 App 后进入“运行研究流水线”页面。
+## 当前边界
 
-如果 `skip_fetch=True`，系统将使用已有 `data/raw` 数据；如果 `skip_fetch=False`，系统会调用 TuShare，需要在 `.env` 中配置 `TUSHARE_TOKEN`。
+- 项目定位为历史量化研究平台，不连接券商实盘交易，也不负责订单执行。
+  The project is a historical quantitative research platform; it does not connect to live brokerage trading or execute orders.
+- 数据可用性取决于所选 Provider 的状态、TuShare Token 权限、积分和接口返回质量。
+  Data availability depends on the selected provider, TuShare token permissions and points, and endpoint response quality.
+- 严格停牌事件模式依赖 `suspend_d` 接口的相应权限与完整覆盖；标准稳健模式不会把缺失行情自动宣称为已确认停牌。
+  Strict suspension-event mode depends on permission and complete coverage for `suspend_d`; standard-robust mode does not label every missing quote as a confirmed suspension.
+- 当前机器学习能力以仓库注册的 scikit-learn 模型为主；LightGBM 和 XGBoost 未安装、未声明，也不属于当前支持范围。
+  Current machine-learning support is centered on the registered scikit-learn models. LightGBM and XGBoost are not installed, declared, or supported.
+- 依赖约束记录的是已验证核心环境，不是完整 lock file；其他操作系统需要另行验证。
+  Dependency constraints record the validated core environment rather than a complete lock file; other operating systems require separate validation.
+- 历史回测和模型输出不代表未来表现，不构成投资建议。
+  Historical backtests and model outputs do not represent future performance and are not investment advice.
 
-## 8. 主要输出
+## License
 
-输出目录：
+项目采用 [MIT License](LICENSE)。
 
-- `data/raw/`
-- `data/processed/`
-- `reports/tables/`
-- `reports/figures/`
-
-主要输出文件：
-
-- `factor_panel.csv`
-- `factor_panel_clean.csv`
-- `ic_summary.csv`
-- `group_return.csv`
-- `long_short_return.csv`
-- `factor_score.csv`
-- `selected_portfolio.csv`
-- `backtest_metrics.csv`
-- `backtest_nav.csv`
-- `backtest_turnover.csv`
-- `nav_curve.png`
-- `monthly_return_bar.png`
-- `drawdown_curve.png`
-
-## 9. 方法说明
-
-本项目以月频样本为主，基于 TuShare 原始数据构建因子面板。因子在预处理阶段进行缺失值填补、缩尾和横截面标准化。
-
-因子检验使用 RankIC、ICIR、历史分组收益和历史多空收益评估因子在样本期内的排序关系。多因子模型使用方向调整后的等权评分，并按月选择 Top N 股票形成模型组合。
-
-组合回测采用月度调仓、等权持仓和交易成本扣减，输出历史回测净值、回撤、换手率和绩效指标。
-
-`return_next` 是历史回测标签，只用于历史回测检验，不是未来收益预测。
-
-## 10. 风险声明
-
-本项目仅用于量化研究、学习和项目展示。项目中的模型评分、趋势参考、组合结果和回测结果均基于历史样本与量化规则生成，不代表未来表现，不构成任何投资建议。使用者应自行承担投资决策风险。
-
-## 11. 后续改进方向
-
-- 扩展样本区间和股票池。
-- 增加更多基本面和技术面因子。
-- 增加机器学习模型。
-- 增加基准指数对比。
-- 增加行业/风格约束。
-- 增加模型参数配置页面。
-- 增加报告导出功能。
-- 增加部署版本或 Docker 环境。
-
-## V3 machine-learning experiments
-
-The unified Pipeline entry point supports one optional, strictly
-out-of-sample ML experiment:
-
-```text
-python scripts/run_pipeline.py --config config/ml_experiment.example.yaml
-```
-
-ML is disabled by default. The current model registry supports `ridge`,
-`elastic_net`, and `hist_gradient_boosting`. LightGBM and XGBoost are not
-currently installed or supported.
-
-The ML input is one pre-merged Parquet modeling panel. Artifact persistence
-is also opt-in; it writes validated JSON and Parquet files under the current
-Pipeline run directory and does not save an estimator or model file.
-
-CLI values override only explicitly supplied YAML leaves. For example:
-
-```text
-python scripts/run_pipeline.py --config config/ml_experiment.example.yaml --ml --ml-model ridge --ml-model-params "{\"alpha\":2.0}"
-```
-
-See [ML Experiment Guide](docs/07_ml_experiment_guide.md) for the panel
-contract, configuration, CLI options, metrics, artifacts, and exit codes.
-
-## V4 Modeling Panel Pipeline
-
-Modeling Panel 将因子特征表和 forward returns 按安全的一对一时间契约合并，
-并发布可审计的 ML 输入 Artifact。当前数据链路为：
-
-```text
-Factor Research → Modeling Panel → ML Experiment
-```
-
-可复制配置：
-[config/modeling_panel_pipeline.example.yaml](config/modeling_panel_pipeline.example.yaml)。
-详细输入契约、三种 source/chain 方式和常见错误见
-[Modeling Panel Pipeline 使用指南](docs/05_modeling_panel_pipeline.md)。
-
-在项目根目录使用 PowerShell 运行：
-
-```powershell
-& "E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe" `
-  scripts/run_pipeline.py `
-  --config "config/modeling_panel_pipeline.example.yaml"
-```
-
-默认 Artifact 位于 `<run_dir>/modeling_panel/`：
-
-| 文件 | 内容 |
-| --- | --- |
-| `modeling_panel.parquet` | 已验证的训练面板 |
-| `config.json` | Builder 配置快照 |
-| `audit.json` | 匹配、缺失值、时间和标签审计 |
-| `manifest.json` | Schema、dtype、大小与 SHA-256 |
-
-Artifact Store 不覆盖既有目录；重复目标会明确失败。该边界降低结构性泄漏
-风险，但不替代对 feature 生成时点和经济含义的人工审查。
-
-## V5 Signal and Holdings development pipeline
-
-The canonical development path extends the Pipeline through ML, Signal, and
-Holdings while keeping business settings in the shared YAML schema:
-
-    python scripts/run_pipeline.py --config config/signal_holdings_pipeline.example.yaml
-
-The example chooses holdings.top_n: 10; this is a user-selected example value,
-while the backend canonical default remains 20. The retained legacy root top_n
-and legacy research/scoring CLI do not define V5 Holdings behavior.
-
-See the [Signal and Holdings Pipeline Guide](docs/08_signal_holdings_pipeline.md)
-for source modes, direction and ranking, Top-N and insufficient-universe
-semantics, equal weighting, Artifact layouts, provenance, and output inspection.
-This is a V5 development capability, not a final v0.6.0 release announcement.
-
-## V6 Research Backtest backend
-
-The v0.7 development path now chains the canonical Pipeline through the native
-Research Backtest backend:
-
-    python scripts/run_pipeline.py --config config/research_backtest_pipeline.example.yaml
-
-The backend consumes exact validated Holdings targets, remains
-frequency-agnostic, and publishes a seven-file Research Backtest Artifact with
-direct Holdings lineage. It is a historical research evaluator, not a live
-execution system. See the
-[Research Backtest Pipeline Guide](docs/10_research_backtest_pipeline.md) for
-source modes, timing, return and suspension rules, cost/NAV semantics, metrics,
-Artifact validation, and non-goals.
-
-Local v0.7.0 release-candidate scope, frozen semantics, compatibility, and
-manual release steps are recorded in the
-[v0.7.0 Release Readiness checklist](docs/11_v0.7.0_release_readiness.md).
-This local readiness record does not claim a merged PR, passing remote CI, or a
-published `v0.7.0` tag.
-
-## V7 Portfolio Construction
-
-The canonical research chain is now Signal -> Top-N selection -> Portfolio
-Construction weighting -> Holdings -> Research Backtest. Portfolio Construction
-is an internal Holdings capability, not a separate Pipeline stage or Artifact;
-it preserves the exact Top-N security set and changes only target weights.
-
-See the [Portfolio Construction Guide](docs/12_portfolio_construction.md) and
-run the generic config entry point with
-`config/portfolio_construction_pipeline.example.yaml`.
-
-The frozen v0.8.0 semantics, compatibility gates, validation scope, and manual
-release procedure are recorded in the
-[v0.8.0 Local Release Readiness checklist](docs/13_v0.8.0_release_readiness.md).
-
-## V8 Risk Model and Minimum Variance
-
-The research chain now supports another registry-driven weighting method:
-
-```text
-Signal -> Top-N -> Portfolio Construction
-                    |- Equal Weight
-                    |- Rank Weight
-                    |- Inverse Volatility
-                    `- Minimum Variance -> Risk Model
-                 -> Holdings -> Research Backtest
-```
-
-Minimum Variance preserves the exact Top-N set and uses a common complete-case
-historical covariance with long-only, fully-invested SLSQP optimization. The
-Risk Model remains an internal Holdings capability, not a Pipeline stage or
-Artifact. Run the standard config-only CLI with
-`config/minimum_variance_pipeline.example.yaml` and see
-[Risk Model and Minimum Variance](docs/14_risk_model_optimizer.md) for the
-frozen covariance, dependency, optimization, and compatibility semantics.
-
-## V9 Research Workbench development
-
-The registry-driven Streamlit Research Workbench is under development for
-v0.10.0. P1 provides the five-page shell and canonical New Run execution
-foundation; Artifact-backed Results, Runs, and Data views remain P2 work.
-
-    streamlit run app/streamlit_app.py
-
-See [V9 Quant Research Workbench](docs/16_research_workbench.md) for the audited
-registries, exact run handoff, artifact contracts, and phase boundaries.
-
-### Data Layer 2.0 core
-
-The P4B core separates immutable-ish TuShare RAW responses from canonical,
-partitioned CURATED Parquet. Exact coverage truth lives in transactional SQLite
-at `data/metadata/catalog.sqlite`; legacy min/max metadata is compatibility-only.
-Ordinary preparation fetches only missing coverage units, never refreshes
-completed history, and uses instance-injected credentials. See
-[Data Layer 2.0](docs/19_data_layer_2_0.md).
-
-### Universe 1.0
-
-The first L2 Research Data contract resolves immutable point-in-time membership
-for CUSTOM, INDEX, and ALL_A_SHARES universes. Historical index snapshots never
-use current or future members, while custom and all-A-share membership applies
-explicit listing/delisting lifecycle boundaries. Eligibility and observation
-availability remain separate downstream concerns. See
-[Universe 1.0](docs/20_universe_1_0.md).
-
-### Adjusted Price and Factor Frequency
-
-P4C2 adds a canonical ResearchCalendar, typed trading-day/month/as-of history,
-factor-owned DAILY/MONTHLY metadata, and anchor-free research adjusted OHLC via
-exact `raw * adj_factor`. Research Backtest accounting remains on provider
-`pct_chg / 100`; frequency never implies global monthly resampling. See
-[Adjusted Price and Factor Frequency](docs/21_adjusted_price_factor_frequency.md).
-
-### Research Input Materialization
-
-P4C3 composes Data Layer 2.0, point-in-time Universe, ResearchCalendar, factor
-frequency metadata, and adjusted prices into content-addressed inputs for the
-existing Factor Research and Modeling contracts. It preserves the existing
-forward-return formula, records label realization in an availability sidecar,
-and reuses only hash-validated exact materializations. Data preparation and
-first-run GUI orchestration remain separate. See
-[ResearchInputBuilder 1.0](docs/22_research_input_builder.md).
+This project is licensed under the [MIT License](LICENSE).

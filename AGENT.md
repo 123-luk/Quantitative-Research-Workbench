@@ -4285,3 +4285,14 @@ E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m pytest 
 .\QuantResearchWorkbench.exe --smoke-test
 E:\FINANCIAL ENGINEERING\.venv\quant-factor-system\Scripts\python.exe -m streamlit run app/streamlit_app.py
 ```
+
+## 2026-08-25 Repository Presentation for Portfolio Use
+
+- 展示目标：将仓库主页整理为面向求职者筛选和技术面试的简洁中英双语说明，准确呈现研究定位、实现能力、架构数据流、安装使用方式、可复现性和能力边界；核验 README 的 MIT License 链接及 LICENSE 标准正文。
+- 实际修改文件：`README.md`、`AGENT.md`；`LICENSE` 已核验为标准 MIT License，法律正文与现有版权行均保持原样。
+- README 移除了开发阶段式 V1/V2/V3/V5/v0.x 叙述、历史页面说明、过期输出清单、本机绝对启动路径、开发日志和未经当前入口支持的旧命令，改为单份同步维护的中英双语项目主页。
+- 截图检查：仓库中没有可安全复用的界面图片，因此未运行程序制造截图，也未新增或生成界面图。
+- 未运行测试：本轮仅修改仓库展示文档；按任务约束未运行 pytest、真实 Provider 请求、研究任务、EXE smoke、Streamlit AppTest 或其他业务测试。
+- 基础检查：执行 `git diff --check`；验证 README 本地相对链接目标；扫描 README 与 LICENSE 中明显 Token、`.env` 内容和私密绝对路径；检查最终 `git diff` 与 `git status` 的提交边界。
+- 未修改范围：未修改量化研究逻辑、数据契约、运行流程、依赖、应用代码或 LICENSE；未读取或改动本地 `.env`；未暂存或提交 `data/`、`-m`、缓存、SQLite、任务记录、Artifact、报告或其他本地用户文件。
+- GitHub 后续人工事项：在 Pull Request 合并后核对仓库 About 简介、Topics、默认分支与 Social preview；人工运行并筛选无 Token、无用户路径、无失败任务信息的工作台截图后，可再补充 `docs/images/` 展示。
