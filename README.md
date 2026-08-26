@@ -1,183 +1,242 @@
 # Quantitative Research Workbench
+# 量化研究工作台
 
-A Share Quantitative Research Platform
+面向中国股票市场的可复现量化研究工作台，将数据管理、因子研究、机器学习、信号生成、组合构建、交易成本、研究回测和结果持久化整合在同一套流程中。
 
-这是一个面向 A 股研究的端到端量化研究工作台。项目将数据准备、因子研究、机器学习、信号与持仓、组合构建、风险估计和历史回测整合在同一条可审计流程中，重点处理数据可信度、时序泄漏、实验复现和研究任务管理。
+A reproducible quantitative research workbench for China A-shares, integrating data management, factor research, machine learning, signal generation, portfolio construction, transaction costs, backtesting, and persistent research outputs in one workflow.
 
-This is an end-to-end quantitative research workbench for China A-shares. It brings data preparation, factor research, machine learning, signals and holdings, portfolio construction, risk estimation, and historical backtesting into one auditable workflow, with an emphasis on data integrity, temporal leakage prevention, experiment reproducibility, and research task management.
+[![Tests](https://github.com/123-luk/Quantitative-Research-Workbench/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/123-luk/Quantitative-Research-Workbench/actions/workflows/tests.yml)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3120/)
+[![MIT License](https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square)](LICENSE)
 
-## 项目概览
+## 项目为什么值得看
+## Why This Project Is Worth Exploring
 
-平台面向希望搭建严谨研究流程的量化研究者、开发者和学习者。它覆盖从TuShare数据接入到Artifact结果查看的完整研究链路，并通过历史时点股票池、Coverage Ledger、walk-forward 划分和 exact `run_id` 降低常见的数据与复现风险。
+该项目不是单一策略回测脚本，而是一套从数据覆盖检查到研究结果持久化的完整研究流程。系统将数据质量、时间序列训练、因子研究、模型预测、组合构建和绩效分析连接起来，并保留配置、运行记录和研究产物，以支持研究复现和后续扩展。
 
-The platform is intended for researchers, developers, and learners who need a disciplined quantitative workflow. It covers the path from TuShare ingestion to Artifact-backed results, using point-in-time universes, a Coverage Ledger, walk-forward splits, and exact `run_id` resolution to reduce common data and reproducibility risks.
+This is more than a single-strategy backtest script. It connects data coverage and quality controls, time-aware model training, factor research, predictions, portfolio construction, and performance analysis, while preserving configurations, run records, and validated artifacts for reproducibility and extension.
 
-项目是本地研究平台，不是实盘交易系统。它不连接券商、不提交订单，也不提供实时行情或生产级交易风控。
+项目定位为本地历史研究平台，不连接券商、不提交订单，也不提供实时行情或生产级交易风控。
 
-This is a local research platform, not a live trading system. It does not connect to brokers, submit orders, provide real-time market data, or implement production trading controls.
+The workbench is designed for local historical research. It does not connect to brokers, submit orders, provide real-time quotes, or implement production trading controls.
 
 ## 主要功能
+## Core Capabilities
 
-- 在工作台中选择 TuShare 官方接口或第三方代理接口；Provider彼此隔离，不自动切换。
-  Explicit selection between the official TuShare API and a third-party proxy; providers remain isolated and never fail over automatically.
-- 使用数据契约、主键与字段校验、Provider质量检查和安全错误分类保护数据边界。
-  Data contracts, key and field validation, provider quality checks, and sanitized error classification protect the ingestion boundary.
-- 分离 RAW 响应与分区 CURATED Parquet，并使用 SQLite Coverage Ledger记录精确覆盖单元。
-  RAW responses are separated from partitioned CURATED Parquet, while a SQLite Coverage Ledger records exact coverage units.
-- 支持 CUSTOM、INDEX 和 ALL_A_SHARES 历史时点股票池，按上市与退市生命周期解析成员，避免用当前成分回填历史。
-  Point-in-time CUSTOM, INDEX, and ALL_A_SHARES universes apply listing and delisting lifecycles without backfilling history from current constituents.
-- 计算并预处理因子，执行 RankIC、分组收益等因子评价，并支持静态或动态因子组合。
-  Factor calculation and preprocessing feed RankIC, grouped-return evaluation, and static or dynamic factor composition.
-- 提供 `ridge`、`elastic_net` 和 `hist_gradient_boosting` 三种已注册的 scikit-learn 模型。
-  The registered scikit-learn models are `ridge`, `elastic_net`, and `hist_gradient_boosting`.
-- 使用 walk-forward 训练、Purge、Embargo、标签可用性约束和严格样本外预测控制时序泄漏。
-  Walk-forward training, purge and embargo windows, label-availability guards, and strict out-of-sample predictions control temporal leakage.
-- 从预测生成信号、Top-N 选择和目标持仓，并保留上游 Artifact 血缘。
-  Predictions flow into signals, Top-N selection, and target holdings with upstream Artifact lineage preserved.
-- 支持等权、排序加权、逆波动率和最小方差组合；风险估计包括样本协方差和 Ledoit-Wolf。
-  Portfolio weighting includes equal weight, rank weight, inverse volatility, and minimum variance, with sample covariance and Ledoit-Wolf risk estimators.
-- 研究回测处理再平衡、交易成本、净值、基准和风险指标，并区分严格停牌事件与标准稳健模式。
-  The research backtest handles rebalancing, transaction costs, NAV, benchmarks, and risk metrics, with distinct strict-event and standard-robust suspension modes.
-- Streamlit 工作台提供中英文界面、后台研究任务、真实阶段进度、安全失败诊断、重试、任务记录和结果页。
-  The bilingual Streamlit workbench provides background research tasks, real stage progress, safe failure diagnostics, retries, task history, and result views.
-- 通过 `run_id`、配置快照、manifest、内容 hash 和经校验的 Artifact 精确复查结果。
-  Exact result review is based on `run_id`, configuration snapshots, manifests, content hashes, and validated Artifacts.
+1、数据接口：在工作台中显式选择 TuShare 官方接口或第三方代理接口。两个 Provider 独立管理，数据身份彼此隔离，不自动回退或混用。
 
-## 工作流程
+Provider management: explicitly choose the official TuShare API or a third-party proxy. Provider identities remain isolated, with no silent failover or data mixing.
 
-平台UI只负责配置、调度和展示；因子、模型、组合、风险与回测计算仍由后端模块及其契约负责。
+2、数据管理：保存 RAW 响应和分区 canonical Parquet，使用 Coverage Ledger 记录精确覆盖单元，并通过数据契约、主键、字段、质量和读回检查保证规范数据可复用。
 
-The UI is limited to configuration, orchestration, and presentation. Factor, model, portfolio, risk, and backtest calculations remain owned by backend modules and their contracts.
+Data management: persist raw responses and partitioned canonical Parquet, track exact coverage units in the Coverage Ledger, and validate contracts, keys, fields, quality, and readback before reuse.
+
+3、因子研究：提供估值、流动性、动量、反转、波动率等因子，并支持注册扩展、预处理、RankIC、分组收益和静态或动态因子组合。
+
+Factor research: study valuation, liquidity, momentum, reversal, volatility, and extensible registered factors with preprocessing, RankIC, grouped returns, and static or dynamic composition.
+
+4、机器学习：注册 Ridge、ElasticNet 和直方图梯度提升模型，使用统一数据集、训练、预测、评价和 Artifact 接口。
+
+Machine learning: run Ridge, ElasticNet, and histogram gradient boosting through shared dataset, training, prediction, evaluation, and artifact interfaces.
+
+5、时序验证：使用 Walk-Forward 滚动训练验证、Purge 重叠样本清除、Embargo 隔离期、标签可用性约束和严格样本外预测降低时序泄漏风险。
+
+Time-aware validation: combine walk-forward training, overlap purging, embargo windows, label-availability guards, and strict out-of-sample predictions to reduce temporal leakage.
+
+6、信号与选股：按照模型评分和可配置方向生成信号，执行 Top-N 选择，并在证券数量不足时按配置停止，避免静默改变研究假设。
+
+Signals and selection: turn model scores into directional signals and Top-N selections, with fail-closed handling when the eligible universe cannot satisfy the requested portfolio size.
+
+7、组合构建：支持等权、排序加权、逆波动率和最小方差，并提供样本协方差、Ledoit-Wolf 风险估计和组合约束。
+
+Portfolio construction: support equal, rank, inverse-volatility, and minimum-variance weighting with sample covariance, Ledoit-Wolf estimation, and portfolio constraints.
+
+8、回测分析：处理调仓、可交易性、换手率和交易成本，输出组合与基准净值、收益、回撤、波动率、夏普比率、信息比率及调仓记录。
+
+Backtest analytics: account for rebalancing, tradability, turnover, and transaction costs, then report portfolio and benchmark NAV, returns, drawdowns, volatility, Sharpe ratio, information ratio, and rebalance records.
+
+9、研究产物：持久化净值、收益、回撤、持仓、模型、信号、配置、manifest、schema、内容 hash 和上游 lineage，并通过精确运行标识读取经校验的 Artifact。
+
+Research artifacts: persist NAV, returns, drawdowns, holdings, models, signals, configuration, manifests, schemas, content hashes, and upstream lineage, with exact-run validated artifact loading.
+
+10、应用服务：Streamlit 中英文界面支持后台研究任务、真实阶段进度、失败诊断、任务重试、历史任务和持久化结果查看。
+
+Application services: the bilingual Streamlit interface provides background jobs, real stage progress, sanitized failure diagnostics, retries, task history, and persistent result views.
+
+## 系统流程
+## Research Flow
 
 ```mermaid
-flowchart LR
-    A[Data Preparation] --> B[Research Inputs]
-    B --> C[Factor Research]
-    C --> D[Model Training and Validation]
-    D --> E[Signals and Target Holdings]
-    E --> F[Portfolio and Risk]
-    F --> G[Research Backtest and Results]
+flowchart TD
+    A[数据接口<br/>Data Provider] --> B[覆盖与质量检查<br/>Coverage and Quality]
+    B --> C[规范数据存储<br/>Canonical Storage]
+    C --> D[股票池与因子<br/>Universe and Factors]
+    D --> E[研究输入面板<br/>Research Panel]
+    E --> F[Walk-Forward 训练<br/>Model Training]
+    F --> G[信号与组合<br/>Signals and Portfolio]
+    G --> H[成本与回测<br/>Costs and Backtest]
+    H --> I[绩效与 Artifact<br/>Analytics and Artifacts]
 ```
 
-数据准备 → 研究输入 → 因子研究 → 模型训练与验证 → 信号与目标持仓 → 组合与风险 → 研究回测与结果
+数据接口 → 数据覆盖与质量检查 → 规范数据存储 → 股票池构建 → 因子计算 → 研究输入面板 → Walk-Forward 模型训练 → 信号生成 → 组合构建 → 成本与回测 → 绩效分析 → Artifact 持久化
 
-Data preparation → research inputs → factor research → model training and validation → signals and target holdings → portfolio and risk → research backtest and results
+Data provider → coverage and quality checks → canonical storage → universe construction → factor calculation → research panel → walk-forward training → signals → portfolio construction → costs and backtest → analytics → artifact persistence
 
 ## 项目结构
+## Architecture
 
-- `app/`：Streamlit 入口、五页工作台、双语界面和任务服务。
-  Streamlit entry point, five-page workbench, bilingual UI, and task services.
-- `src/data/`：Provider、数据契约、准备流程、Parquet 存储和 Coverage Ledger。
-  Providers, data contracts, preparation, Parquet storage, and the Coverage Ledger.
-- `src/universe/` 与 `src/research_data/`：历史时点股票池、研究日历、复权价格和研究输入物化。
-  Point-in-time universes, research calendars, adjusted prices, and research-input materialization.
-- `src/factors/`：因子注册、计算、预处理、评价和组合。
-  Factor registration, calculation, preprocessing, evaluation, and composition.
-- `src/ml/`：数据集契约、walk-forward 划分、模型训练、评价和 Artifact。
-  Dataset contracts, walk-forward splitting, model training, evaluation, and Artifacts.
-- `src/signals/` 与 `src/holdings/`：信号排序、选择和目标持仓。
-  Signal ranking, selection, and target holdings.
-- `src/portfolio_construction/` 与 `src/risk_model/`：权重策略、约束、协方差估计和最小方差优化。
-  Weighting strategies, constraints, covariance estimation, and minimum-variance optimization.
-- `src/research_backtest/`：再平衡、可交易性、收益核算、成本、指标和结果 Artifact。
-  Rebalancing, availability, return accounting, costs, analytics, and result Artifacts.
-- `docs/`：数据层、股票池、工作台和各研究阶段的详细设计说明。
-  Detailed design notes for the data layer, universes, workbench, and research stages.
-- `tests/`：单元、集成和界面契约测试。
-  Unit, integration, and UI contract tests.
+1、`src/data/` 是数据层，包含 Provider、数据契约、Coverage Ledger、准备流程和 Parquet 存储。
+
+2、`src/universe/`、`src/research_data/` 和 `src/factors/` 构成股票池、研究输入与因子研究层。
+
+3、`src/ml/`、`src/modeling_panel/` 和 `src/pipeline/` 负责机器学习、时序验证与研究流水线。
+
+4、`src/signals/`、`src/holdings/`、`src/portfolio_construction/` 和 `src/risk_model/` 负责信号、持仓、权重与风险估计。
+
+5、`src/research_backtest/` 负责调仓、收益、成本、绩效和结果 Artifact。
+
+6、`app/services/` 和 `app/views/` 提供任务服务、结果读取与 Streamlit 界面。
+
+7、`tests/` 和 `docs/` 保存离线测试及数据层、股票池、研究阶段和工作台设计说明。
+
+Together, these directories separate the data, factor, modeling, signal, portfolio, backtest, application, interface, testing, and documentation responsibilities without hiding the lineage between stages.
 
 ## 快速开始
+## Quick Start
 
-仓库当前验证环境为 Windows 和 Python 3.12.2；Python 版本尚未通过 `pyproject.toml` 强制限定，其他版本和平台需要单独验证。详细依赖策略见 [Dependency Policy](docs/06_dependency_policy.md)。
+### 1、下载 Windows 版本
 
-The repository is currently validated on Windows with Python 3.12.2. A Python range is not enforced through `pyproject.toml`, so other versions and platforms require separate validation. See the [Dependency Policy](docs/06_dependency_policy.md) for details.
+从 [GitHub Releases](https://github.com/123-luk/Quantitative-Research-Workbench/releases) 下载 `QuantResearchWorkbench.exe` 和同版本的 `QuantResearchWorkbench.exe.sha256`，核对 SHA-256 后启动程序。构建产物不直接存放在源码仓库中。
 
-1. 创建并激活虚拟环境。
-   Create and activate a virtual environment.
+Download `QuantResearchWorkbench.exe` and its matching `QuantResearchWorkbench.exe.sha256` from [GitHub Releases](https://github.com/123-luk/Quantitative-Research-Workbench/releases), verify the checksum, and launch the application. Built executables are distributed separately from source control.
 
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
+### 2、从源码运行
 
-2. 按仓库已验证的核心约束安装依赖。
-   Install dependencies with the repository's validated core constraints.
+仓库验证环境为 Windows 和 Python 3.12。其他 Python 版本和操作系统需要单独验证。依赖策略见 [Dependency Policy](docs/06_dependency_policy.md)。
 
-   ```powershell
-   python -m pip install --upgrade pip
-   python -m pip install -r requirements.txt -c constraints-v3-core.txt
-   ```
+```powershell
+git clone https://github.com/123-luk/Quantitative-Research-Workbench.git
+cd Quantitative-Research-Workbench
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt -c constraints-v3-core.txt
+python -m streamlit run app/streamlit_app.py
+```
 
-3. 安全配置 TuShare Token。推荐在工作台侧栏的密码输入框中本地输入，Token 仅保留在当前会话。官方接口也支持复制示例文件后在本地填写 `.env`；该文件已被 Git 忽略。不要提交、截图或记录真实 Token。
-   Configure the TuShare token securely. Prefer entering it locally in the workbench password field, where it remains session-only. The official provider can also read a local `.env` copied from the example; Git already ignores that file. Never commit, capture, or log a real token.
+The repository is validated on Windows with Python 3.12. Other Python versions and operating systems require separate verification.
 
-   ```powershell
-   Copy-Item .env.example .env
-   ```
+### 3、完成一次研究
 
-   ```text
-   TUSHARE_TOKEN=your_tushare_token_here
-   ```
+1、在侧栏选择中文或 English，并明确选择 TuShare 官方或代理 Provider。代理是第三方服务，工作台不会自动切换接口。
 
-4. 启动 Streamlit 工作台。
-   Start the Streamlit workbench.
+2、在本地密码输入框中输入对应 Token。Token 仅保留在当前会话，不应提交、截图或写入公开文档。规范数据覆盖完整时，研究可以直接复用本地数据。
 
-   ```powershell
-   python -m streamlit run app/streamlit_app.py
-   ```
+3、打开 New Run，配置日期、日频或月频、CUSTOM、INDEX 或 ALL_A_SHARES 股票池、因子、模型、Top-N、组合方式和回测参数，然后创建后台任务。
 
-   也可以运行 `run_app.bat`、`run_app.ps1`，或在 Windows 资源管理器中启动仓库自带的 `QuantResearchWorkbench.exe`。这些入口最终都启动同一个 `app/streamlit_app.py`。
-   You can also run `run_app.bat`, `run_app.ps1`, or launch the included `QuantResearchWorkbench.exe` from Windows Explorer. All of these entry points start the same `app/streamlit_app.py` application.
+4、在 Data Readiness 和任务页查看覆盖检查、数据准备、因子、建模、信号、组合和回测进度。失败时按照脱敏诊断修复数据、权限、网络或配置问题后重试。
 
-## 使用方法
+5、任务成功后选择 View Results，从结果页检查指标、净值、回撤、持仓、调仓、收益、配置和 Artifact 血缘；历史任务也可以再次打开已持久化结果。
 
-1. 在侧栏选择中文或 English，并明确选择官方或代理 Provider；代理是第三方服务，工作台不会自动回退或切换。
-   Choose Chinese or English in the sidebar and explicitly select the official or proxy provider. The proxy is third-party, and the workbench never switches providers automatically.
-2. 在本地密码框输入对应 Token；如果本地规范数据已完整，可在不调用 Provider 的情况下复用。
-   Enter the matching token locally. Complete canonical local coverage can be reused without a provider call.
-3. 打开 New Run 创建研究任务。任务在后台执行，页面切换或刷新不会中断当前进程中的任务。
-   Open New Run and create a research task. It runs in the background, so navigation or refresh does not interrupt it within the current process.
-4. 配置研究日期、CUSTOM/INDEX/ALL_A_SHARES 股票池、DAILY/MONTHLY 频率、因子、模型、Top-N、组合方式和回测参数。
-   Configure dates, a CUSTOM/INDEX/ALL_A_SHARES universe, DAILY/MONTHLY frequency, factors, model, Top-N selection, portfolio method, and backtest settings.
-5. 在 Data Readiness 和任务页查看缺失覆盖、数据准备、因子、建模、信号、组合和回测的真实阶段进度。
-   Review missing coverage in Data Readiness and follow real preparation, factor, modeling, signal, portfolio, and backtest stages on the task page.
-6. 如果任务失败，查看经过脱敏的失败阶段、数据集、区间和恢复建议；修复权限、网络、数据或配置问题后使用 Retry。
-   If a task fails, inspect the sanitized stage, dataset, range, and recovery guidance, then use Retry after correcting credential, network, data, or configuration issues.
-7. 对成功任务选择 View Results，或从 Research Tasks 使用精确 `run_id` 重新打开结果，检查指标、持仓、收益、配置和 Artifact 血缘。
-   For a successful task, choose View Results or reopen it from Research Tasks by exact `run_id` to inspect metrics, holdings, returns, configuration, and Artifact lineage.
+The same five-step path is available in English: select a provider, enter the token locally, configure and create a run, follow stage progress, and open the persisted results.
 
-工作台的完整交互与结果读取契约见 [Workbench First-Run Integration](docs/23_workbench_first_run_integration.md) 和 [Artifact-Backed Results](docs/17_research_workbench_results.md)。
+## 数据设计与可复现性
+## Data Design and Reproducibility
 
-See [Workbench First-Run Integration](docs/23_workbench_first_run_integration.md) and [Artifact-Backed Results](docs/17_research_workbench_results.md) for the full interaction and result-loading contracts.
+1、Provider 标识参与数据身份，官方与代理数据不会静默混用。Coverage Ledger 按数据集、scope 和精确时间单元记录完成状态，重复研究只请求缺失覆盖。
 
-## 数据与可复现性
+2、历史指数成分和证券生命周期按形成日解析，避免使用当前成分回填历史。研究日历、复权价格、因子回看、标签期限和模型历史区间分别进入数据需求规划。
 
-Provider 标识参与数据身份，官方与代理数据不会静默混用。Coverage Ledger 以数据集、scope 和精确时间单元记录完成状态，重复研究只补充缺失覆盖。历史指数成分和股票生命周期按 formation date 解析，避免把未来可见信息带回过去。
+3、数据和研究输入先写入临时位置、重新读取并校验，再原子发布。成功运行保存配置快照、manifest、schema、内容 hash 和上游 lineage。
 
-Provider identity is part of data identity, preventing silent mixing of official and proxy data. The Coverage Ledger records completion by dataset, scope, and exact time unit, so repeated research requests only missing coverage. Historical index membership and security lifecycles are resolved at each formation date rather than filled from future knowledge.
+4、结果服务只读取指定运行下经过验证的 Artifact，不依赖文件时间或模糊的 latest 回退。完整交互和读取契约见 [Workbench First-Run Integration](docs/23_workbench_first_run_integration.md) 与 [Artifact-Backed Results](docs/17_research_workbench_results.md)。
 
-数据与研究输入先写入临时位置、重新读取并校验，再原子发布。每次成功运行保存配置快照、manifest、schema、内容 hash 和上游 lineage；结果页只解析指定 `run_id` 下经过验证的 Artifact，不使用文件时间或模糊的 latest 回退。
+Provider identity, point-in-time membership, staged validation, atomic publication, content hashes, lineage, and exact-run resolution make repeated research inspectable rather than merely repeatable by convention.
 
-Data and research inputs are staged, read back, validated, and then published atomically. Each successful run records configuration snapshots, manifests, schemas, content hashes, and upstream lineage. Results resolve only validated Artifacts under the requested `run_id`, without filesystem-time or fuzzy latest fallbacks.
+## 研究流程示例
+## Research Workflow Example
 
-更多实现细节见 [Data Layer](docs/19_data_layer_2_0.md)、[Point-in-Time Universe](docs/20_universe_1_0.md) 和 [TuShare Provider Contracts](docs/24_tushare_provider_contracts.md)。
+下面通过一个小规模日频研究案例展示工作台的基本操作、任务执行和研究产出。该案例用于说明系统能够完成完整研究流程，不代表程序只能使用这些参数，也不代表该策略已经具有稳定的样本外盈利能力。
 
-For implementation details, see the [Data Layer](docs/19_data_layer_2_0.md), [Point-in-Time Universe](docs/20_universe_1_0.md), and [TuShare Provider Contracts](docs/24_tushare_provider_contracts.md).
+The following small daily-frequency study demonstrates the workbench workflow, task execution, and persisted outputs. It is an operational example, not a claim that the system is limited to these settings or that the strategy has stable out-of-sample profitability.
 
-## 当前边界
+### 1、数据与股票池
 
-- 项目定位为历史量化研究平台，不连接券商实盘交易，也不负责订单执行。
-  The project is a historical quantitative research platform; it does not connect to live brokerage trading or execute orders.
-- 数据可用性取决于所选 Provider 的状态、TuShare Token 权限、积分和接口返回质量。
-  Data availability depends on the selected provider, TuShare token permissions and points, and endpoint response quality.
-- 严格停牌事件模式依赖 `suspend_d` 接口的相应权限与完整覆盖；标准稳健模式不会把缺失行情自动宣称为已确认停牌。
-  Strict suspension-event mode depends on permission and complete coverage for `suspend_d`; standard-robust mode does not label every missing quote as a confirmed suspension.
-- 当前机器学习能力以仓库注册的 scikit-learn 模型为主；LightGBM 和 XGBoost 未安装、未声明，也不属于当前支持范围。
-  Current machine-learning support is centered on the registered scikit-learn models. LightGBM and XGBoost are not installed, declared, or supported.
-- 依赖约束记录的是已验证核心环境，不是完整 lock file；其他操作系统需要另行验证。
-  Dependency constraints record the validated core environment rather than a complete lock file; other operating systems require separate validation.
-- 历史回测和模型输出不代表未来表现，不构成投资建议。
-  Historical backtests and model outputs do not represent future performance and are not investment advice.
+![数据与股票池配置](docs/images/research-data-universe.png)
+
+案例选择日频研究，以 12 只沪深股票组成小规模自定义股票池，并以沪深300指数作为比较基准。训练年数和最大回看期用于为模型训练与因子计算准备额外历史数据，因此界面中的请求区间不等于系统只读取这一段数据。
+
+This daily example uses a 12-stock custom universe and the CSI 300 as benchmark. Training years and maximum lookback extend the historical context required by model training and factor calculation.
+
+### 2、因子与模型
+
+![因子与模型配置](docs/images/research-factors-model.png)
+
+案例选择 20 日 Amihud 非流动性因子和市净率倒数 BP。BP 描述估值水平，Amihud 因子描述价格变动相对于成交金额的流动性特征。机器学习阶段使用 ElasticNet，将两个因子作为独立特征，通过 L1 和 L2 正则化控制模型复杂度。
+
+Alpha 0.1 和 L1 正则占比 0.50 是本次示例的固定配置，不是经过证明的最优参数。高级因子、模型和 Walk-Forward 参数在界面中保持折叠。
+
+The model uses the selected factors as ElasticNet features. Alpha 0.1 and an L1 ratio of 0.50 are fixed demonstration settings, not optimized claims.
+
+### 3、信号、组合与回测
+
+![信号、组合与回测配置](docs/images/research-signal-portfolio.png)
+
+模型预测得分从高到低排序，每个形成期选择 Top 4 股票，并按等权构建组合。Top 4 与 12 只股票的小规模演示池相匹配，只是示例配置，不代表适用于所有股票池的最优持仓数量。
+
+回测使用沪深300作为基准，显式计入 10 bps 交易成本，并采用 1.2% 年化无风险利率。“证券不足时停止”表示系统不会在股票池证据不足时静默生成不符合配置的组合。
+
+Scores are ranked from highest to lowest, four securities are selected at each formation date, and the portfolio is equally weighted. The backtest uses the CSI 300 benchmark, 10 bps transaction costs, and a 1.2% annual risk-free rate.
+
+### 4、任务完成
+
+![任务完成与数据覆盖](docs/images/research-task-complete.png)
+
+任务完成全部 2534 个数据覆盖单元的检查，并生成可以再次打开和持久化读取的研究结果。本次任务复用了已验证的本地数据，因此跳过了重复的数据接口请求。
+
+The task completed all 2,534 coverage checks and persisted reopenable research results. Verified local data was reused, so duplicate provider requests were skipped.
+
+### 5、研究结果
+
+![研究结果概览](docs/images/research-results-overview.png)
+
+净总收益为 3.36%，净年化收益为 2.83%，净夏普比率为 0.18，净最大回撤为 -17.99%，净年化波动率为 17.40%。基准总收益为 -9.13%，超额总收益为 12.50%，信息比率为 1.07，平均换手率为 9.79%，交易成本拖累为 6.12%。
+
+该案例在研究区间内取得正收益并跑赢基准，但夏普比率较低，最大回撤和交易成本影响仍然明显。该结果主要用于展示系统能够完成从数据准备、因子计算和模型训练，到信号、组合、成本建模、回测和研究结果持久化的完整流程，不能被解释为策略已经具备稳定盈利能力。
+
+The example produced a positive return and outperformed its benchmark over the displayed interval, while its low Sharpe ratio, drawdown, and cost drag remain material. The result demonstrates the complete software workflow and should not be interpreted as evidence of stable profitability.
+
+<details>
+<summary>风险、成本与收益明细 / Risk, Cost and Return Details</summary>
+
+系统进一步输出组合与基准净值、回撤序列、每日成本前收益、交易成本、每日成本后收益、换手率、交易名义金额和调仓记录。
+
+![收益与月度展示](docs/images/research-return-details.png)
+
+月收益表由日度净收益复合得到，用于按月展示研究区间内的收益分布，不是独立的后验绩效指标。
+
+The detailed views include portfolio and benchmark NAV, drawdown, daily gross return, cost, daily net return, turnover, traded notional, rebalance records, and monthly displays compounded from daily net returns.
+
+</details>
+
+该案例仅用于软件功能和研究流程展示，不构成投资建议。历史回测结果不能保证未来表现，小规模自定义股票池也可能存在选择偏差。
+
+This example demonstrates the software workflow and research outputs only. It does not constitute investment advice, and historical backtest results do not guarantee future performance.
+
+## 研究边界与扩展空间
+## Research Boundaries and Extensions
+
+1、平台服务于历史量化研究，不负责实时行情、券商连接、订单执行和生产级交易风控。后续实盘化需要独立的执行、合规、监控和故障恢复体系。
+
+2、数据可用性取决于所选 Provider 的状态、Token 权限、积分和返回质量。严格停牌事件模式还依赖 `suspend_d` 的权限与完整覆盖；标准稳健模式不会把缺失行情自动认定为已确认停牌。
+
+3、当前机器学习能力以已注册的 scikit-learn 模型为主。LightGBM、XGBoost 和深度学习模型未安装或声明，可以通过现有模型注册与 Artifact 契约扩展，但需要重新验证依赖和时序研究设计。
+
+4、依赖约束记录已验证的核心环境，不是完整 lock file。其他操作系统、大规模股票池、更多市场和更长区间需要单独进行资源、数据质量和数值稳定性验证。
+
+5、任何因子、模型和回测结论都受样本选择、参数搜索、交易成本、市场制度和数据修订影响。历史结果不代表未来表现，也不构成投资建议。
+
+These boundaries keep the current claims precise while leaving clear extension points for new providers, factors, models, optimizers, markets, and execution infrastructure.
 
 ## License
 

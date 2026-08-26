@@ -1,0 +1,44 @@
+name: tests
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -c constraints-v3-core.txt
+
+      - name: Run stable offline core tests
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          python -m pytest -q \
+            tests/test_data_layer_2_contracts.py \
+            tests/test_price_volume_factors.py \
+            tests/test_linear_model_adapters.py \
+            tests/test_walk_forward_splitter.py \
+            tests/test_signal_builder.py \
+            tests/test_portfolio_construction_weighting.py \
+            tests/test_research_backtest_returns.py \
+            tests/test_research_backtest_artifacts.py
