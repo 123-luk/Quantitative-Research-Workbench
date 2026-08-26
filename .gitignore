@@ -8,3 +8,6 @@ data/processed/
 data/output/
 reports/figures/
 reports/tables/
+/AGENT.md
+/QuantResearchWorkbench.exe
+/QuantResearchWorkbench.exe.sha256
